@@ -194,6 +194,14 @@ async def get_job_runs(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             )
+        # Convert timezone-aware datetimes to naive UTC if needed
+        # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
+        if start_date and start_date.tzinfo is not None:
+            # Convert to UTC first, then remove timezone info
+            start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
+        if end_date and end_date.tzinfo is not None:
+            # Convert to UTC first, then remove timezone info
+            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
         runs = await job_service.get_job_runs(job_id, start_date=start_date, end_date=end_date)
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
@@ -268,14 +276,12 @@ async def get_client_jobs(
     try:
         # Convert timezone-aware datetimes to naive UTC if needed
         # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
-        if start_date:
-            if start_date.tzinfo is not None:
-                # Convert to UTC naive datetime
-                start_date = start_date.astimezone().replace(tzinfo=None)
-        if end_date:
-            if end_date.tzinfo is not None:
-                # Convert to UTC naive datetime
-                end_date = end_date.astimezone().replace(tzinfo=None)
+        if start_date and start_date.tzinfo is not None:
+            # Convert to UTC first, then remove timezone info
+            start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
+        if end_date and end_date.tzinfo is not None:
+            # Convert to UTC first, then remove timezone info
+            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
         jobs = await job_service.get_jobs_by_client(
             authenticated_client_id, start_date=start_date, end_date=end_date
         )
