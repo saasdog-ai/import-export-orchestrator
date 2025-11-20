@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures."""
 
-import asyncio
 from collections.abc import AsyncGenerator
 from uuid import uuid4
 
@@ -35,7 +34,7 @@ TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/test_
 @pytest.fixture(scope="function")
 async def test_db():
     """Create test database.
-    
+
     Note: This fixture requires a running PostgreSQL database.
     Integration tests that use this will be skipped if database is unavailable.
     Uses function scope to match pytest-asyncio auto mode.
@@ -50,7 +49,7 @@ async def test_db():
         await conn.close()
     except Exception as e:
         pytest.skip(f"PostgreSQL database not available: {e}. Skipping integration tests.")
-    
+
     # Create engine with NullPool for tests - use asyncpg driver
     engine = create_async_engine(
         TEST_DATABASE_URL,  # Keep +asyncpg for async driver
@@ -215,17 +214,16 @@ async def test_client_app(test_db: Database):
     """Create a test client for FastAPI with initialized dependencies."""
     from httpx import AsyncClient
     from httpx._transports.asgi import ASGITransport
-    
+
     # Initialize dependencies for integration tests
-    from app.core.dependency_injection import init_dependencies, shutdown_dependencies
-    from app.infrastructure.saas.client import MockSaaSApiClient
-    from app.infrastructure.query.engine import ExportQueryEngine
-    from app.services.job_service import JobService
     from app.infrastructure.db.repositories import JobRepository, JobRunRepository
-    from app.services.job_runner import JobRunnerService
-    from app.services.scheduler_service import SchedulerService
+    from app.infrastructure.query.engine import ExportQueryEngine
+    from app.infrastructure.saas.client import MockSaaSApiClient
     from app.infrastructure.scheduling.scheduler import APSchedulerService
-    
+    from app.services.job_runner import JobRunnerService
+    from app.services.job_service import JobService
+    from app.services.scheduler_service import SchedulerService
+
     # Create services
     saas_client = MockSaaSApiClient()
     query_engine = ExportQueryEngine(test_db, saas_client)
@@ -252,11 +250,11 @@ async def test_client_app(test_db: Database):
         scheduler_service=scheduler_service,
         job_runner=job_runner,
     )
-    
+
     # Initialize dependencies by setting global instances directly
     # Note: init_dependencies() uses global settings, so we set globals manually for tests
     import app.core.dependency_injection as di
-    
+
     # Set global instances that the API endpoints depend on
     di._db = test_db
     di._query_engine = query_engine
@@ -264,7 +262,7 @@ async def test_client_app(test_db: Database):
     di._job_repository = job_repository
     di._job_run_repository = job_run_repository
     di._saas_client = saas_client
-    
+
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client
