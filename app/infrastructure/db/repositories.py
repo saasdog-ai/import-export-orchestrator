@@ -5,6 +5,26 @@ from uuid import UUID
 
 from sqlalchemy import select, update
 
+
+def _to_naive_utc(dt: datetime | None) -> datetime | None:
+    """Convert timezone-aware datetime to naive UTC datetime for database storage."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        # Convert to UTC and remove timezone info
+        return dt.astimezone(UTC).replace(tzinfo=None)
+    return dt
+
+
+def _to_aware_utc(dt: datetime | None) -> datetime | None:
+    """Convert naive datetime to timezone-aware UTC datetime for domain entities."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        # Assume naive datetime is UTC and add timezone info
+        return dt.replace(tzinfo=UTC)
+    return dt
+
 from app.domain.entities import (
     JobDefinition,
     JobRun,
@@ -37,8 +57,8 @@ class JobRepository:
                 import_config=job.import_config.model_dump() if job.import_config else None,
                 cron_schedule=job.cron_schedule,
                 enabled=job.enabled,
-                created_at=job.created_at,
-                updated_at=job.updated_at,
+                created_at=_to_naive_utc(job.created_at),
+                updated_at=_to_naive_utc(job.updated_at),
             )
             session.add(db_job)
             await session.commit()
@@ -64,11 +84,11 @@ class JobRepository:
         async with self.db.async_session_maker() as session:
             query = select(JobDefinitionModel).where(JobDefinitionModel.client_id == client_id)
 
-            # Apply date filters
+            # Apply date filters (convert timezone-aware to naive UTC for comparison)
             if start_date:
-                query = query.where(JobDefinitionModel.created_at >= start_date)
+                query = query.where(JobDefinitionModel.created_at >= _to_naive_utc(start_date))
             if end_date:
-                query = query.where(JobDefinitionModel.created_at <= end_date)
+                query = query.where(JobDefinitionModel.created_at <= _to_naive_utc(end_date))
 
             result = await session.execute(query.order_by(JobDefinitionModel.created_at.desc()))
             db_jobs = result.scalars().all()
@@ -99,7 +119,7 @@ class JobRepository:
                     import_config=job.import_config.model_dump() if job.import_config else None,
                     cron_schedule=job.cron_schedule,
                     enabled=job.enabled,
-                    updated_at=datetime.now(UTC),
+                    updated_at=_to_naive_utc(datetime.now(UTC)),
                 )
             )
             await session.commit()
@@ -118,8 +138,8 @@ class JobRepository:
             import_config=ImportConfig(**db_job.import_config) if db_job.import_config else None,
             cron_schedule=db_job.cron_schedule,
             enabled=db_job.enabled,
-            created_at=db_job.created_at,
-            updated_at=db_job.updated_at,
+            created_at=_to_aware_utc(db_job.created_at),
+            updated_at=_to_aware_utc(db_job.updated_at),
         )
 
 
@@ -137,12 +157,12 @@ class JobRunRepository:
                 id=job_run.id,
                 job_id=job_run.job_id,
                 status=job_run.status.value,
-                started_at=job_run.started_at,
-                completed_at=job_run.completed_at,
+                started_at=_to_naive_utc(job_run.started_at),
+                completed_at=_to_naive_utc(job_run.completed_at),
                 error_message=job_run.error_message,
                 result_metadata=job_run.result_metadata,
-                created_at=job_run.created_at,
-                updated_at=job_run.updated_at,
+                created_at=_to_naive_utc(job_run.created_at),
+                updated_at=_to_naive_utc(job_run.updated_at),
             )
             session.add(db_run)
             await session.commit()
@@ -166,11 +186,11 @@ class JobRunRepository:
         async with self.db.async_session_maker() as session:
             query = select(JobRunModel).where(JobRunModel.job_id == job_id)
 
-            # Apply date filters
+            # Apply date filters (convert timezone-aware to naive UTC for comparison)
             if start_date:
-                query = query.where(JobRunModel.created_at >= start_date)
+                query = query.where(JobRunModel.created_at >= _to_naive_utc(start_date))
             if end_date:
-                query = query.where(JobRunModel.created_at <= end_date)
+                query = query.where(JobRunModel.created_at <= _to_naive_utc(end_date))
 
             result = await session.execute(query.order_by(JobRunModel.created_at.desc()))
             db_runs = result.scalars().all()
@@ -189,12 +209,12 @@ class JobRunRepository:
         async with self.db.async_session_maker() as session:
             update_values = {
                 "status": status.value,
-                "updated_at": datetime.now(UTC),
+                "updated_at": _to_naive_utc(datetime.now(UTC)),
             }
             if started_at:
-                update_values["started_at"] = started_at
+                update_values["started_at"] = _to_naive_utc(started_at)
             if completed_at:
-                update_values["completed_at"] = completed_at
+                update_values["completed_at"] = _to_naive_utc(completed_at)
             if error_message:
                 update_values["error_message"] = error_message
             if result_metadata:
@@ -212,10 +232,10 @@ class JobRunRepository:
             id=db_run.id,
             job_id=db_run.job_id,
             status=JobStatus(db_run.status),
-            started_at=db_run.started_at,
-            completed_at=db_run.completed_at,
+            started_at=_to_aware_utc(db_run.started_at),
+            completed_at=_to_aware_utc(db_run.completed_at),
             error_message=db_run.error_message,
             result_metadata=db_run.result_metadata,
-            created_at=db_run.created_at,
-            updated_at=db_run.updated_at,
+            created_at=_to_aware_utc(db_run.created_at),
+            updated_at=_to_aware_utc(db_run.updated_at),
         )
