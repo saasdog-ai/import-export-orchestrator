@@ -40,6 +40,8 @@ class MockSaaSApiClient(SaaSApiClientInterface):
                       If None, uses in-memory storage only.
         """
         self.data_file = data_file
+        # Initialize _sample_data as empty dict first
+        self._sample_data: dict[ExportEntity, list[dict[str, Any]]] = {}
         self._load_initial_data()
 
     def _load_initial_data(self):
@@ -95,10 +97,6 @@ class MockSaaSApiClient(SaaSApiClientInterface):
             "created_at": "2024-01-01T08:00:00Z",
         }
 
-        # Initialize _sample_data if not already set
-        if not hasattr(self, "_sample_data"):
-            self._sample_data: dict[ExportEntity, list[dict[str, Any]]] = {}
-        
         # Populate with default data
         self._sample_data = {
             ExportEntity.BILL: [
@@ -181,7 +179,7 @@ class MockSaaSApiClient(SaaSApiClientInterface):
     ) -> list[dict[str, Any]]:
         """Fetch mock data for an entity."""
         logger.info(f"Fetching {entity.value} data (mock)")
-        data = self._sample_data.get(entity, [])
+        data: list[dict[str, Any]] = self._sample_data.get(entity, [])
 
         # Apply filters if provided (simplified mock filtering)
         if filters:
@@ -282,7 +280,7 @@ class MockSaaSApiClient(SaaSApiClientInterface):
         if self.data_file:
             self._save_data()
 
-        result = {
+        result: dict[str, Any] = {
             "imported_count": imported_count,
             "updated_count": updated_count,
             "failed_count": failed_count,
