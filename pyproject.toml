@@ -89,7 +89,8 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
-    "--cov-fail-under=35",  # Temporarily lowered - will increase as more tests are added
+    # Note: --cov-fail-under is set in CI workflow, not here
+    # This allows local runs to see coverage without failing
     "-v",
 ]
 
