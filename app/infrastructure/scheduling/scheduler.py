@@ -117,7 +117,7 @@ class APSchedulerService(SchedulerInterface):
         except Exception as e:
             logger.error(f"Failed to remove cron job '{job_id}': {e}")
 
-    def get_job(self, job_id: str) -> any | None:
+    def get_job(self, job_id: str) -> Any | None:
         """Get a scheduled job by ID."""
         if not self.scheduler:
             return None
