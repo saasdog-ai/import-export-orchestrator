@@ -260,7 +260,7 @@ class MockSaaSApiClient(SaaSApiClientInterface):
                     # Create new record with generated ID
                     record["id"] = str(uuid4())
                     if "created_at" not in record:
-                        from datetime import datetime
+                        from datetime import UTC, datetime
 
                         record["created_at"] = datetime.now(UTC).isoformat() + "Z"
                     current_data.append(record)

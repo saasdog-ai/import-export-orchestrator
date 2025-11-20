@@ -85,7 +85,7 @@ class AzureBlobStorage:
     ) -> str:
         """Generate a SAS (Shared Access Signature) URL for downloading."""
         try:
-            from datetime import datetime, timedelta
+            from datetime import UTC, datetime, timedelta
 
             from azure.storage.blob import BlobSasPermissions, generate_blob_sas
 
