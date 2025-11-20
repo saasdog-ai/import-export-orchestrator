@@ -29,17 +29,28 @@ from app.services.scheduler_service import SchedulerService
 TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/test_job_runner"
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Note: event_loop fixture removed - pytest-asyncio auto mode handles this
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 async def test_db():
-    """Create test database."""
+    """Create test database.
+    
+    Note: This fixture requires a running PostgreSQL database.
+    Integration tests that use this will be skipped if database is unavailable.
+    Uses function scope to match pytest-asyncio auto mode.
+    """
+    # Check if database is available
+    try:
+        import asyncpg
+        # Try to connect to verify database is available
+        conn = await asyncpg.connect(
+            "postgresql://postgres:postgres@localhost:5432/test_job_runner"
+        )
+        await conn.close()
+    except Exception as e:
+        pytest.skip(f"PostgreSQL database not available: {e}. Skipping integration tests.")
+    
     # Create engine with NullPool for tests - use asyncpg driver
     engine = create_async_engine(
         TEST_DATABASE_URL,  # Keep +asyncpg for async driver
@@ -47,22 +58,21 @@ async def test_db():
         echo=False,
     )
 
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        # Create tables (idempotent - safe to run multiple times)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    # Create database wrapper
-    db = Database(TEST_DATABASE_URL)
-    await db.connect()
+        # Create database wrapper
+        db = Database(TEST_DATABASE_URL)
+        await db.connect()
 
-    yield db
+        yield db
 
-    # Cleanup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-    await db.disconnect()
-    await engine.dispose()
+        # Cleanup - rollback any uncommitted transactions
+        await db.disconnect()
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture
