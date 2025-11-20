@@ -40,19 +40,23 @@ echo ""
 
 # Step 3: Run type checker (non-blocking)
 echo -e "${YELLOW}Step 3: Running type checker (mypy)...${NC}"
-if mypy app 2>&1 | tee /tmp/mypy_output.log; then
+MYPY_OUTPUT=$(mypy app 2>&1)
+MYPY_EXIT_CODE=$?
+
+if [ $MYPY_EXIT_CODE -eq 0 ]; then
     echo -e "${GREEN}✅ Type checker passed${NC}"
 else
-    ERROR_COUNT=$(grep -c "error:" /tmp/mypy_output.log 2>/dev/null || echo "0")
+    ERROR_COUNT=$(echo "$MYPY_OUTPUT" | grep -c "error:" || echo "0")
     if [ "$ERROR_COUNT" -gt 0 ]; then
         echo -e "${YELLOW}⚠️  Type checker found $ERROR_COUNT issues (non-blocking)${NC}"
-        echo -e "${YELLOW}💡 These are mostly from optional cloud dependencies and SQLAlchemy${NC}"
-        echo -e "${YELLOW}💡 CI will also show these warnings but won't fail${NC}"
+        echo -e "${YELLOW}💡 Most errors are from optional cloud dependencies (boto3, azure, google.cloud)${NC}"
+        echo -e "${YELLOW}💡 These are ignored via mypy overrides and won't fail CI${NC}"
+        # Show summary line
+        echo "$MYPY_OUTPUT" | grep "Found.*error" | tail -1 || true
     else
         echo -e "${GREEN}✅ Type checker passed${NC}"
     fi
 fi
-rm -f /tmp/mypy_output.log
 echo ""
 
 # Step 4: Run unit tests
