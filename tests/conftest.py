@@ -42,6 +42,7 @@ async def test_db():
     # Check if database is available
     try:
         import asyncpg
+
         # Try to connect to verify database is available
         conn = await asyncpg.connect(
             "postgresql://postgres:postgres@localhost:5432/test_job_runner"
