@@ -93,7 +93,9 @@ ruff format app tests
 ### 3. Type Checker (mypy)
 - Type annotations
 - Type errors
-- Note: Non-blocking (warnings only)
+- **Note: Non-blocking** - Shows warnings but doesn't fail the push
+- Matches CI behavior (non-blocking in GitHub Actions)
+- Most errors are from optional cloud dependencies (ignored via mypy overrides)
 
 ### 4. Unit Tests (pytest)
 - All unit tests must pass
