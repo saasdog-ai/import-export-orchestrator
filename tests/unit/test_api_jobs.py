@@ -326,7 +326,39 @@ async def test_get_job_runs_success(mock_job_service, authenticated_client_id, s
     assert len(result) == 2
     assert all(run.job_id == sample_job.id for run in result)
     mock_job_service.get_job.assert_called_once_with(sample_job.id)
-    mock_job_service.get_job_runs.assert_called_once_with(sample_job.id)
+    mock_job_service.get_job_runs.assert_called_once_with(sample_job.id, start_date=None, end_date=None)
+
+
+@pytest.mark.asyncio
+async def test_get_job_runs_with_date_filter(mock_job_service, authenticated_client_id, sample_job):
+    """Test getting job runs with date filtering."""
+    from datetime import datetime
+
+    # Setup
+    runs = [
+        JobRun(id=uuid4(), job_id=sample_job.id, status=JobStatus.PENDING),
+    ]
+
+    start_date = datetime.utcnow()
+    end_date = datetime.utcnow()
+
+    mock_job_service.get_job = AsyncMock(return_value=sample_job)
+    mock_job_service.get_job_runs = AsyncMock(return_value=runs)
+
+    # Execute with date filters
+    result = await get_job_runs(
+        job_id=sample_job.id,
+        start_date=start_date,
+        end_date=end_date,
+        authenticated_client_id=authenticated_client_id,
+        job_service=mock_job_service,
+    )
+
+    # Verify
+    assert len(result) == 1
+    mock_job_service.get_job_runs.assert_called_once_with(
+        sample_job.id, start_date=start_date, end_date=end_date
+    )
 
 
 @pytest.mark.asyncio
@@ -390,4 +422,42 @@ async def test_get_client_jobs_success(mock_job_service, authenticated_client_id
     # Verify - model_validate can accept JobDefinition objects
     assert len(result) == 2
     assert all(job.client_id == authenticated_client_id for job in result)
-    mock_job_service.get_jobs_by_client.assert_called_once_with(authenticated_client_id)
+    mock_job_service.get_jobs_by_client.assert_called_once_with(
+        authenticated_client_id, start_date=None, end_date=None
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_client_jobs_with_date_filter(mock_job_service, authenticated_client_id):
+    """Test getting all jobs for a client with date filtering."""
+    from datetime import datetime
+
+    # Setup
+    jobs = [
+        JobDefinition(
+            id=uuid4(),
+            client_id=authenticated_client_id,
+            name="Job 1",
+            job_type=JobType.EXPORT,
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        ),
+    ]
+
+    start_date = datetime.utcnow()
+    end_date = datetime.utcnow()
+
+    mock_job_service.get_jobs_by_client = AsyncMock(return_value=jobs)
+
+    # Execute with date filters
+    result = await get_client_jobs(
+        start_date=start_date,
+        end_date=end_date,
+        authenticated_client_id=authenticated_client_id,
+        job_service=mock_job_service,
+    )
+
+    # Verify
+    assert len(result) == 1
+    mock_job_service.get_jobs_by_client.assert_called_once_with(
+        authenticated_client_id, start_date=start_date, end_date=end_date
+    )

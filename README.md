@@ -131,9 +131,17 @@ import-export-orchestrator/
 - `GET /jobs/{job_id}` - Get job definition by ID
 - `PUT /jobs/{job_id}` - Update job definition
 - `POST /jobs/{job_id}/run` - Manually trigger a job run
-- `GET /jobs/{job_id}/runs` - Get all runs for a job
+- `GET /jobs/{job_id}/runs` - Get all runs for a job (supports date filtering)
 - `GET /jobs/{job_id}/runs/{run_id}` - Get specific job run
-- `GET /jobs/clients/{client_id}` - Get all jobs for a client
+- `GET /jobs` - Get all jobs for authenticated client (supports date filtering)
+
+**Date Filtering**: Both `GET /jobs/{job_id}/runs` and `GET /jobs` support optional query parameters:
+- `start_date` - Filter records created after this date/time (ISO 8601 format)
+- `end_date` - Filter records created before this date/time (ISO 8601 format)
+
+Example: `GET /jobs/{job_id}/runs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z`
+
+See [docs/DATE_FILTERING.md](docs/DATE_FILTERING.md) for detailed documentation.
 
 ### Export Operations
 

@@ -4,6 +4,8 @@ Note: These tests use real database connections and should be considered integra
 For true unit tests with mocked dependencies, see test_repositories_mocked.py
 """
 
+import asyncio
+
 import pytest
 
 from app.domain.entities import (
@@ -43,6 +45,43 @@ async def test_get_jobs_by_client(
     jobs = await job_repository.get_by_client_id(test_client_id)
     assert len(jobs) >= 1
     assert all(job.client_id == test_client_id for job in jobs)
+
+
+@pytest.mark.asyncio
+async def test_get_jobs_by_client_with_date_filter(
+    job_repository: JobRepository, test_client_id, test_job: JobDefinition
+):
+    """Test getting jobs by client ID with date filtering."""
+    from datetime import datetime, timedelta
+
+    # Create a job
+    await job_repository.create(test_job)
+
+    # Get all jobs
+    all_jobs = await job_repository.get_by_client_id(test_client_id)
+    assert len(all_jobs) >= 1
+
+    # Filter by start_date (should include the job we just created)
+    future_date = datetime.utcnow() + timedelta(days=1)
+    future_jobs = await job_repository.get_by_client_id(test_client_id, start_date=future_date)
+    assert len(future_jobs) == 0  # No jobs created in the future
+
+    # Filter by end_date (should include the job we just created)
+    past_date = datetime.utcnow() - timedelta(days=1)
+    past_jobs = await job_repository.get_by_client_id(test_client_id, end_date=past_date)
+    # The job we created should be after past_date, so it might not be in results
+    # But we can verify the filtering works
+
+    # Filter by date range (should include the job)
+    start_date = datetime.utcnow() - timedelta(days=1)
+    end_date = datetime.utcnow() + timedelta(days=1)
+    range_jobs = await job_repository.get_by_client_id(
+        test_client_id, start_date=start_date, end_date=end_date
+    )
+    assert len(range_jobs) >= 1
+    assert all(
+        start_date <= job.created_at <= end_date for job in range_jobs
+    )
 
 
 @pytest.mark.asyncio
@@ -90,3 +129,49 @@ async def test_update_job_run_status(
     )
     assert updated_run.status == JobStatus.RUNNING
     assert updated_run.started_at is not None
+
+
+@pytest.mark.asyncio
+async def test_get_job_runs_with_date_filter(
+    job_repository: JobRepository,
+    job_run_repository: JobRunRepository,
+    test_job: JobDefinition,
+):
+    """Test getting job runs with date filtering."""
+    from datetime import datetime, timedelta
+
+    # Create job and multiple runs
+    created_job = await job_repository.create(test_job)
+
+    # Create runs at different times
+    run1 = JobRun(job_id=created_job.id, status=JobStatus.PENDING)
+    created_run1 = await job_run_repository.create(run1)
+
+    # Wait a moment to ensure different timestamps
+    await asyncio.sleep(0.1)
+
+    run2 = JobRun(job_id=created_job.id, status=JobStatus.PENDING)
+    created_run2 = await job_run_repository.create(run2)
+
+    # Get all runs
+    all_runs = await job_run_repository.get_by_job_id(created_job.id)
+    assert len(all_runs) >= 2
+
+    # Filter by start_date (should include both runs)
+    past_date = datetime.utcnow() - timedelta(days=1)
+    past_runs = await job_run_repository.get_by_job_id(created_job.id, start_date=past_date)
+    assert len(past_runs) >= 2
+
+    # Filter by future start_date (should return empty)
+    future_date = datetime.utcnow() + timedelta(days=1)
+    future_runs = await job_run_repository.get_by_job_id(created_job.id, start_date=future_date)
+    assert len(future_runs) == 0
+
+    # Filter by date range
+    start_date = datetime.utcnow() - timedelta(days=1)
+    end_date = datetime.utcnow() + timedelta(days=1)
+    range_runs = await job_run_repository.get_by_job_id(
+        created_job.id, start_date=start_date, end_date=end_date
+    )
+    assert len(range_runs) >= 2
+    assert all(start_date <= run.created_at <= end_date for run in range_runs)
