@@ -1,6 +1,7 @@
 """API routes for job management."""
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -158,14 +159,20 @@ async def run_job(
 )
 async def get_job_runs(
     job_id: UUID,
-    start_date: datetime | None = Query(
-        default=None,
-        description="Filter runs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
-    ),
-    end_date: datetime | None = Query(
-        default=None,
-        description="Filter runs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
-    ),
+    start_date: Annotated[
+        datetime | None,
+        Query(
+            default=None,
+            description="Filter runs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
+        ),
+    ] = None,
+    end_date: Annotated[
+        datetime | None,
+        Query(
+            default=None,
+            description="Filter runs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
+        ),
+    ] = None,
     authenticated_client_id: UUID = Depends(get_current_client_id),
     job_service: JobService = Depends(get_job_service),
 ):
@@ -230,14 +237,20 @@ async def get_job_run(
     response_model=list[JobDefinitionResponse],
 )
 async def get_client_jobs(
-    start_date: datetime | None = Query(
-        default=None,
-        description="Filter jobs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
-    ),
-    end_date: datetime | None = Query(
-        default=None,
-        description="Filter jobs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
-    ),
+    start_date: Annotated[
+        datetime | None,
+        Query(
+            default=None,
+            description="Filter jobs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
+        ),
+    ] = None,
+    end_date: Annotated[
+        datetime | None,
+        Query(
+            default=None,
+            description="Filter jobs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
+        ),
+    ] = None,
     authenticated_client_id: UUID = Depends(get_current_client_id),
     job_service: JobService = Depends(get_job_service),
 ):
@@ -257,6 +270,11 @@ async def get_client_jobs(
     - Get jobs in a date range: GET /jobs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z
     """
     try:
+        # Convert timezone-aware datetimes to naive UTC if needed
+        if start_date and start_date.tzinfo is not None:
+            start_date = start_date.replace(tzinfo=None)
+        if end_date and end_date.tzinfo is not None:
+            end_date = end_date.replace(tzinfo=None)
         jobs = await job_service.get_jobs_by_client(
             authenticated_client_id, start_date=start_date, end_date=end_date
         )
