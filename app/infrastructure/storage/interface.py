@@ -1,7 +1,6 @@
 """Interface for cloud storage operations."""
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class CloudStorageInterface(ABC):
@@ -9,7 +8,7 @@ class CloudStorageInterface(ABC):
 
     @abstractmethod
     async def upload_file(
-        self, local_file_path: str, remote_file_path: str, content_type: Optional[str] = None
+        self, local_file_path: str, remote_file_path: str, content_type: str | None = None
     ) -> str:
         """
         Upload a local file to cloud storage.
@@ -63,4 +62,3 @@ class CloudStorageInterface(ABC):
             remote_file_path: Path/name of the file in cloud storage
         """
         raise NotImplementedError
-

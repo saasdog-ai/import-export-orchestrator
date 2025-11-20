@@ -1,6 +1,5 @@
 """Service for managing job definitions and runs."""
 
-from typing import List, Optional
 from uuid import UUID
 
 from app.core.logging import get_logger
@@ -22,7 +21,7 @@ class JobService:
         job_run_repository: JobRunRepository,
         scheduler_service: SchedulerService,
         job_runner: JobRunnerService,
-        message_queue: Optional[MessageQueueInterface] = None,
+        message_queue: MessageQueueInterface | None = None,
     ):
         """Initialize job service."""
         self.job_repository = job_repository
@@ -49,7 +48,7 @@ class JobService:
             raise ValueError(f"Job not found: {job_id}")
         return job
 
-    async def get_jobs_by_client(self, client_id: UUID) -> List[JobDefinition]:
+    async def get_jobs_by_client(self, client_id: UUID) -> list[JobDefinition]:
         """Get all jobs for a client."""
         return await self.job_repository.get_by_client_id(client_id)
 
@@ -108,7 +107,6 @@ class JobService:
             raise ValueError(f"Job run not found: {run_id}")
         return job_run
 
-    async def get_job_runs(self, job_id: UUID) -> List[JobRun]:
+    async def get_job_runs(self, job_id: UUID) -> list[JobRun]:
         """Get all runs for a job."""
         return await self.job_run_repository.get_by_job_id(job_id)
-

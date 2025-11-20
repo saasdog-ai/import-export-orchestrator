@@ -1,8 +1,5 @@
 """Factory for creating message queue instances."""
 
-import json
-from typing import Optional
-
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.infrastructure.queue.interface import MessageQueueInterface
@@ -10,7 +7,7 @@ from app.infrastructure.queue.interface import MessageQueueInterface
 logger = get_logger(__name__)
 
 
-def get_message_queue() -> Optional[MessageQueueInterface]:
+def get_message_queue() -> MessageQueueInterface | None:
     """
     Get message queue instance based on configuration.
 
@@ -21,12 +18,16 @@ def get_message_queue() -> Optional[MessageQueueInterface]:
     cloud_provider = settings.cloud_provider
 
     if cloud_provider is None:
-        logger.warning("No cloud provider configured. Using in-memory queue (not recommended for production).")
+        logger.warning(
+            "No cloud provider configured. Using in-memory queue (not recommended for production)."
+        )
         return None
 
     queue_name = settings.message_queue_name
     if not queue_name:
-        logger.warning("No message queue name configured. Using in-memory queue (not recommended for production).")
+        logger.warning(
+            "No message queue name configured. Using in-memory queue (not recommended for production)."
+        )
         return None
 
     if cloud_provider == "aws":
@@ -53,4 +54,3 @@ def get_message_queue() -> Optional[MessageQueueInterface]:
     else:
         logger.warning(f"Unknown cloud provider: {cloud_provider}")
         return None
-

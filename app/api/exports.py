@@ -1,22 +1,21 @@
 """API routes for export operations."""
 
-from typing import Dict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dto import (
+    ErrorResponse,
     ExportPreviewRequest,
     ExportPreviewResponse,
     ExportRequest,
-    ExportResultResponse,
+)
+from app.api.dto import (
     ExportResultResponse as ExportResultResponseDTO,
-    ErrorResponse,
 )
 from app.auth.backend import get_current_client_id
-from app.core.config import get_settings
 from app.core.dependency_injection import get_job_service, get_query_engine
-from app.domain.entities import ExportConfig, JobRun, JobStatus, JobType
+from app.domain.entities import ExportConfig, JobStatus, JobType
 from app.infrastructure.query.engine import ExportQueryEngine
 from app.infrastructure.storage.factory import get_cloud_storage
 from app.services.job_service import JobService
@@ -37,13 +36,14 @@ async def create_export(
 ):
     """
     Create and trigger an export job.
-    
+
     The client_id is extracted from the JWT token, not from the URL path.
     This prevents clients from accessing other clients' data by manipulating URLs.
     """
     try:
-        from app.domain.entities import JobDefinition
         from uuid import uuid4
+
+        from app.domain.entities import JobDefinition
 
         # Create export config
         export_config = ExportConfig(
@@ -79,9 +79,7 @@ async def create_export(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post(
@@ -96,7 +94,7 @@ async def preview_export(
 ):
     """
     Preview export results without creating a job.
-    
+
     The client_id is extracted from the JWT token. This endpoint allows clients
     to preview what data would be exported before creating an actual export job.
     """
@@ -117,16 +115,14 @@ async def preview_export(
         return ExportPreviewResponse(
             entity=preview_request.entity,
             count=result.get("count", 0),
-            records=result.get("records", [])[:preview_request.limit],
+            records=result.get("records", [])[: preview_request.limit],
             limit=preview_request.limit,
             offset=0,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get(
@@ -178,9 +174,7 @@ async def get_export_result(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get(
@@ -254,7 +248,4 @@ async def get_export_download_url(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

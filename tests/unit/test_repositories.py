@@ -3,12 +3,9 @@
 import pytest
 
 from app.domain.entities import (
-    ExportConfig,
-    ExportEntity,
     JobDefinition,
     JobRun,
     JobStatus,
-    JobType,
 )
 from app.infrastructure.db.repositories import JobRepository, JobRunRepository
 
@@ -50,7 +47,7 @@ async def test_create_job_run(
     """Test creating a job run."""
     # First create the job
     created_job = await job_repository.create(test_job)
-    
+
     job_run = JobRun(
         job_id=created_job.id,
         status=JobStatus.PENDING,
@@ -68,16 +65,16 @@ async def test_update_job_run_status(
 ):
     """Test updating job run status."""
     from datetime import datetime
-    
+
     # Create job and run
     created_job = await job_repository.create(test_job)
-    
+
     job_run = JobRun(
         job_id=created_job.id,
         status=JobStatus.PENDING,
     )
     created_run = await job_run_repository.create(job_run)
-    
+
     # Update status
     updated_run = await job_run_repository.update_status(
         created_run.id,
@@ -86,4 +83,3 @@ async def test_update_job_run_status(
     )
     assert updated_run.status == JobStatus.RUNNING
     assert updated_run.started_at is not None
-

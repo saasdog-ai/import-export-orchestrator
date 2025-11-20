@@ -1,8 +1,9 @@
 """Unit tests for import validator."""
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from app.domain.entities import ExportEntity
 from app.services.import_validator import ImportValidator
@@ -63,9 +64,7 @@ class TestImportValidator:
             f.write(",100.00,2024-01-01,Test\n")
             f.write(",200.50,2024-01-02,Another test\n")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is True
         assert len(errors) == 0
 
@@ -75,9 +74,7 @@ class TestImportValidator:
             f.write("id,description\n")
             f.write(",Test\n")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is False
         assert len(errors) > 0
         assert any("Missing required fields" in e.get("message", "") for e in errors)
@@ -88,13 +85,10 @@ class TestImportValidator:
             f.write("id,amount,date\n")
             f.write(",invalid,2024-01-01\n")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is False
         assert any(
-            e.get("field") == "amount" and "number" in e.get("message", "").lower()
-            for e in errors
+            e.get("field") == "amount" and "number" in e.get("message", "").lower() for e in errors
         )
 
     def test_validate_csv_content_invalid_date(self, temp_csv_file):
@@ -103,13 +97,10 @@ class TestImportValidator:
             f.write("id,amount,date\n")
             f.write(",100.00,01-01-2024\n")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is False
         assert any(
-            e.get("field") == "date" and "YYYY-MM-DD" in e.get("message", "")
-            for e in errors
+            e.get("field") == "date" and "YYYY-MM-DD" in e.get("message", "") for e in errors
         )
 
     def test_validate_csv_content_malicious_script(self, temp_csv_file):
@@ -118,9 +109,7 @@ class TestImportValidator:
             f.write("id,amount,date,description\n")
             f.write(",100.00,2024-01-01,<script>alert('xss')</script>\n")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is False
         assert any(
             "malicious" in e.get("message", "").lower() or "script" in e.get("message", "").lower()
@@ -133,9 +122,7 @@ class TestImportValidator:
             f.write("id,amount,date,description\n")
             f.write(",100.00,2024-01-01,'; DROP TABLE bills; --\n")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is False
         assert any("malicious" in e.get("message", "").lower() for e in errors)
 
@@ -145,9 +132,7 @@ class TestImportValidator:
             f.write("id,amount,date\n")
             f.write(",,2024-01-01\n")  # Missing amount
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_csv_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
         assert is_valid is False
         assert any(
             e.get("field") == "amount" and "required" in e.get("message", "").lower()
@@ -165,9 +150,7 @@ class TestImportValidator:
         with open(temp_json_file, "w") as f:
             json.dump(data, f)
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_json_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_json_file, ExportEntity.BILL)
         assert is_valid is True
         assert len(errors) == 0
 
@@ -176,9 +159,7 @@ class TestImportValidator:
         with open(temp_json_file, "w") as f:
             f.write("{ invalid json }")
 
-        is_valid, errors = ImportValidator.validate_file_content(
-            temp_json_file, ExportEntity.BILL
-        )
+        is_valid, errors = ImportValidator.validate_file_content(temp_json_file, ExportEntity.BILL)
         assert is_valid is False
         assert len(errors) > 0
         assert any("Invalid JSON" in e.get("message", "") for e in errors)
@@ -236,7 +217,5 @@ class TestImportValidator:
 
         assert len(errors) > 0
         assert any(
-            e.get("field") == "amount" and "number" in e.get("message", "").lower()
-            for e in errors
+            e.get("field") == "amount" and "number" in e.get("message", "").lower() for e in errors
         )
-

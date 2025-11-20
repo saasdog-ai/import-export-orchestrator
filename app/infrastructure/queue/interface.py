@@ -1,14 +1,14 @@
 """Interface for message queue operations."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class MessageQueueInterface(ABC):
     """Interface for message queue operations (SQS, Azure Queue, GCP Pub/Sub)."""
 
     @abstractmethod
-    async def send_message(self, message_body: Dict[str, Any], delay_seconds: int = 0) -> str:
+    async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
         """
         Send a message to the queue.
 
@@ -24,7 +24,7 @@ class MessageQueueInterface(ABC):
     @abstractmethod
     async def receive_messages(
         self, max_messages: int = 1, wait_time_seconds: int = 20
-    ) -> list[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Receive messages from the queue.
 
@@ -48,7 +48,7 @@ class MessageQueueInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_queue_attributes(self) -> Dict[str, Any]:
+    async def get_queue_attributes(self) -> dict[str, Any]:
         """
         Get queue attributes (e.g., approximate number of messages).
 
@@ -56,4 +56,3 @@ class MessageQueueInterface(ABC):
             Dictionary of queue attributes
         """
         raise NotImplementedError
-

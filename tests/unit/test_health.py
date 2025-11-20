@@ -1,7 +1,8 @@
 """Unit tests for health check endpoints."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.api.health import health_check, health_check_db
 
@@ -24,10 +25,10 @@ async def test_health_check_db_success():
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=None)
-    
+
     mock_db = MagicMock()
     mock_db.async_session_maker.return_value = mock_session
-    
+
     with patch("app.api.health.get_database", return_value=mock_db):
         result = await health_check_db(db=mock_db)
         assert result.status == "healthy"
@@ -43,11 +44,10 @@ async def test_health_check_db_failure():
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=None)
     mock_db.async_session_maker.return_value = mock_session
-    
+
     from fastapi import HTTPException
-    
+
     with patch("app.api.health.get_database", return_value=mock_db):
         with pytest.raises(HTTPException) as exc_info:
             await health_check_db(db=mock_db)
         assert exc_info.value.status_code == 503
-

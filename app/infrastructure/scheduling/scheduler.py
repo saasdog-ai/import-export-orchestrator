@@ -1,7 +1,6 @@
 """Pluggable scheduler implementation using APScheduler."""
 
-from datetime import datetime
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -44,7 +43,7 @@ class APSchedulerService(SchedulerInterface):
     def __init__(self, timezone: str = "UTC"):
         """Initialize scheduler."""
         self.timezone = timezone
-        self.scheduler: Optional[AsyncIOScheduler] = None
+        self.scheduler: AsyncIOScheduler | None = None
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -118,9 +117,8 @@ class APSchedulerService(SchedulerInterface):
         except Exception as e:
             logger.error(f"Failed to remove cron job '{job_id}': {e}")
 
-    def get_job(self, job_id: str) -> Optional[any]:
+    def get_job(self, job_id: str) -> any | None:
         """Get a scheduled job by ID."""
         if not self.scheduler:
             return None
         return self.scheduler.get_job(job_id)
-

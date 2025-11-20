@@ -46,4 +46,3 @@ class Database:
     def get_session(self) -> AsyncSession:
         """Get async database session."""
         return self.async_session_maker()
-

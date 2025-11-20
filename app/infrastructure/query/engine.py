@@ -1,11 +1,10 @@
 """Query engine for translating DSL filters to SQLAlchemy expressions."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+from sqlalchemy import and_, not_, or_
 
 from app.core.logging import get_logger
-from sqlalchemy import and_, or_, select, not_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 logger = get_logger(__name__)
 
@@ -18,9 +17,7 @@ from app.domain.entities import (
     LogicalOperator,
 )
 from app.infrastructure.db.database import Database
-from app.infrastructure.db.models import Base
 from app.infrastructure.query.schema import (
-    ALLOWED_JOINS,
     validate_field_path,
 )
 from app.infrastructure.saas.client import SaaSApiClientInterface
@@ -34,16 +31,16 @@ class ExportQueryEngine:
         self.db = db
         self.saas_client = saas_client
         # Mock models for query building (in real implementation, these would be actual ORM models)
-        self._mock_models: Dict[ExportEntity, Any] = {}
+        self._mock_models: dict[ExportEntity, Any] = {}
 
-    async def execute_export_query(
-        self, config: ExportConfig
-    ) -> Dict[str, Any]:
+    async def execute_export_query(self, config: ExportConfig) -> dict[str, Any]:
         """Execute an export query and return results."""
         # Validate all fields
         for field in config.fields:
             if not validate_field_path(config.entity, field):
-                raise ValueError(f"Field '{field}' is not allowed for entity '{config.entity.value}'")
+                raise ValueError(
+                    f"Field '{field}' is not allowed for entity '{config.entity.value}'"
+                )
 
         # Validate filters
         if config.filters:
@@ -63,7 +60,9 @@ class ExportQueryEngine:
 
         # Apply limit and offset
         total_count = len(sorted_data)
-        paginated_data = sorted_data[config.offset : config.offset + (config.limit or len(sorted_data))]
+        paginated_data = sorted_data[
+            config.offset : config.offset + (config.limit or len(sorted_data))
+        ]
 
         # Select only requested fields and handle nested fields
         selected_records = self._select_fields(paginated_data, config.fields, config.entity)
@@ -76,9 +75,7 @@ class ExportQueryEngine:
             "offset": config.offset,
         }
 
-    def _validate_filter_group(
-        self, entity: ExportEntity, group: ExportFilterGroup
-    ) -> None:
+    def _validate_filter_group(self, entity: ExportEntity, group: ExportFilterGroup) -> None:
         """Validate a filter group recursively."""
         for filter_item in group.filters:
             if not validate_field_path(entity, filter_item.field):
@@ -102,9 +99,7 @@ class ExportQueryEngine:
         # In real implementation, this would build actual SQLAlchemy select() statements
         return None
 
-    def _build_filter_expression(
-        self, entity: ExportEntity, filter_item: ExportFilter
-    ) -> Any:
+    def _build_filter_expression(self, entity: ExportEntity, filter_item: ExportFilter) -> Any:
         """Build SQLAlchemy filter expression from a filter."""
         # In a real implementation, this would:
         # 1. Parse field path (e.g., "vendor.name" -> (Vendor, "name"))
@@ -120,9 +115,7 @@ class ExportQueryEngine:
         # etc.
         return None
 
-    def _combine_filters(
-        self, operator: LogicalOperator, expressions: List[Any]
-    ) -> Any:
+    def _combine_filters(self, operator: LogicalOperator, expressions: list[Any]) -> Any:
         """Combine filter expressions with logical operator."""
         if not expressions:
             return None
@@ -138,7 +131,7 @@ class ExportQueryEngine:
         else:
             raise ValueError(f"Unknown logical operator: {operator}")
 
-    def _filters_to_dict(self, filter_group: ExportFilterGroup) -> Dict[str, Any]:
+    def _filters_to_dict(self, filter_group: ExportFilterGroup) -> dict[str, Any]:
         """Convert filter group to a simple dict for SaaS API (simplified)."""
         # In production, this would be more sophisticated
         # For now, return a basic structure
@@ -151,8 +144,8 @@ class ExportQueryEngine:
         return result
 
     def _apply_filters(
-        self, data: List[Dict[str, Any]], config: ExportConfig
-    ) -> List[Dict[str, Any]]:
+        self, data: list[dict[str, Any]], config: ExportConfig
+    ) -> list[dict[str, Any]]:
         """Apply filters to data (in-memory filtering for mock data)."""
         if not config.filters:
             return data
@@ -165,7 +158,7 @@ class ExportQueryEngine:
         return filtered
 
     def _matches_filters(
-        self, record: Dict[str, Any], filter_group: ExportFilterGroup, entity: ExportEntity
+        self, record: dict[str, Any], filter_group: ExportFilterGroup, entity: ExportEntity
     ) -> bool:
         """Check if a record matches the filter group."""
         results = []
@@ -228,7 +221,7 @@ class ExportQueryEngine:
         except (TypeError, ValueError):
             return False
 
-    def _get_nested_value(self, data: Dict[str, Any], field_path: str) -> Any:
+    def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Get nested value from dictionary using dot notation."""
         parts = field_path.split(".")
         value = data
@@ -242,13 +235,13 @@ class ExportQueryEngine:
         return value
 
     def _apply_sorting(
-        self, data: List[Dict[str, Any]], sort: Optional[List[Dict[str, str]]]
-    ) -> List[Dict[str, Any]]:
+        self, data: list[dict[str, Any]], sort: list[dict[str, str]] | None
+    ) -> list[dict[str, Any]]:
         """Apply sorting to data with support for mixed sort directions."""
         if not sort:
             return data
 
-        def sort_key(record: Dict[str, Any]) -> tuple:
+        def sort_key(record: dict[str, Any]) -> tuple:
             """Generate sort key from record, handling mixed sort directions."""
             keys = []
             for sort_item in sort:
@@ -270,43 +263,53 @@ class ExportQueryEngine:
 
         try:
             # Sort the data
-            sorted_data = sorted(data, key=lambda r: tuple(
-                (-v if isinstance(v, (int, float)) and desc else v)
-                if v is not None else (float("inf") if not desc else float("-inf"))
-                for (v, desc) in [
-                    (self._get_nested_value(r, s.get("field", "")), s.get("direction", "asc").lower() == "desc")
-                    for s in sort
-                ]
-            ))
-            
+            sorted_data = sorted(
+                data,
+                key=lambda r: tuple(
+                    (-v if isinstance(v, (int, float)) and desc else v)
+                    if v is not None
+                    else (float("inf") if not desc else float("-inf"))
+                    for (v, desc) in [
+                        (
+                            self._get_nested_value(r, s.get("field", "")),
+                            s.get("direction", "asc").lower() == "desc",
+                        )
+                        for s in sort
+                    ]
+                ),
+            )
+
             # Post-process: For string fields that are descending, we need to reverse
             # Check if we have any descending string fields
             has_desc_string = False
             for sort_item in sort:
                 if sort_item.get("direction", "asc").lower() == "desc":
                     if sorted_data:
-                        sample_value = self._get_nested_value(sorted_data[0], sort_item.get("field", ""))
+                        sample_value = self._get_nested_value(
+                            sorted_data[0], sort_item.get("field", "")
+                        )
                         if isinstance(sample_value, str):
                             has_desc_string = True
                             break
-            
+
             if has_desc_string:
                 # For descending string fields, we need a more complex approach
                 # Group by all sort fields up to the first descending string field
                 # Then sort each group
                 from collections import defaultdict
-                from functools import reduce
-                
+
                 # Find first descending string field index
                 first_desc_string_idx = None
                 for i, sort_item in enumerate(sort):
                     if sort_item.get("direction", "asc").lower() == "desc":
                         if sorted_data:
-                            sample_value = self._get_nested_value(sorted_data[0], sort_item.get("field", ""))
+                            sample_value = self._get_nested_value(
+                                sorted_data[0], sort_item.get("field", "")
+                            )
                             if isinstance(sample_value, str):
                                 first_desc_string_idx = i
                                 break
-                
+
                 if first_desc_string_idx is not None:
                     # Group by all fields before the first descending string
                     groups = defaultdict(list)
@@ -316,37 +319,47 @@ class ExportQueryEngine:
                             for i in range(first_desc_string_idx)
                         )
                         groups[group_key].append(record)
-                    
+
                     # Sort each group by the descending string field and subsequent fields
                     result = []
                     for group_key in sorted(groups.keys()):
                         group_records = groups[group_key]
                         # Sort this group by remaining fields
-                        group_sorted = sorted(group_records, key=lambda r: tuple(
-                            self._get_nested_value(r, s.get("field", ""))
-                            if s.get("direction", "asc").lower() == "asc"
-                            else (-v if isinstance((v := self._get_nested_value(r, s.get("field", ""))), (int, float)) else v)
-                            for s in sort[first_desc_string_idx:]
-                        ))
+                        group_sorted = sorted(
+                            group_records,
+                            key=lambda r: tuple(
+                                self._get_nested_value(r, s.get("field", ""))
+                                if s.get("direction", "asc").lower() == "asc"
+                                else (
+                                    -v
+                                    if isinstance(
+                                        (v := self._get_nested_value(r, s.get("field", ""))),
+                                        (int, float),
+                                    )
+                                    else v
+                                )
+                                for s in sort[first_desc_string_idx:]
+                            ),
+                        )
                         # Reverse if first remaining field is descending string
                         if sort[first_desc_string_idx].get("direction", "asc").lower() == "desc":
                             group_sorted.reverse()
                         result.extend(group_sorted)
                     return result
-            
+
             # If all fields are descending, reverse the entire list
             all_desc = all(s.get("direction", "asc").lower() == "desc" for s in sort)
             if all_desc:
                 sorted_data.reverse()
-            
+
             return sorted_data
         except Exception as e:
             logger.warning(f"Failed to sort data: {e}")
             return data
 
     def _select_fields(
-        self, data: List[Dict[str, Any]], fields: List[str], entity: ExportEntity
-    ) -> List[Dict[str, Any]]:
+        self, data: list[dict[str, Any]], fields: list[str], entity: ExportEntity
+    ) -> list[dict[str, Any]]:
         """Select and format only the requested fields."""
         result = []
         for record in data:
@@ -362,4 +375,3 @@ class ExportQueryEngine:
                     selected_record[field] = record.get(field)
             result.append(selected_record)
         return result
-

@@ -1,7 +1,6 @@
 """Application configuration using Pydantic Settings."""
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,26 +47,28 @@ class Settings(BaseSettings):
     job_runner_queue_size: int = Field(default=100)
 
     # AWS (optional - use IAM roles in production)
-    aws_region: Optional[str] = Field(default=None)
-    aws_access_key_id: Optional[str] = Field(default=None)
-    aws_secret_access_key: Optional[str] = Field(default=None)
+    aws_region: str | None = Field(default=None)
+    aws_access_key_id: str | None = Field(default=None)
+    aws_secret_access_key: str | None = Field(default=None)
 
     # RDS (optional - use AWS Secrets Manager in production)
-    rds_host: Optional[str] = Field(default=None)
+    rds_host: str | None = Field(default=None)
     rds_port: int = Field(default=5432)
-    rds_db_name: Optional[str] = Field(default=None)
-    rds_username: Optional[str] = Field(default=None)
-    rds_password: Optional[str] = Field(default=None)
+    rds_db_name: str | None = Field(default=None)
+    rds_username: str | None = Field(default=None)
+    rds_password: str | None = Field(default=None)
 
     # Cloud Storage (AWS S3, Azure Blob, GCP Cloud Storage)
-    cloud_provider: Optional[str] = Field(
+    cloud_provider: str | None = Field(
         default=None, description="Cloud provider: 'aws', 'azure', or 'gcp'"
     )
-    cloud_storage_bucket: Optional[str] = Field(
+    cloud_storage_bucket: str | None = Field(
         default=None, description="Bucket/container name for cloud storage"
     )
-    azure_storage_account_name: Optional[str] = Field(default=None)
-    export_file_format: str = Field(default="csv", description="Default export format: 'csv' or 'json'")
+    azure_storage_account_name: str | None = Field(default=None)
+    export_file_format: str = Field(
+        default="csv", description="Default export format: 'csv' or 'json'"
+    )
     export_local_path: str = Field(
         default="/tmp/exports", description="Local directory for temporary export files"
     )
@@ -76,7 +77,7 @@ class Settings(BaseSettings):
     )
 
     # Message Queue (SQS, Azure Queue, GCP Pub/Sub)
-    message_queue_name: Optional[str] = Field(
+    message_queue_name: str | None = Field(
         default=None, description="Queue name/topic name for message queue"
     )
     message_queue_wait_time: int = Field(
@@ -92,8 +93,7 @@ class Settings(BaseSettings):
         return self.database_url.replace("+asyncpg", "")
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
-

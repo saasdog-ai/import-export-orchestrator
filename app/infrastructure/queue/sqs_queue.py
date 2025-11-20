@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 from app.core.logging import get_logger
 
@@ -68,7 +68,7 @@ class SQSQueue:
             else:
                 raise
 
-    async def send_message(self, message_body: Dict[str, Any], delay_seconds: int = 0) -> str:
+    async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
         """Send a message to SQS."""
         await self._ensure_queue_url()
         try:
@@ -90,7 +90,7 @@ class SQSQueue:
 
     async def receive_messages(
         self, max_messages: int = 1, wait_time_seconds: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Receive messages from SQS."""
         await self._ensure_queue_url()
         try:
@@ -141,7 +141,7 @@ class SQSQueue:
             logger.error(f"Failed to delete message from SQS: {e}")
             raise
 
-    async def get_queue_attributes(self) -> Dict[str, Any]:
+    async def get_queue_attributes(self) -> dict[str, Any]:
         """Get SQS queue attributes."""
         await self._ensure_queue_url()
         try:
@@ -156,4 +156,3 @@ class SQSQueue:
         except ClientError as e:
             logger.error(f"Failed to get queue attributes: {e}")
             raise
-

@@ -1,10 +1,11 @@
 """Unit tests for authentication backend."""
 
-import pytest
 from uuid import UUID
 
-from app.auth.backend import JWTAuthBackend, get_auth_backend
+import pytest
 from fastapi import Request
+
+from app.auth.backend import JWTAuthBackend, get_auth_backend
 
 
 def test_jwt_auth_backend_init():
@@ -68,4 +69,3 @@ def test_get_auth_backend():
     backend2 = get_auth_backend()
     # Should return same instance (singleton)
     assert backend1 is backend2
-

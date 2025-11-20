@@ -1,6 +1,5 @@
 """Service for managing job scheduling."""
 
-from typing import Optional
 from uuid import UUID
 
 from app.core.logging import get_logger
@@ -22,7 +21,7 @@ class SchedulerService:
         job_repository: JobRepository,
         job_run_repository: JobRunRepository,
         job_runner: JobRunnerService,
-        message_queue: Optional[MessageQueueInterface] = None,
+        message_queue: MessageQueueInterface | None = None,
     ):
         """Initialize scheduler service."""
         self.scheduler = scheduler
@@ -93,4 +92,3 @@ class SchedulerService:
         for job in jobs:
             await self.schedule_job(job)
         logger.info(f"Reloaded {len(jobs)} scheduled jobs")
-

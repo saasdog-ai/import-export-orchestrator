@@ -1,2 +1,1 @@
 """SaaS API client infrastructure."""
-

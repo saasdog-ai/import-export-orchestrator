@@ -1,7 +1,5 @@
 """Dependency injection container."""
 
-from typing import Optional
-
 from app.core.config import get_settings
 from app.infrastructure.db.database import Database
 from app.infrastructure.db.repositories import (
@@ -11,8 +9,8 @@ from app.infrastructure.db.repositories import (
 from app.infrastructure.query.engine import ExportQueryEngine
 from app.infrastructure.queue.factory import get_message_queue as create_message_queue
 from app.infrastructure.queue.interface import MessageQueueInterface
-from app.infrastructure.scheduling.scheduler import APSchedulerService
 from app.infrastructure.saas.client import MockSaaSApiClient
+from app.infrastructure.scheduling.scheduler import APSchedulerService
 from app.infrastructure.storage.factory import get_cloud_storage as create_cloud_storage
 from app.infrastructure.storage.interface import CloudStorageInterface
 from app.services.job_runner import JobRunnerService
@@ -22,23 +20,30 @@ from app.services.scheduler_service import SchedulerService
 settings = get_settings()
 
 # Global instances (initialized on startup)
-_db: Optional[Database] = None
-_job_repository: Optional[JobRepository] = None
-_job_run_repository: Optional[JobRunRepository] = None
-_query_engine: Optional[ExportQueryEngine] = None
-_scheduler: Optional[APSchedulerService] = None
-_scheduler_service: Optional[SchedulerService] = None
-_job_runner: Optional[JobRunnerService] = None
-_job_service: Optional[JobService] = None
-_saas_client: Optional[MockSaaSApiClient] = None
-_cloud_storage: Optional[CloudStorageInterface] = None
-_message_queue: Optional[MessageQueueInterface] = None
+_db: Database | None = None
+_job_repository: JobRepository | None = None
+_job_run_repository: JobRunRepository | None = None
+_query_engine: ExportQueryEngine | None = None
+_scheduler: APSchedulerService | None = None
+_scheduler_service: SchedulerService | None = None
+_job_runner: JobRunnerService | None = None
+_job_service: JobService | None = None
+_saas_client: MockSaaSApiClient | None = None
+_cloud_storage: CloudStorageInterface | None = None
+_message_queue: MessageQueueInterface | None = None
 
 
 async def init_dependencies() -> None:
     """Initialize all dependencies."""
     global _db, _job_repository, _job_run_repository, _query_engine
-    global _scheduler, _scheduler_service, _job_runner, _job_service, _saas_client, _cloud_storage, _message_queue
+    global \
+        _scheduler, \
+        _scheduler_service, \
+        _job_runner, \
+        _job_service, \
+        _saas_client, \
+        _cloud_storage, \
+        _message_queue
 
     # Database
     _db = Database(settings.database_url)
@@ -167,12 +172,11 @@ def get_saas_client() -> MockSaaSApiClient:
     return _saas_client
 
 
-def get_cloud_storage() -> Optional[CloudStorageInterface]:
+def get_cloud_storage() -> CloudStorageInterface | None:
     """Get cloud storage instance."""
     return _cloud_storage
 
 
-def get_message_queue() -> Optional[MessageQueueInterface]:
+def get_message_queue() -> MessageQueueInterface | None:
     """Get message queue instance."""
     return _message_queue
-

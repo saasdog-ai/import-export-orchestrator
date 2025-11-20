@@ -5,11 +5,10 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from app.core.logging import get_logger
-from app.domain.entities import ExportConfig, ExportEntity
 
 logger = get_logger(__name__)
 
@@ -19,7 +18,7 @@ class FileGenerator:
 
     @staticmethod
     def generate_csv_file(
-        data: List[Dict[str, Any]], fields: List[str], output_dir: Optional[str] = None
+        data: list[dict[str, Any]], fields: list[str], output_dir: str | None = None
     ) -> str:
         """
         Generate a CSV file from data.
@@ -64,9 +63,7 @@ class FileGenerator:
         return file_path
 
     @staticmethod
-    def generate_json_file(
-        data: List[Dict[str, Any]], output_dir: Optional[str] = None
-    ) -> str:
+    def generate_json_file(data: list[dict[str, Any]], output_dir: str | None = None) -> str:
         """
         Generate a JSON file from data.
 
@@ -94,7 +91,7 @@ class FileGenerator:
         return file_path
 
     @staticmethod
-    def _get_nested_value(data: Dict[str, Any], field_path: str) -> Any:
+    def _get_nested_value(data: dict[str, Any], field_path: str) -> Any:
         """
         Get nested value from dictionary using dot notation.
 
@@ -133,4 +130,3 @@ class FileGenerator:
             "json": "application/json",
         }
         return format_map.get(format_type.lower(), "text/csv")
-

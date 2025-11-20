@@ -1,6 +1,5 @@
 """API routes for job management."""
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,7 +13,6 @@ from app.api.dto import (
 )
 from app.auth.backend import get_current_client_id
 from app.core.dependency_injection import get_job_service
-from app.domain.entities import JobDefinition, JobRun
 from app.services.job_service import JobService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -33,7 +31,7 @@ async def create_job(
 ):
     """
     Create a new job definition.
-    
+
     The client_id is extracted from the JWT token. If job_data contains a client_id,
     it must match the authenticated client_id from the token.
     """
@@ -62,9 +60,7 @@ async def create_job(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get(
@@ -90,9 +86,7 @@ async def get_job(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.put(
@@ -126,9 +120,7 @@ async def update_job(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post(
@@ -156,14 +148,12 @@ async def run_job(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get(
     "/{job_id}/runs",
-    response_model=List[JobRunResponse],
+    response_model=list[JobRunResponse],
 )
 async def get_job_runs(
     job_id: UUID,
@@ -184,9 +174,7 @@ async def get_job_runs(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get(
@@ -214,14 +202,12 @@ async def get_job_run(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get(
     "",
-    response_model=List[JobDefinitionResponse],
+    response_model=list[JobDefinitionResponse],
 )
 async def get_client_jobs(
     authenticated_client_id: UUID = Depends(get_current_client_id),
@@ -229,7 +215,7 @@ async def get_client_jobs(
 ):
     """
     Get all jobs for the authenticated client.
-    
+
     The client_id is extracted from the JWT token. This endpoint returns
     all jobs belonging to the authenticated client.
     """
@@ -237,7 +223,4 @@ async def get_client_jobs(
         jobs = await job_service.get_jobs_by_client(authenticated_client_id)
         return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -2,15 +2,15 @@
 
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 try:
-    from azure.storage.queue import QueueServiceClient, QueueMessage
     from azure.core.exceptions import AzureError
+    from azure.storage.queue import QueueMessage, QueueServiceClient
 except ImportError:
     QueueServiceClient = None
     logger.warning("azure-storage-queue not installed. Azure queue will not be available.")
@@ -42,7 +42,9 @@ class AzureQueueStorage:
 
             account_url = f"https://{account_name}.queue.core.windows.net"
             credential = DefaultAzureCredential()
-            self.queue_service_client = QueueServiceClient(account_url=account_url, credential=credential)
+            self.queue_service_client = QueueServiceClient(
+                account_url=account_url, credential=credential
+            )
 
         # Queue client will be initialized lazily
         self._queue_name = queue_name
@@ -71,7 +73,7 @@ class AzureQueueStorage:
                 logger.error(f"Failed to create queue: {e}")
                 raise
 
-    async def send_message(self, message_body: Dict[str, Any], delay_seconds: int = 0) -> str:
+    async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
         """Send a message to Azure Queue."""
         await self._ensure_queue_client()
         try:
@@ -94,7 +96,7 @@ class AzureQueueStorage:
 
     async def receive_messages(
         self, max_messages: int = 1, wait_time_seconds: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Receive messages from Azure Queue."""
         await self._ensure_queue_client()
         try:
@@ -154,7 +156,7 @@ class AzureQueueStorage:
             logger.error(f"Failed to delete message from Azure queue: {e}")
             raise
 
-    async def get_queue_attributes(self) -> Dict[str, Any]:
+    async def get_queue_attributes(self) -> dict[str, Any]:
         """Get Azure Queue attributes."""
         await self._ensure_queue_client()
         try:
@@ -168,4 +170,3 @@ class AzureQueueStorage:
         except AzureError as e:
             logger.error(f"Failed to get queue attributes: {e}")
             raise
-

@@ -36,4 +36,3 @@ async def health_check_db(db: Database = Depends(get_database)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Database connection failed: {str(e)}",
         )
-

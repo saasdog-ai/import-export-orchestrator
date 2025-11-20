@@ -1,2 +1,1 @@
 """Scheduling infrastructure."""
-

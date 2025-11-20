@@ -1,7 +1,6 @@
 """AWS S3 storage implementation."""
 
 import asyncio
-from typing import Optional
 
 from app.core.logging import get_logger
 
@@ -9,8 +8,8 @@ logger = get_logger(__name__)
 
 try:
     import boto3
-    from botocore.exceptions import ClientError
     from botocore.config import Config
+    from botocore.exceptions import ClientError
 except ImportError:
     boto3 = None
     logger.warning("boto3 not installed. S3 storage will not be available.")
@@ -35,7 +34,7 @@ class S3Storage:
         )
 
     async def upload_file(
-        self, local_file_path: str, remote_file_path: str, content_type: Optional[str] = None
+        self, local_file_path: str, remote_file_path: str, content_type: str | None = None
     ) -> str:
         """Upload a file to S3."""
         try:
@@ -87,7 +86,9 @@ class S3Storage:
                     self.bucket_name, remote_file_path, local_file_path
                 ),
             )
-            logger.info(f"Downloaded s3://{self.bucket_name}/{remote_file_path} to {local_file_path}")
+            logger.info(
+                f"Downloaded s3://{self.bucket_name}/{remote_file_path} to {local_file_path}"
+            )
             return local_file_path
         except ClientError as e:
             logger.error(f"Failed to download file from S3: {e}")
@@ -105,4 +106,3 @@ class S3Storage:
         except ClientError as e:
             logger.error(f"Failed to delete file from S3: {e}")
             raise
-

@@ -1,12 +1,9 @@
 """Schema definitions for allowed fields and joins."""
 
-from typing import Dict, List, Set, Tuple
-
 from app.domain.entities import ExportEntity
 
-
 # Allowed fields for each entity
-ENTITY_FIELDS: Dict[ExportEntity, Set[str]] = {
+ENTITY_FIELDS: dict[ExportEntity, set[str]] = {
     ExportEntity.BILL: {
         "id",
         "amount",
@@ -33,7 +30,7 @@ ENTITY_FIELDS: Dict[ExportEntity, Set[str]] = {
 }
 
 # Allowed nested field paths (entity.relation.field)
-NESTED_FIELDS: Dict[ExportEntity, Dict[str, Set[str]]] = {
+NESTED_FIELDS: dict[ExportEntity, dict[str, set[str]]] = {
     ExportEntity.BILL: {
         "vendor": {"id", "name", "email"},
         "project": {"id", "code", "name"},
@@ -49,7 +46,7 @@ NESTED_FIELDS: Dict[ExportEntity, Dict[str, Set[str]]] = {
 }
 
 # Allowed join paths: (from_entity, to_entity) -> join condition info
-ALLOWED_JOINS: Dict[Tuple[ExportEntity, str], Tuple[ExportEntity, str]] = {
+ALLOWED_JOINS: dict[tuple[ExportEntity, str], tuple[ExportEntity, str]] = {
     (ExportEntity.BILL, "vendor"): (ExportEntity.VENDOR, "id"),
     (ExportEntity.BILL, "project"): (ExportEntity.PROJECT, "id"),
     (ExportEntity.INVOICE, "vendor"): (ExportEntity.VENDOR, "id"),
@@ -79,7 +76,7 @@ def validate_field_path(entity: ExportEntity, field_path: str) -> bool:
     return field in nested_fields[relation]
 
 
-def get_allowed_fields(entity: ExportEntity) -> Set[str]:
+def get_allowed_fields(entity: ExportEntity) -> set[str]:
     """Get all allowed fields for an entity (simple + nested)."""
     fields = set(ENTITY_FIELDS.get(entity, set()))
     nested = NESTED_FIELDS.get(entity, {})
@@ -87,4 +84,3 @@ def get_allowed_fields(entity: ExportEntity) -> Set[str]:
         for field in relation_fields:
             fields.add(f"{relation}.{field}")
     return fields
-

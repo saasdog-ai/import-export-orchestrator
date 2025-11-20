@@ -3,7 +3,6 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from app.core.config import get_settings
@@ -33,8 +32,8 @@ class JobRunnerService:
         job_run_repository: JobRunRepository,
         query_engine: ExportQueryEngine,
         saas_client: SaaSApiClientInterface,
-        cloud_storage: Optional[CloudStorageInterface] = None,
-        message_queue: Optional[MessageQueueInterface] = None,
+        cloud_storage: CloudStorageInterface | None = None,
+        message_queue: MessageQueueInterface | None = None,
         max_workers: int = 5,
     ):
         """Initialize job runner."""
@@ -58,8 +57,7 @@ class JobRunnerService:
 
         self._running = True
         self._workers = [
-            asyncio.create_task(self._worker(f"worker-{i}"))
-            for i in range(self.max_workers)
+            asyncio.create_task(self._worker(f"worker-{i}")) for i in range(self.max_workers)
         ]
         logger.info(f"Started job runner with {self.max_workers} workers")
 
@@ -123,7 +121,9 @@ class JobRunnerService:
                             await self.message_queue.delete_message(receipt_handle)
 
                         except Exception as e:
-                            logger.error(f"Worker {worker_id} error processing message: {e}", exc_info=True)
+                            logger.error(
+                                f"Worker {worker_id} error processing message: {e}", exc_info=True
+                            )
                             # Message will become visible again after visibility timeout
                             # Don't delete it so it can be retried
                 else:
@@ -131,7 +131,7 @@ class JobRunnerService:
                     try:
                         job, job_run = await asyncio.wait_for(self._queue.get(), timeout=1.0)
                         await self._execute_job_run(job, job_run, worker_id)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
 
             except asyncio.CancelledError:
@@ -143,13 +143,9 @@ class JobRunnerService:
 
         logger.info(f"Worker {worker_id} stopped")
 
-    async def _execute_job_run(
-        self, job: JobDefinition, job_run: JobRun, worker_id: str
-    ) -> None:
+    async def _execute_job_run(self, job: JobDefinition, job_run: JobRun, worker_id: str) -> None:
         """Execute a single job run."""
-        logger.info(
-            f"Worker {worker_id} executing job run {job_run.id} for job {job.name}"
-        )
+        logger.info(f"Worker {worker_id} executing job run {job_run.id} for job {job.name}")
 
         # Update status to running
         await self.job_run_repository.update_status(
@@ -222,9 +218,7 @@ class JobRunnerService:
                     local_file_path, remote_file_path, content_type=content_type
                 )
 
-                logger.info(
-                    f"Uploaded export file to cloud storage: {remote_file_path}"
-                )
+                logger.info(f"Uploaded export file to cloud storage: {remote_file_path}")
             except Exception as e:
                 logger.error(f"Failed to upload file to cloud storage: {e}", exc_info=True)
                 # Continue even if upload fails - file is still available locally
@@ -259,9 +253,7 @@ class JobRunnerService:
             result_metadata=result_metadata,
         )
 
-        logger.info(
-            f"Export job {job.id} completed: {count} records exported to {export_format}"
-        )
+        logger.info(f"Export job {job.id} completed: {count} records exported to {export_format}")
 
     async def _execute_import_job(
         self, job: JobDefinition, job_run: JobRun, worker_id: str
@@ -272,26 +264,29 @@ class JobRunnerService:
 
         # Get source file path from import config options
         source_file = job.import_config.options.get("source_file")
-        
+
         if source_file:
             # Import from file (CSV or JSON)
             from app.infrastructure.storage.file_parser import FileParser
-            
+
             logger.info(f"Importing from file: {source_file}")
-            
+
             # Download file from cloud storage if needed
             local_file_path = source_file
-            
+
             # If file is in cloud storage, download it first
             if self.cloud_storage and not os.path.exists(source_file):
                 try:
                     # Download from cloud storage to temp location
                     from app.core.config import get_settings
+
                     settings = get_settings()
                     temp_dir = settings.export_local_path or "/tmp"
                     os.makedirs(temp_dir, exist_ok=True)
-                    local_file_path = os.path.join(temp_dir, f"import_{job_run.id}_{os.path.basename(source_file)}")
-                    
+                    local_file_path = os.path.join(
+                        temp_dir, f"import_{job_run.id}_{os.path.basename(source_file)}"
+                    )
+
                     # Download file from cloud storage
                     logger.info(f"Downloading file from cloud storage: {source_file}")
                     await self.cloud_storage.download_file(source_file, local_file_path)
@@ -306,7 +301,7 @@ class JobRunnerService:
                         error_message=error_msg,
                     )
                     return
-            
+
             # Parse the file with row-level error tracking
             try:
                 data = FileParser.parse_file(local_file_path)
@@ -320,12 +315,12 @@ class JobRunnerService:
                     error_message=error_msg,
                 )
                 return
-            
+
             # Import data with detailed error reporting
             import_errors = []
             try:
                 result = await self.saas_client.import_data(job.import_config, data)
-                
+
                 # Check if import_data returned errors
                 if isinstance(result, dict) and "errors" in result:
                     import_errors = result["errors"]
@@ -333,13 +328,15 @@ class JobRunnerService:
                 # Track import errors with row information
                 error_msg = f"Import failed: {str(e)}"
                 logger.error(error_msg, exc_info=True)
-                
+
                 # Try to provide row-level error information
-                import_errors.append({
-                    "row": None,
-                    "message": error_msg,
-                })
-                
+                import_errors.append(
+                    {
+                        "row": None,
+                        "message": error_msg,
+                    }
+                )
+
                 await self.job_run_repository.update_status(
                     job_run.id,
                     JobStatus.FAILED,
@@ -351,7 +348,7 @@ class JobRunnerService:
                     },
                 )
                 return
-            
+
             # Store result metadata with error details
             result_metadata = {
                 "imported_count": result.get("imported_count", 0),
@@ -370,7 +367,9 @@ class JobRunnerService:
                 JobStatus.SUCCEEDED if result.get("failed_count", 0) == 0 else JobStatus.FAILED,
                 completed_at=datetime.utcnow(),
                 result_metadata=result_metadata,
-                error_message=f"{result.get('failed_count', 0)} records failed to import" if result.get("failed_count", 0) > 0 else None,
+                error_message=f"{result.get('failed_count', 0)} records failed to import"
+                if result.get("failed_count", 0) > 0
+                else None,
             )
 
             logger.info(
@@ -380,9 +379,7 @@ class JobRunnerService:
         else:
             # Fallback: Fetch data from SaaS API (for backward compatibility)
             logger.warning("No source_file in import config. Fetching from SaaS API (mock).")
-            data = await self.saas_client.fetch_data(
-                job.import_config.entity, filters={}
-            )
+            data = await self.saas_client.fetch_data(job.import_config.entity, filters={})
 
             # Import data using SaaS client
             result = await self.saas_client.import_data(job.import_config, data)
@@ -407,4 +404,3 @@ class JobRunnerService:
                 f"Import job {job.id} completed: {result.get('imported_count', 0)} created, "
                 f"{result.get('updated_count', 0)} updated, {result.get('failed_count', 0)} failed"
             )
-

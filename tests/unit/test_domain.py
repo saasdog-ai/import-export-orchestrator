@@ -117,4 +117,3 @@ def test_job_definition_missing_config():
             job_type=JobType.EXPORT,
             export_config=None,  # Missing required config
         )
-

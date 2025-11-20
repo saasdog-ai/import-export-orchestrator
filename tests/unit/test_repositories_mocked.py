@@ -1,10 +1,10 @@
 """Unit tests for repositories with mocked database."""
 
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.domain.entities import (
     ExportConfig,
@@ -40,8 +40,7 @@ def mock_session():
 @pytest.mark.asyncio
 async def test_create_job(mock_db, mock_session):
     """Test creating a job with mocked database."""
-    from datetime import datetime
-    
+
     # Setup
     test_job = JobDefinition(
         id=uuid4(),
@@ -53,7 +52,7 @@ async def test_create_job(mock_db, mock_session):
             fields=["id", "amount"],
         ),
     )
-    
+
     # Mock the database model with all required fields
     db_model = JobDefinitionModel(
         id=test_job.id,
@@ -65,20 +64,20 @@ async def test_create_job(mock_db, mock_session):
         updated_at=datetime.utcnow(),
     )
     db_model.export_config = {"entity": "bill", "fields": ["id", "amount"]}
-    
+
     # Mock session context manager
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
-    
+
     # Mock session.execute to return the model
     result_mock = MagicMock()
     result_mock.scalar_one.return_value = db_model
     mock_session.execute.return_value = result_mock
-    
+
     # Execute
     repository = JobRepository(mock_db)
     created_job = await repository.create(test_job)
-    
+
     # Verify
     assert created_job.id == test_job.id
     assert created_job.name == test_job.name
@@ -89,8 +88,7 @@ async def test_create_job(mock_db, mock_session):
 @pytest.mark.asyncio
 async def test_get_job_by_id(mock_db, mock_session):
     """Test getting a job by ID with mocked database."""
-    from datetime import datetime
-    
+
     job_id = uuid4()
     client_id = uuid4()
     db_model = JobDefinitionModel(
@@ -107,20 +105,20 @@ async def test_get_job_by_id(mock_db, mock_session):
         "entity": "bill",
         "fields": ["id", "amount"],
     }
-    
+
     # Mock session context manager
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
-    
+
     # Mock session.execute
     result_mock = MagicMock()
     result_mock.scalar_one_or_none.return_value = db_model
     mock_session.execute.return_value = result_mock
-    
+
     # Execute
     repository = JobRepository(mock_db)
     retrieved_job = await repository.get_by_id(job_id)
-    
+
     # Verify
     assert retrieved_job is not None
     assert retrieved_job.id == job_id
@@ -130,8 +128,7 @@ async def test_get_job_by_id(mock_db, mock_session):
 @pytest.mark.asyncio
 async def test_get_jobs_by_client(mock_db, mock_session):
     """Test getting jobs by client ID with mocked database."""
-    from datetime import datetime
-    
+
     client_id = uuid4()
     db_models = [
         JobDefinitionModel(
@@ -156,20 +153,20 @@ async def test_get_jobs_by_client(mock_db, mock_session):
     # Set export_config for both models
     for model in db_models:
         model.export_config = {"entity": "bill", "fields": ["id"]}
-    
+
     # Mock session context manager
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
-    
+
     # Mock session.execute
     result_mock = MagicMock()
     result_mock.scalars.return_value.all.return_value = db_models
     mock_session.execute.return_value = result_mock
-    
+
     # Execute
     repository = JobRepository(mock_db)
     jobs = await repository.get_by_client_id(client_id)
-    
+
     # Verify
     assert len(jobs) == 2
     assert all(job.client_id == client_id for job in jobs)
@@ -178,14 +175,13 @@ async def test_get_jobs_by_client(mock_db, mock_session):
 @pytest.mark.asyncio
 async def test_create_job_run(mock_db, mock_session):
     """Test creating a job run with mocked database."""
-    from datetime import datetime
-    
+
     job_id = uuid4()
     job_run = JobRun(
         job_id=job_id,
         status=JobStatus.PENDING,
     )
-    
+
     db_model = JobRunModel(
         id=job_run.id,
         job_id=job_id,
@@ -193,20 +189,20 @@ async def test_create_job_run(mock_db, mock_session):
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
-    
+
     # Mock session context manager
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
-    
+
     # Mock session.execute
     result_mock = MagicMock()
     result_mock.scalar_one.return_value = db_model
     mock_session.execute.return_value = result_mock
-    
+
     # Execute
     repository = JobRunRepository(mock_db)
     created_run = await repository.create(job_run)
-    
+
     # Verify
     assert created_run.id == job_run.id
     assert created_run.status == JobStatus.PENDING
@@ -217,12 +213,11 @@ async def test_create_job_run(mock_db, mock_session):
 @pytest.mark.asyncio
 async def test_update_job_run_status(mock_db, mock_session):
     """Test updating job run status with mocked database."""
-    from datetime import datetime
-    
+
     run_id = uuid4()
     job_id = uuid4()
     started_at = datetime.utcnow()
-    
+
     db_model = JobRunModel(
         id=run_id,
         job_id=job_id,
@@ -231,16 +226,16 @@ async def test_update_job_run_status(mock_db, mock_session):
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
-    
+
     # Mock session context manager
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
-    
+
     # Mock session.execute - first call gets the model, second call returns it after update
     result_mock = MagicMock()
     result_mock.scalar_one_or_none.return_value = db_model
     mock_session.execute.return_value = result_mock
-    
+
     # Execute
     repository = JobRunRepository(mock_db)
     updated_run = await repository.update_status(
@@ -248,9 +243,8 @@ async def test_update_job_run_status(mock_db, mock_session):
         JobStatus.RUNNING,
         started_at=started_at,
     )
-    
+
     # Verify
     assert updated_run.status == JobStatus.RUNNING
     assert updated_run.started_at is not None
     mock_session.commit.assert_called_once()
-

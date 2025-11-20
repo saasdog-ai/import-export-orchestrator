@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 from app.core.logging import get_logger
 
@@ -66,9 +66,7 @@ class GCPPubSubQueue:
         try:
             await asyncio.to_thread(self.publisher_client.get_topic, topic=self.topic_path)
         except GoogleCloudError:
-            await asyncio.to_thread(
-                self.publisher_client.create_topic, name=self.topic_path
-            )
+            await asyncio.to_thread(self.publisher_client.create_topic, name=self.topic_path)
             logger.info(f"Created Pub/Sub topic: {self.topic_name}")
 
         # Create subscription if it doesn't exist
@@ -84,7 +82,7 @@ class GCPPubSubQueue:
             )
             logger.info(f"Created Pub/Sub subscription: {self.subscription_name}")
 
-    async def send_message(self, message_body: Dict[str, Any], delay_seconds: int = 0) -> str:
+    async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
         """Send a message to Pub/Sub."""
         await self._ensure_topic_and_subscription()
         try:
@@ -105,7 +103,7 @@ class GCPPubSubQueue:
 
     async def receive_messages(
         self, max_messages: int = 1, wait_time_seconds: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Receive messages from Pub/Sub."""
         await self._ensure_topic_and_subscription()
         try:
@@ -158,14 +156,16 @@ class GCPPubSubQueue:
             logger.error(f"Failed to acknowledge message in Pub/Sub: {e}")
             raise
 
-    async def get_queue_attributes(self) -> Dict[str, Any]:
+    async def get_queue_attributes(self) -> dict[str, Any]:
         """Get Pub/Sub subscription attributes."""
         await self._ensure_topic_and_subscription()
         try:
             loop = asyncio.get_event_loop()
             subscription = await loop.run_in_executor(
                 None,
-                lambda: self.subscriber_client.get_subscription(subscription=self.subscription_path),
+                lambda: self.subscriber_client.get_subscription(
+                    subscription=self.subscription_path
+                ),
             )
             return {
                 "num_undelivered_messages": subscription.num_undelivered_messages,
@@ -173,4 +173,3 @@ class GCPPubSubQueue:
         except GoogleCloudError as e:
             logger.error(f"Failed to get subscription attributes: {e}")
             raise
-

@@ -1,9 +1,10 @@
 """Unit tests for file parser."""
 
 import json
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from app.infrastructure.storage.file_parser import FileParser
 
@@ -35,7 +36,7 @@ class TestFileParser:
             f.write(",200.50,2024-01-02,Another bill\n")
 
         records = FileParser.parse_csv_file(temp_csv_file)
-        
+
         assert len(records) == 2
         assert records[0]["amount"] == "100.00"
         assert records[0]["date"] == "2024-01-01"
@@ -49,7 +50,7 @@ class TestFileParser:
             f.write(",,2024-01-01,\n")
 
         records = FileParser.parse_csv_file(temp_csv_file)
-        
+
         assert len(records) == 1
         assert records[0]["id"] is None
         assert records[0]["amount"] is None
@@ -71,7 +72,7 @@ class TestFileParser:
             json.dump(data, f)
 
         records = FileParser.parse_json_file(temp_json_file)
-        
+
         assert len(records) == 2
         assert records[0]["amount"] == "100.00"
         assert records[1]["amount"] == "200.50"
@@ -83,7 +84,7 @@ class TestFileParser:
             json.dump(data, f)
 
         records = FileParser.parse_json_file(temp_json_file)
-        
+
         assert len(records) == 1
         assert isinstance(records, list)
         assert records[0]["amount"] == "100.00"
@@ -100,7 +101,7 @@ class TestFileParser:
             f.write(",100.00,2024-01-01\n")
 
         records = FileParser.parse_file(temp_csv_file)
-        
+
         assert len(records) == 1
         assert records[0]["amount"] == "100.00"
 
@@ -111,7 +112,7 @@ class TestFileParser:
             json.dump(data, f)
 
         records = FileParser.parse_file(temp_json_file)
-        
+
         assert len(records) == 1
         assert records[0]["amount"] == "100.00"
 
@@ -122,6 +123,5 @@ class TestFileParser:
 
         with pytest.raises(ValueError) as exc_info:
             FileParser.parse_file(str(temp_file))
-        
-        assert "Unsupported file format" in str(exc_info.value)
 
+        assert "Unsupported file format" in str(exc_info.value)

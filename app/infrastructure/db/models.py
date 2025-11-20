@@ -1,13 +1,13 @@
 """SQLAlchemy database models."""
 
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
-from app.domain.entities import JobStatus, JobType
+from app.domain.entities import JobStatus
 from app.infrastructure.db.database import Base
 
 
@@ -17,7 +17,9 @@ class JobDefinitionModel(Base):
     __tablename__ = "job_definitions"
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    client_id = Column(PGUUID(as_uuid=True), nullable=False)  # No foreign key - clients managed in main SaaS app
+    client_id = Column(
+        PGUUID(as_uuid=True), nullable=False
+    )  # No foreign key - clients managed in main SaaS app
     name = Column(String(255), nullable=False)
     job_type = Column(String(20), nullable=False)  # JobType enum as string
     export_config = Column(JSON, nullable=True)
@@ -46,4 +48,3 @@ class JobRunModel(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     job = relationship("JobDefinitionModel", back_populates="runs")
-

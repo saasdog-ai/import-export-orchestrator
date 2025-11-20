@@ -1,7 +1,5 @@
 """Factory for creating cloud storage instances."""
 
-from typing import Optional
-
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.infrastructure.storage.interface import CloudStorageInterface
@@ -9,7 +7,7 @@ from app.infrastructure.storage.interface import CloudStorageInterface
 logger = get_logger(__name__)
 
 
-def get_cloud_storage() -> Optional[CloudStorageInterface]:
+def get_cloud_storage() -> CloudStorageInterface | None:
     """
     Get cloud storage instance based on configuration.
 
@@ -46,4 +44,3 @@ def get_cloud_storage() -> Optional[CloudStorageInterface]:
     else:
         logger.warning(f"Unknown cloud provider: {cloud_provider}")
         return None
-

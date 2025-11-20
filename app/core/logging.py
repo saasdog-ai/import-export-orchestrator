@@ -2,7 +2,6 @@
 
 import logging
 import sys
-from typing import Any
 
 from app.core.config import get_settings
 
@@ -31,4 +30,3 @@ def setup_logging() -> None:
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance with the given name."""
     return logging.getLogger(name)
-

@@ -1,13 +1,13 @@
 """Unit tests for services."""
 
-import pytest
 from uuid import uuid4
+
+import pytest
 
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
     JobDefinition,
-    JobRun,
     JobStatus,
     JobType,
 )
@@ -73,4 +73,3 @@ async def test_get_job_runs(job_service: JobService, test_job: JobDefinition):
     runs = await job_service.get_job_runs(created_job.id)
     assert len(runs) >= 1
     assert all(run.job_id == created_job.id for run in runs)
-

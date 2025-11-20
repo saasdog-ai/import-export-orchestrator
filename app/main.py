@@ -7,11 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import exports, health, imports, jobs
 from app.core.config import get_settings
-from app.core.dependency_injection import init_dependencies, shutdown_dependencies
+from app.core.dependency_injection import (
+    get_job_runner,
+    get_scheduler_service,
+    init_dependencies,
+    shutdown_dependencies,
+)
 from app.core.logging import setup_logging
-from app.services.job_runner import JobRunnerService
-from app.services.scheduler_service import SchedulerService
-from app.core.dependency_injection import get_job_runner, get_scheduler_service
 
 settings = get_settings()
 
@@ -72,4 +74,3 @@ async def root():
         "version": "0.1.0",
         "status": "running",
     }
-

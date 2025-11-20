@@ -1,10 +1,9 @@
 """Pluggable authentication backend interface and implementations."""
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
+from fastapi.security import HTTPBearer
 
 from app.core.logging import get_logger
 
@@ -17,11 +16,11 @@ security = HTTPBearer(auto_error=False)
 class AuthBackendInterface:
     """Interface for authentication backends."""
 
-    def extract_token(self, request: Request) -> Optional[str]:
+    def extract_token(self, request: Request) -> str | None:
         """Extract token from request."""
         raise NotImplementedError
 
-    async def validate_token(self, token: str) -> Optional[dict]:
+    async def validate_token(self, token: str) -> dict | None:
         """Validate JWT token and return payload."""
         raise NotImplementedError
 
@@ -37,7 +36,7 @@ class AuthBackendInterface:
         """Verify token expiration."""
         raise NotImplementedError
 
-    async def get_current_user_id(self, request: Request) -> Optional[UUID]:
+    async def get_current_user_id(self, request: Request) -> UUID | None:
         """Get current authenticated user ID from request."""
         raise NotImplementedError
 
@@ -57,7 +56,7 @@ class JWTAuthBackend(AuthBackendInterface):
         # TODO: Enable real JWT validation
         self.enabled = False
 
-    def extract_token(self, request: Request) -> Optional[str]:
+    def extract_token(self, request: Request) -> str | None:
         """
         Extract JWT token from request Authorization header.
 
@@ -77,7 +76,7 @@ class JWTAuthBackend(AuthBackendInterface):
         except ValueError:
             return None
 
-    async def validate_token(self, token: str) -> Optional[dict]:
+    async def validate_token(self, token: str) -> dict | None:
         """
         Validate JWT token and return decoded payload.
 
@@ -136,7 +135,7 @@ class JWTAuthBackend(AuthBackendInterface):
         # return datetime.now(timezone.utc).timestamp() < exp
         return True
 
-    async def get_current_user_id(self, request: Request) -> Optional[UUID]:
+    async def get_current_user_id(self, request: Request) -> UUID | None:
         """
         Get current authenticated user ID from request.
 
@@ -163,7 +162,7 @@ class JWTAuthBackend(AuthBackendInterface):
 
         return None
 
-    async def get_current_client_id(self, request: Request) -> Optional[UUID]:
+    async def get_current_client_id(self, request: Request) -> UUID | None:
         """
         Get current authenticated client ID from JWT token.
 
@@ -207,7 +206,7 @@ class JWTAuthBackend(AuthBackendInterface):
 
 
 # Global auth backend instance (initialized in main.py)
-_auth_backend: Optional[JWTAuthBackend] = None
+_auth_backend: JWTAuthBackend | None = None
 
 
 def get_auth_backend() -> JWTAuthBackend:
@@ -238,7 +237,7 @@ async def get_current_client_id(request: Request) -> UUID:
 
     auth_backend = get_auth_backend()
     client_id = await auth_backend.get_current_client_id(request)
-    
+
     if client_id is None:
         if auth_backend.enabled:
             # When auth is enabled, require valid token
@@ -249,6 +248,5 @@ async def get_current_client_id(request: Request) -> UUID:
         else:
             # For development, return default client ID when auth is disabled
             return UUID("00000000-0000-0000-0000-000000000000")
-    
-    return client_id
 
+    return client_id

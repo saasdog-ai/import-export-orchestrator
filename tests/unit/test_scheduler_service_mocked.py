@@ -1,9 +1,9 @@
 """Unit tests for scheduler service with mocked dependencies."""
 
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from app.domain.entities import (
     ExportConfig,
@@ -82,10 +82,10 @@ async def test_schedule_job_success(scheduler_service, mock_scheduler, mock_mess
         cron_schedule="0 0 * * *",
         enabled=True,
     )
-    
+
     # Execute
     await scheduler_service.schedule_job(job)
-    
+
     # Verify
     mock_scheduler.add_cron_job.assert_called_once()
     # Verify the cron schedule and job ID were passed
@@ -107,10 +107,10 @@ async def test_schedule_job_no_cron(scheduler_service, mock_scheduler):
         cron_schedule=None,  # No cron
         enabled=True,
     )
-    
+
     # Execute
     await scheduler_service.schedule_job(job)
-    
+
     # Verify scheduler was not called
     mock_scheduler.add_cron_job.assert_not_called()
 
@@ -128,10 +128,10 @@ async def test_schedule_job_disabled(scheduler_service, mock_scheduler):
         cron_schedule="0 0 * * *",
         enabled=False,  # Disabled
     )
-    
+
     # Execute
     await scheduler_service.schedule_job(job)
-    
+
     # Verify scheduler was not called
     mock_scheduler.add_cron_job.assert_not_called()
 
@@ -154,7 +154,7 @@ async def test_schedule_job_with_message_queue(
         cron_schedule="0 0 * * *",
         enabled=True,
     )
-    
+
     # Mock job run creation
     job_run = JobRun(
         id=uuid4(),
@@ -162,14 +162,14 @@ async def test_schedule_job_with_message_queue(
         status=JobStatus.PENDING,
     )
     mock_job_run_repository.create = AsyncMock(return_value=job_run)
-    
+
     # Schedule the job
     await scheduler_service.schedule_job(job)
-    
+
     # Get the scheduled function and execute it
     scheduled_func = mock_scheduler.add_cron_job.call_args[0][0]
     await scheduled_func()
-    
+
     # Verify
     mock_job_run_repository.create.assert_called_once()
     mock_message_queue.send_message.assert_called_once()
@@ -195,7 +195,7 @@ async def test_schedule_job_without_message_queue(
         job_runner=mock_job_runner,
         message_queue=None,  # No queue
     )
-    
+
     # Setup
     job = JobDefinition(
         id=uuid4(),
@@ -206,7 +206,7 @@ async def test_schedule_job_without_message_queue(
         cron_schedule="0 0 * * *",
         enabled=True,
     )
-    
+
     # Mock job run creation
     job_run = JobRun(
         id=uuid4(),
@@ -215,14 +215,14 @@ async def test_schedule_job_without_message_queue(
     )
     mock_job_run_repository.create = AsyncMock(return_value=job_run)
     mock_job_runner.queue_job_run = AsyncMock()
-    
+
     # Schedule the job
     await scheduler_service.schedule_job(job)
-    
+
     # Get the scheduled function and execute it
     scheduled_func = mock_scheduler.add_cron_job.call_args[0][0]
     await scheduled_func()
-    
+
     # Verify
     mock_job_run_repository.create.assert_called_once()
     mock_job_runner.queue_job_run.assert_called_once_with(job, job_run)
@@ -233,10 +233,10 @@ async def test_unschedule_job(scheduler_service, mock_scheduler):
     """Test unscheduling a job."""
     # Setup
     job_id = uuid4()
-    
+
     # Execute
     await scheduler_service.unschedule_job(job_id)
-    
+
     # Verify
     mock_scheduler.remove_job.assert_called_once_with(str(job_id))
 
@@ -265,13 +265,12 @@ async def test_reload_all_scheduled_jobs(scheduler_service, mock_job_repository,
             enabled=True,
         ),
     ]
-    
+
     mock_job_repository.get_enabled_scheduled_jobs = AsyncMock(return_value=jobs)
-    
+
     # Execute
     await scheduler_service.reload_all_scheduled_jobs()
-    
+
     # Verify
     mock_job_repository.get_enabled_scheduled_jobs.assert_called_once()
     assert mock_scheduler.add_cron_job.call_count == 2
-

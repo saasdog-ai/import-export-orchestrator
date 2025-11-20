@@ -1,18 +1,19 @@
 """Unit tests for dependency injection."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.core.dependency_injection import (
+    get_cloud_storage,
     get_database,
     get_job_repository,
     get_job_run_repository,
-    get_query_engine,
-    get_job_service,
     get_job_runner,
-    get_scheduler_service,
-    get_cloud_storage,
+    get_job_service,
     get_message_queue,
+    get_query_engine,
+    get_scheduler_service,
 )
 
 
@@ -72,11 +73,8 @@ def test_get_cloud_storage_optional():
         assert result is None
 
 
-
-
 def test_get_message_queue_optional():
     """Test getting message queue (can be None)."""
     with patch("app.core.dependency_injection._message_queue", None):
         result = get_message_queue()
         assert result is None
-

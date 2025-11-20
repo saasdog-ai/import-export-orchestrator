@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -86,8 +86,8 @@ class ExportFilterGroup(BaseModel):
     """Group of filters with logical operators."""
 
     operator: LogicalOperator = LogicalOperator.AND
-    filters: List["ExportFilter"] = Field(default_factory=list)
-    groups: List["ExportFilterGroup"] = Field(default_factory=list)
+    filters: list["ExportFilter"] = Field(default_factory=list)
+    groups: list["ExportFilterGroup"] = Field(default_factory=list)
 
     @field_validator("filters", "groups", mode="before")
     @classmethod
@@ -113,12 +113,12 @@ class ExportConfig(BaseModel):
     """Export job configuration."""
 
     entity: ExportEntity
-    fields: List[str] = Field(..., description="List of fields to return")
-    filters: Optional[ExportFilterGroup] = None
-    sort: Optional[List[Dict[str, str]]] = Field(
+    fields: list[str] = Field(..., description="List of fields to return")
+    filters: ExportFilterGroup | None = None
+    sort: list[dict[str, str]] | None = Field(
         default=None, description="List of sort directives: [{'field': 'name', 'direction': 'asc'}]"
     )
-    limit: Optional[int] = Field(default=None, ge=1, le=10000)
+    limit: int | None = Field(default=None, ge=1, le=10000)
     offset: int = Field(default=0, ge=0)
 
 
@@ -127,7 +127,7 @@ class ImportConfig(BaseModel):
 
     source: str = Field(..., description="Source system identifier")
     entity: ExportEntity
-    options: Dict[str, Any] = Field(default_factory=dict, description="Import-specific options")
+    options: dict[str, Any] = Field(default_factory=dict, description="Import-specific options")
 
 
 class JobDefinition(BaseModel):
@@ -137,9 +137,9 @@ class JobDefinition(BaseModel):
     client_id: UUID
     name: str
     job_type: JobType
-    export_config: Optional[ExportConfig] = None
-    import_config: Optional[ImportConfig] = None
-    cron_schedule: Optional[str] = Field(
+    export_config: ExportConfig | None = None
+    import_config: ImportConfig | None = None
+    cron_schedule: str | None = Field(
         default=None, description="Cron expression for scheduled execution"
     )
     enabled: bool = Field(default=True)
@@ -165,10 +165,10 @@ class JobRun(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     job_id: UUID
     status: JobStatus = JobStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    result_metadata: Optional[Dict[str, Any]] = Field(
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    result_metadata: dict[str, Any] | None = Field(
         default=None, description="Metadata about the job result"
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -176,4 +176,3 @@ class JobRun(BaseModel):
 
     class Config:
         from_attributes = True
-

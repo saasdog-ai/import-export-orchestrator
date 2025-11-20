@@ -1,7 +1,8 @@
 """Unit tests for query engine with mocked dependencies."""
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from app.domain.entities import (
     ExportConfig,
@@ -44,34 +45,38 @@ async def test_execute_export_query_basic(query_engine: ExportQueryEngine):
         offset=0,
     )
     result = await query_engine.execute_export_query(config)
-    
+
     # Structure validation
     assert result is not None
     assert "entity" in result
     assert "count" in result
     assert "records" in result
     assert result["entity"] == "bill"
-    
+
     # Deep validation: Verify all records have ONLY the requested fields
     requested_fields = {"id", "amount", "date"}
     for record in result["records"]:
         record_fields = set(record.keys())
-        assert record_fields == requested_fields, \
+        assert record_fields == requested_fields, (
             f"Field selection failed: Record has fields {record_fields}, expected {requested_fields}"
-        
+        )
+
         # Verify fields have appropriate types/values
         assert "id" in record
         assert "amount" in record
         assert "date" in record
         # Amount should be numeric
-        assert isinstance(record["amount"], (int, float)), \
+        assert isinstance(record["amount"], (int, float)), (
             f"Amount should be numeric, got {type(record['amount'])}"
-    
+        )
+
     # Verify pagination is correct
-    assert len(result["records"]) <= config.limit, \
+    assert len(result["records"]) <= config.limit, (
         f"Returned {len(result['records'])} records, but limit is {config.limit}"
-    assert result["count"] >= len(result["records"]), \
+    )
+    assert result["count"] >= len(result["records"]), (
         f"Total count {result['count']} should be >= returned records {len(result['records'])}"
+    )
     assert result["limit"] == config.limit
     assert result["offset"] == config.offset
 
@@ -97,11 +102,12 @@ async def test_execute_export_query_with_filters(query_engine: ExportQueryEngine
     result = await query_engine.execute_export_query(config)
     assert result is not None
     assert result["count"] >= 0
-    
+
     # Deep validation: Verify ALL records actually match the filter
     for record in result["records"]:
-        assert record["amount"] > 1000, \
+        assert record["amount"] > 1000, (
             f"Filter failed: Record {record} has amount {record['amount']} which is not > 1000"
+        )
 
 
 @pytest.mark.asyncio
@@ -116,13 +122,14 @@ async def test_execute_export_query_with_sort(query_engine: ExportQueryEngine):
     result = await query_engine.execute_export_query(config)
     assert result is not None
     assert len(result["records"]) <= 10
-    
+
     # Deep validation: Verify records are actually sorted in descending order
     if len(result["records"]) > 1:
         dates = [record["date"] for record in result["records"]]
         for i in range(len(dates) - 1):
-            assert dates[i] >= dates[i + 1], \
+            assert dates[i] >= dates[i + 1], (
                 f"Sort failed: dates not in descending order: {dates[i]} < {dates[i + 1]}"
+            )
 
 
 @pytest.mark.asyncio
@@ -136,29 +143,35 @@ async def test_execute_export_query_pagination(query_engine: ExportQueryEngine):
         offset=0,
     )
     result1 = await query_engine.execute_export_query(config)
-    
+
     config.offset = 2
     result2 = await query_engine.execute_export_query(config)
-    
+
     assert result1 is not None
     assert result2 is not None
     assert len(result1["records"]) <= 2
     assert len(result2["records"]) <= 2
-    
+
     # Deep validation: Verify pages don't overlap and total count is consistent
     assert result1["count"] == result2["count"], "Total count should be same for both pages"
-    
+
     page1_ids = {record["id"] for record in result1["records"]}
     page2_ids = {record["id"] for record in result2["records"]}
-    assert page1_ids.isdisjoint(page2_ids), \
+    assert page1_ids.isdisjoint(page2_ids), (
         f"Pagination failed: Pages overlap. Page 1: {page1_ids}, Page 2: {page2_ids}"
+    )
 
 
 @pytest.mark.asyncio
 async def test_apply_filters_complex(query_engine: ExportQueryEngine):
     """Test complex filter application - deep validation."""
-    from app.domain.entities import ExportFilter, ExportFilterGroup, ExportFilterOperator, LogicalOperator
-    
+    from app.domain.entities import (
+        ExportFilter,
+        ExportFilterGroup,
+        ExportFilterOperator,
+        LogicalOperator,
+    )
+
     # Create complex filter: (amount > 1000) AND (vendor.name contains "Acme")
     filter1 = ExportFilter(
         field="amount",
@@ -174,25 +187,27 @@ async def test_apply_filters_complex(query_engine: ExportQueryEngine):
         operator=LogicalOperator.AND,
         filters=[filter1, filter2],
     )
-    
+
     config = ExportConfig(
         entity=ExportEntity.BILL,
         fields=["id", "amount", "vendor.name"],
         filters=filter_group,
         limit=10,
     )
-    
+
     result = await query_engine.execute_export_query(config)
     assert result is not None
     assert result["count"] >= 0
-    
+
     # Deep validation: Verify ALL records match BOTH filter conditions
     for record in result["records"]:
-        assert record["amount"] > 1000, \
+        assert record["amount"] > 1000, (
             f"Filter failed: Record {record} has amount {record['amount']} which is not > 1000"
+        )
         vendor_name = record.get("vendor.name", "")
-        assert "acme" in vendor_name.lower(), \
+        assert "acme" in vendor_name.lower(), (
             f"Filter failed: Record {record} vendor.name '{vendor_name}' does not contain 'Acme'"
+        )
 
 
 @pytest.mark.asyncio
@@ -207,11 +222,11 @@ async def test_apply_sorting_multiple_fields(query_engine: ExportQueryEngine):
         ],
         limit=10,
     )
-    
+
     result = await query_engine.execute_export_query(config)
     assert result is not None
     assert len(result["records"]) <= 10
-    
+
     # Deep validation: Verify multi-field sorting is correct
     if len(result["records"]) > 1:
         records = result["records"]
@@ -220,20 +235,22 @@ async def test_apply_sorting_multiple_fields(query_engine: ExportQueryEngine):
             next_date = records[i + 1]["date"]
             curr_amount = records[i]["amount"]
             next_amount = records[i + 1]["amount"]
-            
+
             # Compare dates as strings (ISO format YYYY-MM-DD sorts correctly as strings)
             # If dates are equal, amounts should be ascending
             if curr_date == next_date:
-                assert curr_amount <= next_amount, \
+                assert curr_amount <= next_amount, (
                     f"Multi-sort failed: Same date {curr_date} but amounts not ascending: {curr_amount} > {next_amount}"
+                )
             else:
                 # Dates should be descending (as strings, "2024-01-20" > "2024-01-15")
                 # Note: String comparison works for ISO dates: "2024-01-20" > "2024-01-15"
                 date_descending = curr_date >= next_date
-                assert date_descending, \
-                    f"Multi-sort failed: Dates not descending: {curr_date} < {next_date} at position {i}. " \
-                    f"Record {i}: date={curr_date}, amount={curr_amount}; " \
-                    f"Record {i+1}: date={next_date}, amount={next_amount}"
+                assert date_descending, (
+                    f"Multi-sort failed: Dates not descending: {curr_date} < {next_date} at position {i}. "
+                    f"Record {i}: date={curr_date}, amount={curr_amount}; "
+                    f"Record {i + 1}: date={next_date}, amount={next_amount}"
+                )
 
 
 @pytest.mark.asyncio
@@ -244,21 +261,20 @@ async def test_select_fields_nested(query_engine: ExportQueryEngine):
         fields=["id", "amount", "vendor.name", "project.code"],
         limit=10,
     )
-    
+
     result = await query_engine.execute_export_query(config)
     assert result is not None
-    
+
     # Deep validation: Verify ALL records have ONLY the requested fields
     requested_fields = {"id", "amount", "vendor.name", "project.code"}
     for record in result["records"]:
         record_fields = set(record.keys())
-        assert record_fields == requested_fields, \
+        assert record_fields == requested_fields, (
             f"Field selection failed: Record {record} has fields {record_fields}, expected {requested_fields}"
-        
+        )
+
         # Verify nested fields are present and have values
         assert "vendor.name" in record, f"Record {record} missing vendor.name"
         assert "project.code" in record, f"Record {record} missing project.code"
         assert record["vendor.name"] is not None, f"Record {record} has None for vendor.name"
         assert record["project.code"] is not None, f"Record {record} has None for project.code"
-
-

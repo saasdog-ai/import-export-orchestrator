@@ -3,9 +3,6 @@
 import pytest
 from httpx import AsyncClient
 
-from app.domain.entities import ExportEntity, JobType
-from app.main import app
-
 
 @pytest.mark.asyncio
 async def test_health_check(test_client_app: AsyncClient):
@@ -19,7 +16,6 @@ async def test_health_check(test_client_app: AsyncClient):
 @pytest.mark.asyncio
 async def test_create_job(test_client_app: AsyncClient):
     """Test creating a job via API."""
-    from uuid import uuid4
 
     job_data = {
         "name": "Test Export Job",
@@ -50,4 +46,3 @@ async def test_preview_export(test_client_app: AsyncClient):
     response = await test_client_app.post("/exports/preview", json=preview_data)
     # May fail if dependencies not initialized, but should be 200 or 400/500
     assert response.status_code in [200, 400, 500]
-

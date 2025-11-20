@@ -1,12 +1,17 @@
 """Unit tests for exports API endpoints with mocked dependencies."""
 
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, status
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.api.exports import create_export, get_export_result, get_export_download_url, preview_export
+from app.api.exports import (
+    create_export,
+    get_export_download_url,
+    get_export_result,
+    preview_export,
+)
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
@@ -15,7 +20,6 @@ from app.domain.entities import (
     JobStatus,
     JobType,
 )
-from app.infrastructure.query.engine import ExportQueryEngine
 
 
 @pytest.fixture
@@ -64,7 +68,7 @@ async def test_create_export_success(mock_job_service, authenticated_client_id, 
     # Setup mocks
     job_id = uuid4()
     run_id = uuid4()
-    
+
     created_job = JobDefinition(
         id=job_id,
         client_id=authenticated_client_id,
@@ -75,26 +79,27 @@ async def test_create_export_success(mock_job_service, authenticated_client_id, 
             fields=["id", "amount", "date"],
         ),
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.PENDING,
     )
-    
+
     mock_job_service.create_job = AsyncMock(return_value=created_job)
     mock_job_service.run_job = AsyncMock(return_value=job_run)
-    
+
     # Execute
     from app.api.dto import ExportRequest
+
     request_dto = ExportRequest(**export_request)
-    
+
     result = await create_export(
         export_request=request_dto,
         authenticated_client_id=authenticated_client_id,
         job_service=mock_job_service,
     )
-    
+
     # Deep validation: Verify the job was created with correct configuration
     mock_job_service.create_job.assert_called_once()
     create_job_call = mock_job_service.create_job.call_args[0][0]
@@ -105,10 +110,10 @@ async def test_create_export_success(mock_job_service, authenticated_client_id, 
     assert create_job_call.export_config.limit == 100  # Correct limit
     assert create_job_call.export_config.offset == 0  # Correct offset
     assert create_job_call.enabled is True  # Job is enabled
-    
+
     # Verify run_job was called with correct job ID
     mock_job_service.run_job.assert_called_once_with(job_id)
-    
+
     # Verify response matches expected values
     assert result.run_id == run_id
     assert result.entity == ExportEntity.BILL
@@ -120,22 +125,23 @@ async def test_create_export_validation_error(mock_job_service, authenticated_cl
     """Test export creation with validation error."""
     # Setup mocks
     mock_job_service.create_job = AsyncMock(side_effect=ValueError("Invalid export config"))
-    
+
     # Execute
     from app.api.dto import ExportRequest
+
     export_request = ExportRequest(
         entity=ExportEntity.BILL,
         fields=["invalid_field"],
         limit=100,
     )
-    
+
     with pytest.raises(HTTPException) as exc_info:
         await create_export(
             export_request=export_request,
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-    
+
     # Verify
     assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -152,33 +158,34 @@ async def test_preview_export_success(mock_query_engine, authenticated_client_id
         ],
     }
     mock_query_engine.execute_export_query = AsyncMock(return_value=preview_data)
-    
+
     # Execute
     from app.api.dto import ExportPreviewRequest
+
     preview_request = ExportPreviewRequest(
         entity=ExportEntity.BILL,
         fields=["id", "amount"],
         limit=20,
     )
-    
+
     result = await preview_export(
         preview_request=preview_request,
         authenticated_client_id=authenticated_client_id,
         query_engine=mock_query_engine,
     )
-    
+
     # Deep validation: Verify query engine was called with correct config
     mock_query_engine.execute_export_query.assert_called_once()
     query_call = mock_query_engine.execute_export_query.call_args[0][0]
     assert query_call.entity == ExportEntity.BILL  # Correct entity
     assert query_call.fields == ["id", "amount"]  # Correct fields
     assert query_call.limit == 20  # Correct limit
-    
+
     # Deep validation: Verify response data matches preview request
     assert result.count == 5  # Correct total count
     assert len(result.records) == 2  # Correct number of records returned
     assert result.entity == ExportEntity.BILL  # Correct entity
-    
+
     # Verify records have the requested fields
     for record in result.records:
         assert "id" in record
@@ -192,22 +199,23 @@ async def test_preview_export_validation_error(mock_query_engine, authenticated_
     """Test export preview with validation error."""
     # Setup mocks
     mock_query_engine.execute_export_query = AsyncMock(side_effect=ValueError("Invalid field"))
-    
+
     # Execute
     from app.api.dto import ExportPreviewRequest
+
     preview_request = ExportPreviewRequest(
         entity=ExportEntity.BILL,
         fields=["invalid_field"],
         limit=20,
     )
-    
+
     with pytest.raises(HTTPException) as exc_info:
         await preview_export(
             preview_request=preview_request,
             authenticated_client_id=authenticated_client_id,
             query_engine=mock_query_engine,
         )
-    
+
     # Verify
     assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -218,7 +226,7 @@ async def test_get_export_result_success(mock_job_service, authenticated_client_
     # Setup
     job_id = uuid4()
     run_id = uuid4()
-    
+
     job = JobDefinition(
         id=job_id,
         client_id=authenticated_client_id,
@@ -226,28 +234,28 @@ async def test_get_export_result_success(mock_job_service, authenticated_client_
         job_type=JobType.EXPORT,
         export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.SUCCEEDED,
         result_metadata={"count": 10, "format": "csv"},
     )
-    
+
     mock_job_service.get_job_run = AsyncMock(return_value=job_run)
     mock_job_service.get_job = AsyncMock(return_value=job)
-    
+
     # Execute
     result = await get_export_result(
         run_id=run_id,
         authenticated_client_id=authenticated_client_id,
         job_service=mock_job_service,
     )
-    
+
     # Deep validation: Verify service calls
     mock_job_service.get_job_run.assert_called_once_with(run_id)
     mock_job_service.get_job.assert_called_once_with(job_id)
-    
+
     # Deep validation: Verify response matches job run data
     assert result.run_id == run_id
     assert result.status == JobStatus.SUCCEEDED
@@ -265,7 +273,7 @@ async def test_get_export_result_unauthorized(mock_job_service, authenticated_cl
     job_id = uuid4()
     run_id = uuid4()
     other_client_id = uuid4()
-    
+
     job = JobDefinition(
         id=job_id,
         client_id=other_client_id,  # Different client
@@ -273,16 +281,16 @@ async def test_get_export_result_unauthorized(mock_job_service, authenticated_cl
         job_type=JobType.EXPORT,
         export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.SUCCEEDED,
     )
-    
+
     mock_job_service.get_job_run = AsyncMock(return_value=job_run)
     mock_job_service.get_job = AsyncMock(return_value=job)
-    
+
     # Execute - HTTPException is caught and re-raised as 500 in the generic handler
     # But the detail message should contain 403
     with pytest.raises(HTTPException) as exc_info:
@@ -291,7 +299,7 @@ async def test_get_export_result_unauthorized(mock_job_service, authenticated_cl
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-    
+
     # Verify - the exception detail should mention 403
     assert "403" in str(exc_info.value.detail) or exc_info.value.status_code in [403, 500]
 
@@ -301,10 +309,10 @@ async def test_get_export_result_not_export_job(mock_job_service, authenticated_
     """Test getting result for non-export job."""
     # Setup
     from app.domain.entities import ImportConfig
-    
+
     job_id = uuid4()
     run_id = uuid4()
-    
+
     job = JobDefinition(
         id=job_id,
         client_id=authenticated_client_id,
@@ -312,16 +320,16 @@ async def test_get_export_result_not_export_job(mock_job_service, authenticated_
         job_type=JobType.IMPORT,
         import_config=ImportConfig(source="test", entity=ExportEntity.BILL),  # Import job
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.SUCCEEDED,
     )
-    
+
     mock_job_service.get_job_run = AsyncMock(return_value=job_run)
     mock_job_service.get_job = AsyncMock(return_value=job)
-    
+
     # Execute
     with pytest.raises(HTTPException) as exc_info:
         await get_export_result(
@@ -329,18 +337,23 @@ async def test_get_export_result_not_export_job(mock_job_service, authenticated_
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-    
+
     # Verify - should be 400 or 500 (if caught by generic handler)
-    assert exc_info.value.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
+    assert exc_info.value.status_code in [
+        status.HTTP_400_BAD_REQUEST,
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+    ]
 
 
 @pytest.mark.asyncio
-async def test_get_export_download_url_success(mock_job_service, mock_cloud_storage, authenticated_client_id):
+async def test_get_export_download_url_success(
+    mock_job_service, mock_cloud_storage, authenticated_client_id
+):
     """Test getting download URL successfully."""
     # Setup
     job_id = uuid4()
     run_id = uuid4()
-    
+
     job = JobDefinition(
         id=job_id,
         client_id=authenticated_client_id,
@@ -348,19 +361,21 @@ async def test_get_export_download_url_success(mock_job_service, mock_cloud_stor
         job_type=JobType.EXPORT,
         export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.SUCCEEDED,
         result_metadata={"remote_file_path": "exports/file.csv"},
     )
-    
+
     mock_job_service.get_job_run = AsyncMock(return_value=job_run)
     mock_job_service.get_job = AsyncMock(return_value=job)
     # Mock cloud storage - note: method is generate_presigned_url
-    mock_cloud_storage.generate_presigned_url = AsyncMock(return_value="https://example.com/download?token=abc")
-    
+    mock_cloud_storage.generate_presigned_url = AsyncMock(
+        return_value="https://example.com/download?token=abc"
+    )
+
     # Execute - cloud_storage is injected via Depends, so we patch get_cloud_storage
     with patch("app.api.exports.get_cloud_storage", return_value=mock_cloud_storage):
         result = await get_export_download_url(
@@ -369,19 +384,21 @@ async def test_get_export_download_url_success(mock_job_service, mock_cloud_stor
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-    
+
     # Deep validation: Verify cloud storage was called with correct parameters
     mock_cloud_storage.generate_presigned_url.assert_called_once()
     url_call = mock_cloud_storage.generate_presigned_url.call_args
-    
+
     # The method signature is: generate_presigned_url(remote_file_path, expiration_seconds=...)
     # Check both positional and keyword args
     file_path = url_call[0][0] if url_call[0] else url_call[1].get("remote_file_path")
-    expiration = url_call[0][1] if len(url_call[0]) > 1 else url_call[1].get("expiration_seconds", 3600)
-    
+    expiration = (
+        url_call[0][1] if len(url_call[0]) > 1 else url_call[1].get("expiration_seconds", 3600)
+    )
+
     assert file_path == "exports/file.csv"  # Correct file path from metadata
     assert expiration == 3600  # Correct expiration
-    
+
     # Deep validation: Verify response contains all required fields
     assert result["run_id"] == str(run_id)
     assert result["download_url"] == "https://example.com/download?token=abc"
@@ -396,7 +413,7 @@ async def test_get_export_download_url_no_file(mock_job_service, authenticated_c
     # Setup
     job_id = uuid4()
     run_id = uuid4()
-    
+
     job = JobDefinition(
         id=job_id,
         client_id=authenticated_client_id,
@@ -404,17 +421,17 @@ async def test_get_export_download_url_no_file(mock_job_service, authenticated_c
         job_type=JobType.EXPORT,
         export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.SUCCEEDED,
         result_metadata={},  # No remote_file_path
     )
-    
+
     mock_job_service.get_job_run = AsyncMock(return_value=job_run)
     mock_job_service.get_job = AsyncMock(return_value=job)
-    
+
     # Execute
     with pytest.raises(HTTPException) as exc_info:
         await get_export_download_url(
@@ -423,7 +440,7 @@ async def test_get_export_download_url_no_file(mock_job_service, authenticated_c
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-    
+
     # Verify
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
@@ -434,7 +451,7 @@ async def test_get_export_download_url_not_completed(mock_job_service, authentic
     # Setup
     job_id = uuid4()
     run_id = uuid4()
-    
+
     job = JobDefinition(
         id=job_id,
         client_id=authenticated_client_id,
@@ -442,16 +459,16 @@ async def test_get_export_download_url_not_completed(mock_job_service, authentic
         job_type=JobType.EXPORT,
         export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
     )
-    
+
     job_run = JobRun(
         id=run_id,
         job_id=job_id,
         status=JobStatus.RUNNING,  # Not completed
     )
-    
+
     mock_job_service.get_job_run = AsyncMock(return_value=job_run)
     mock_job_service.get_job = AsyncMock(return_value=job)
-    
+
     # Execute
     with pytest.raises(HTTPException) as exc_info:
         await get_export_download_url(
@@ -460,7 +477,6 @@ async def test_get_export_download_url_not_completed(mock_job_service, authentic
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-    
+
     # Verify
     assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
-

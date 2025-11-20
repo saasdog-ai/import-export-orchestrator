@@ -1,7 +1,7 @@
 """Data Transfer Objects (DTOs) for API requests and responses."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -22,20 +22,20 @@ class JobDefinitionCreate(BaseModel):
     client_id: UUID
     name: str
     job_type: JobType
-    export_config: Optional[ExportConfig] = None
-    import_config: Optional[ImportConfig] = None
-    cron_schedule: Optional[str] = None
+    export_config: ExportConfig | None = None
+    import_config: ImportConfig | None = None
+    cron_schedule: str | None = None
     enabled: bool = True
 
 
 class JobDefinitionUpdate(BaseModel):
     """DTO for updating a job definition."""
 
-    name: Optional[str] = None
-    export_config: Optional[ExportConfig] = None
-    import_config: Optional[ImportConfig] = None
-    cron_schedule: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    export_config: ExportConfig | None = None
+    import_config: ImportConfig | None = None
+    cron_schedule: str | None = None
+    enabled: bool | None = None
 
 
 class JobDefinitionResponse(BaseModel):
@@ -45,9 +45,9 @@ class JobDefinitionResponse(BaseModel):
     client_id: UUID
     name: str
     job_type: JobType
-    export_config: Optional[ExportConfig] = None
-    import_config: Optional[ImportConfig] = None
-    cron_schedule: Optional[str] = None
+    export_config: ExportConfig | None = None
+    import_config: ImportConfig | None = None
+    cron_schedule: str | None = None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -59,10 +59,10 @@ class JobRunResponse(BaseModel):
     id: UUID
     job_id: UUID
     status: JobStatus
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    result_metadata: Optional[Dict[str, Any]] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    result_metadata: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -71,10 +71,10 @@ class ExportRequest(BaseModel):
     """DTO for export job request."""
 
     entity: ExportEntity
-    fields: List[str] = Field(..., description="List of fields to return")
-    filters: Optional[ExportFilterGroup] = None
-    sort: Optional[List[Dict[str, str]]] = None
-    limit: Optional[int] = Field(default=None, ge=1, le=10000)
+    fields: list[str] = Field(..., description="List of fields to return")
+    filters: ExportFilterGroup | None = None
+    sort: list[dict[str, str]] | None = None
+    limit: int | None = Field(default=None, ge=1, le=10000)
     offset: int = Field(default=0, ge=0)
 
 
@@ -82,9 +82,9 @@ class ExportPreviewRequest(BaseModel):
     """DTO for export preview request."""
 
     entity: ExportEntity
-    fields: List[str] = Field(..., description="List of fields to return")
-    filters: Optional[ExportFilterGroup] = None
-    sort: Optional[List[Dict[str, str]]] = None
+    fields: list[str] = Field(..., description="List of fields to return")
+    filters: ExportFilterGroup | None = None
+    sort: list[dict[str, str]] | None = None
     limit: int = Field(default=20, ge=1, le=100)
 
 
@@ -93,7 +93,7 @@ class ExportPreviewResponse(BaseModel):
 
     entity: ExportEntity
     count: int
-    records: List[Dict[str, Any]]
+    records: list[dict[str, Any]]
     limit: int
     offset: int
 
@@ -104,15 +104,15 @@ class ExportResultResponse(BaseModel):
     run_id: UUID
     entity: ExportEntity
     status: JobStatus
-    result_metadata: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
+    result_metadata: dict[str, Any] | None = None
+    error_message: str | None = None
 
 
 class ErrorResponse(BaseModel):
     """DTO for error response."""
 
     error: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 class HealthResponse(BaseModel):
@@ -120,4 +120,3 @@ class HealthResponse(BaseModel):
 
     status: str
     timestamp: datetime
-

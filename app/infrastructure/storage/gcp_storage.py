@@ -1,7 +1,6 @@
 """Google Cloud Storage implementation."""
 
 import asyncio
-from typing import Optional
 
 from app.core.logging import get_logger
 
@@ -31,7 +30,7 @@ class GCPCloudStorage:
         self.storage_client = storage.Client()
 
     async def upload_file(
-        self, local_file_path: str, remote_file_path: str, content_type: Optional[str] = None
+        self, local_file_path: str, remote_file_path: str, content_type: str | None = None
     ) -> str:
         """Upload a file to GCP Cloud Storage."""
         try:
@@ -63,9 +62,7 @@ class GCPCloudStorage:
             loop = asyncio.get_event_loop()
             url = await loop.run_in_executor(
                 None,
-                lambda: blob.generate_signed_url(
-                    expiration=expiration_seconds, method="GET"
-                ),
+                lambda: blob.generate_signed_url(expiration=expiration_seconds, method="GET"),
             )
             return url
         except GoogleCloudError as e:
@@ -102,4 +99,3 @@ class GCPCloudStorage:
         except GoogleCloudError as e:
             logger.error(f"Failed to delete file from GCP: {e}")
             raise
-

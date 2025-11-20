@@ -1,11 +1,9 @@
 """Repository implementations for database operations."""
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import (
     JobDefinition,
@@ -47,7 +45,7 @@ class JobRepository:
             await session.refresh(db_job)
             return self._model_to_entity(db_job)
 
-    async def get_by_id(self, job_id: UUID) -> Optional[JobDefinition]:
+    async def get_by_id(self, job_id: UUID) -> JobDefinition | None:
         """Get job definition by ID."""
         async with self.db.async_session_maker() as session:
             result = await session.execute(
@@ -56,7 +54,7 @@ class JobRepository:
             db_job = result.scalar_one_or_none()
             return self._model_to_entity(db_job) if db_job else None
 
-    async def get_by_client_id(self, client_id: UUID) -> List[JobDefinition]:
+    async def get_by_client_id(self, client_id: UUID) -> list[JobDefinition]:
         """Get all job definitions for a client."""
         async with self.db.async_session_maker() as session:
             result = await session.execute(
@@ -65,7 +63,7 @@ class JobRepository:
             db_jobs = result.scalars().all()
             return [self._model_to_entity(db_job) for db_job in db_jobs]
 
-    async def get_enabled_scheduled_jobs(self) -> List[JobDefinition]:
+    async def get_enabled_scheduled_jobs(self) -> list[JobDefinition]:
         """Get all enabled jobs with cron schedules."""
         async with self.db.async_session_maker() as session:
             result = await session.execute(
@@ -140,16 +138,14 @@ class JobRunRepository:
             await session.refresh(db_run)
             return self._model_to_entity(db_run)
 
-    async def get_by_id(self, run_id: UUID) -> Optional[JobRun]:
+    async def get_by_id(self, run_id: UUID) -> JobRun | None:
         """Get job run by ID."""
         async with self.db.async_session_maker() as session:
-            result = await session.execute(
-                select(JobRunModel).where(JobRunModel.id == run_id)
-            )
+            result = await session.execute(select(JobRunModel).where(JobRunModel.id == run_id))
             db_run = result.scalar_one_or_none()
             return self._model_to_entity(db_run) if db_run else None
 
-    async def get_by_job_id(self, job_id: UUID) -> List[JobRun]:
+    async def get_by_job_id(self, job_id: UUID) -> list[JobRun]:
         """Get all runs for a job."""
         async with self.db.async_session_maker() as session:
             result = await session.execute(
@@ -164,10 +160,10 @@ class JobRunRepository:
         self,
         run_id: UUID,
         status: JobStatus,
-        started_at: Optional[datetime] = None,
-        completed_at: Optional[datetime] = None,
-        error_message: Optional[str] = None,
-        result_metadata: Optional[dict] = None,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+        error_message: str | None = None,
+        result_metadata: dict | None = None,
     ) -> JobRun:
         """Update job run status."""
         async with self.db.async_session_maker() as session:
@@ -203,4 +199,3 @@ class JobRunRepository:
             created_at=db_run.created_at,
             updated_at=db_run.updated_at,
         )
-

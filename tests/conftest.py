@@ -1,15 +1,13 @@
 """Pytest configuration and fixtures."""
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core.config import get_settings
-from app.core.dependency_injection import init_dependencies, shutdown_dependencies
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
@@ -210,4 +208,3 @@ async def test_client_app():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
-
