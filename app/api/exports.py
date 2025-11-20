@@ -145,13 +145,13 @@ async def get_export_result(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
 
         if not job.export_config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Job is not an export job",
-            ) from e
+            )
 
         # If job is completed and has a remote file, add download URL to metadata
         result_metadata = job_run.result_metadata or {}
@@ -197,7 +197,7 @@ async def get_export_download_url(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
 
         if not job.export_config:
             raise HTTPException(

@@ -81,7 +81,7 @@ async def get_job(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
         return JobDefinitionResponse.model_validate(job.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -108,7 +108,7 @@ async def update_job(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
 
         # Merge updates
         update_dict = job_data.model_dump(exclude_unset=True)
@@ -142,7 +142,7 @@ async def run_job(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
         job_run = await job_service.run_job(job_id)
         return JobRunResponse.model_validate(job_run.model_dump())
     except ValueError as e:
@@ -168,7 +168,7 @@ async def get_job_runs(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
         runs = await job_service.get_job_runs(job_id)
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
@@ -196,7 +196,7 @@ async def get_job_run(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            ) from e
+            )
         job_run = await job_service.get_job_run(run_id)
         return JobRunResponse.model_validate(job_run.model_dump())
     except ValueError as e:
