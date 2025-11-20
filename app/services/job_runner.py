@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.core.config import get_settings
