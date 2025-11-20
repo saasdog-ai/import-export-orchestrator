@@ -79,10 +79,11 @@ set -e  # Re-enable exit on error
 # Check for actual test failures (not just errors)
 FAILURES=$(echo "$TEST_OUTPUT" | grep -c "FAILED" || echo "0")
 ERRORS=$(echo "$TEST_OUTPUT" | grep -c "ERROR" || echo "0")
-PASSED=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" | head -1 || echo "0")
+PASSED_RAW=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" | head -1 || echo "0")
+PASSED=$(echo "$PASSED_RAW" | tr -d '\n' | tr -d ' ')
 
-# Ensure PASSED is a valid integer
-if [ -z "$PASSED" ] || [ "$PASSED" = "" ]; then
+# Ensure PASSED is a valid integer (default to 0 if empty or invalid)
+if [ -z "$PASSED" ] || ! [ "$PASSED" -eq "$PASSED" ] 2>/dev/null; then
     PASSED=0
 fi
 
