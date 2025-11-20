@@ -1,6 +1,6 @@
 """Repository implementations for database operations."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -99,7 +99,7 @@ class JobRepository:
                     import_config=job.import_config.model_dump() if job.import_config else None,
                     cron_schedule=job.cron_schedule,
                     enabled=job.enabled,
-                    updated_at=datetime.utcnow(),
+                    updated_at=datetime.now(UTC),
                 )
             )
             await session.commit()
@@ -189,7 +189,7 @@ class JobRunRepository:
         async with self.db.async_session_maker() as session:
             update_values = {
                 "status": status.value,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(UTC),
             }
             if started_at:
                 update_values["started_at"] = started_at

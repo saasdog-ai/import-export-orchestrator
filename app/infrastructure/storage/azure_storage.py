@@ -102,7 +102,7 @@ class AzureBlobStorage:
                 blob_name=remote_file_path,
                 account_key=None,  # Will use credential if available
                 permission=BlobSasPermissions(read=True),
-                expiry=datetime.utcnow() + timedelta(seconds=expiration_seconds),
+                expiry=datetime.now(UTC) + timedelta(seconds=expiration_seconds),
             )
 
             url = f"{blob_client.url}?{sas_token}"

@@ -30,8 +30,8 @@ class Client(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
     name: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -143,8 +143,8 @@ class JobDefinition(BaseModel):
         default=None, description="Cron expression for scheduled execution"
     )
     enabled: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="after")
     def validate_job_config(self) -> "JobDefinition":
@@ -171,8 +171,8 @@ class JobRun(BaseModel):
     result_metadata: dict[str, Any] | None = Field(
         default=None, description="Metadata about the job result"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True

@@ -262,7 +262,7 @@ class MockSaaSApiClient(SaaSApiClientInterface):
                     if "created_at" not in record:
                         from datetime import datetime
 
-                        record["created_at"] = datetime.utcnow().isoformat() + "Z"
+                        record["created_at"] = datetime.now(UTC).isoformat() + "Z"
                     current_data.append(record)
                     imported_count += 1
                     logger.debug(f"Created new {entity.value} record {record['id']}")

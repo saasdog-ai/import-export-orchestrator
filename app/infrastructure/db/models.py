@@ -1,6 +1,6 @@
 """SQLAlchemy database models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Text
@@ -26,8 +26,13 @@ class JobDefinitionModel(Base):
     import_config = Column(JSON, nullable=True)
     cron_schedule = Column(String(100), nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
 
     runs = relationship("JobRunModel", back_populates="job", cascade="all, delete-orphan")
 
@@ -44,7 +49,12 @@ class JobRunModel(Base):
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     result_metadata = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
 
     job = relationship("JobDefinitionModel", back_populates="runs")

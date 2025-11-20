@@ -151,7 +151,7 @@ class JobRunnerService:
         await self.job_run_repository.update_status(
             job_run.id,
             JobStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(UTC),
         )
 
         try:
@@ -171,7 +171,7 @@ class JobRunnerService:
             await self.job_run_repository.update_status(
                 job_run.id,
                 JobStatus.FAILED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(UTC),
                 error_message=str(e),
             )
 
@@ -249,7 +249,7 @@ class JobRunnerService:
         await self.job_run_repository.update_status(
             job_run.id,
             JobStatus.SUCCEEDED,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(UTC),
             result_metadata=result_metadata,
         )
 
@@ -297,7 +297,7 @@ class JobRunnerService:
                     await self.job_run_repository.update_status(
                         job_run.id,
                         JobStatus.FAILED,
-                        completed_at=datetime.utcnow(),
+                        completed_at=datetime.now(UTC),
                         error_message=error_msg,
                     )
                     return
@@ -311,7 +311,7 @@ class JobRunnerService:
                 await self.job_run_repository.update_status(
                     job_run.id,
                     JobStatus.FAILED,
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(UTC),
                     error_message=error_msg,
                 )
                 return
@@ -340,7 +340,7 @@ class JobRunnerService:
                 await self.job_run_repository.update_status(
                     job_run.id,
                     JobStatus.FAILED,
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(UTC),
                     error_message=error_msg,
                     result_metadata={
                         "import_errors": import_errors,
@@ -365,7 +365,7 @@ class JobRunnerService:
             await self.job_run_repository.update_status(
                 job_run.id,
                 JobStatus.SUCCEEDED if result.get("failed_count", 0) == 0 else JobStatus.FAILED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(UTC),
                 result_metadata=result_metadata,
                 error_message=f"{result.get('failed_count', 0)} records failed to import"
                 if result.get("failed_count", 0) > 0
@@ -396,7 +396,7 @@ class JobRunnerService:
             await self.job_run_repository.update_status(
                 job_run.id,
                 JobStatus.SUCCEEDED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(UTC),
                 result_metadata=result_metadata,
             )
 
