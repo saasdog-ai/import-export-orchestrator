@@ -3,6 +3,12 @@
 
 set -e
 
+# Function to handle errors gracefully
+handle_error() {
+    echo -e "${RED}❌ Pre-push check failed at: $1${NC}"
+    exit 1
+}
+
 echo "🔍 Running pre-push checks..."
 echo ""
 
@@ -40,8 +46,11 @@ echo ""
 
 # Step 3: Run type checker (non-blocking)
 echo -e "${YELLOW}Step 3: Running type checker (mypy)...${NC}"
+# Run mypy but don't fail on errors (non-blocking)
+set +e  # Temporarily disable exit on error for this step
 MYPY_OUTPUT=$(mypy app 2>&1)
 MYPY_EXIT_CODE=$?
+set -e  # Re-enable exit on error
 
 if [ $MYPY_EXIT_CODE -eq 0 ]; then
     echo -e "${GREEN}✅ Type checker passed${NC}"
@@ -61,28 +70,34 @@ echo ""
 
 # Step 4: Run unit tests
 echo -e "${YELLOW}Step 4: Running unit tests...${NC}"
-# Run tests and check for failures (errors are OK)
-if pytest tests/unit/ -v --tb=line -q --maxfail=1 2>&1 | tee /tmp/pytest_output.log | grep -q "FAILED"; then
-    echo -e "${RED}❌ Unit tests failed!${NC}"
-    grep "FAILED" /tmp/pytest_output.log | head -5
-    rm -f /tmp/pytest_output.log
-    exit 1
-fi
+# Run tests and capture output
+set +e  # Temporarily disable exit on error for test parsing
+TEST_OUTPUT=$(pytest tests/unit/ -v --tb=line -q 2>&1)
+TEST_EXIT_CODE=$?
+set -e  # Re-enable exit on error
 
-# Check if tests passed (errors are warnings, not failures)
-PASSED=$(grep -oE "[0-9]+ passed" /tmp/pytest_output.log 2>/dev/null | grep -oE "[0-9]+" || echo "0")
-if [ "$PASSED" -gt 0 ]; then
+# Check for actual test failures (not just errors)
+FAILURES=$(echo "$TEST_OUTPUT" | grep -c "FAILED" || echo "0")
+ERRORS=$(echo "$TEST_OUTPUT" | grep -c "ERROR" || echo "0")
+PASSED=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" || echo "0")
+
+if [ "$FAILURES" -gt 0 ]; then
+    echo -e "${RED}❌ Unit tests failed! ($FAILURES failures)${NC}"
+    echo "$TEST_OUTPUT" | grep -A 3 "FAILED" | head -10
+    exit 1
+elif [ "$ERRORS" -gt 0 ] && [ "$PASSED" -eq 0 ]; then
+    echo -e "${RED}❌ No tests passed! ($ERRORS errors)${NC}"
+    echo "$TEST_OUTPUT" | tail -10
+    exit 1
+elif [ "$PASSED" -gt 0 ]; then
     echo -e "${GREEN}✅ Unit tests: $PASSED passed${NC}"
-    ERRORS=$(grep -c "ERROR" /tmp/pytest_output.log 2>/dev/null || echo "0")
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${YELLOW}⚠️  ($ERRORS errors - may be due to missing database connections)${NC}"
     fi
 else
     echo -e "${RED}❌ No tests passed!${NC}"
-    rm -f /tmp/pytest_output.log
     exit 1
 fi
-rm -f /tmp/pytest_output.log
 echo ""
 
 # Step 5: Check test coverage (optional)
