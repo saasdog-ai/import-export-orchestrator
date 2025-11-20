@@ -68,9 +68,9 @@ async def test_get_jobs_by_client_with_date_filter(
 
     # Filter by end_date (should include the job we just created)
     past_date = datetime.utcnow() - timedelta(days=1)
-    past_jobs = await job_repository.get_by_client_id(test_client_id, end_date=past_date)
+    await job_repository.get_by_client_id(test_client_id, end_date=past_date)
     # The job we created should be after past_date, so it might not be in results
-    # But we can verify the filtering works
+    # But we can verify the filtering works by calling the method
 
     # Filter by date range (should include the job)
     start_date = datetime.utcnow() - timedelta(days=1)
@@ -79,9 +79,7 @@ async def test_get_jobs_by_client_with_date_filter(
         test_client_id, start_date=start_date, end_date=end_date
     )
     assert len(range_jobs) >= 1
-    assert all(
-        start_date <= job.created_at <= end_date for job in range_jobs
-    )
+    assert all(start_date <= job.created_at <= end_date for job in range_jobs)
 
 
 @pytest.mark.asyncio
@@ -145,13 +143,13 @@ async def test_get_job_runs_with_date_filter(
 
     # Create runs at different times
     run1 = JobRun(job_id=created_job.id, status=JobStatus.PENDING)
-    created_run1 = await job_run_repository.create(run1)
+    await job_run_repository.create(run1)
 
     # Wait a moment to ensure different timestamps
     await asyncio.sleep(0.1)
 
     run2 = JobRun(job_id=created_job.id, status=JobStatus.PENDING)
-    created_run2 = await job_run_repository.create(run2)
+    await job_run_repository.create(run2)
 
     # Get all runs
     all_runs = await job_run_repository.get_by_job_id(created_job.id)

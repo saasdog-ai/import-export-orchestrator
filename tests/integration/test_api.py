@@ -99,9 +99,7 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
 
     # Get runs with end_date filter (past date - might return empty or some runs)
     past_date = datetime.utcnow() - timedelta(days=1)
-    response = await test_client_app.get(
-        f"/jobs/{job_id}/runs?end_date={past_date.isoformat()}Z"
-    )
+    response = await test_client_app.get(f"/jobs/{job_id}/runs?end_date={past_date.isoformat()}Z")
     assert response.status_code == 200
     past_runs = response.json()
     # Verify all returned runs are before past_date
