@@ -243,20 +243,17 @@ async def test_client_app(test_db: Database):
         job_runner=job_runner,
     )
     
-    # Initialize dependencies using the function signature
-    # Note: init_dependencies() doesn't take parameters, it uses global settings
-    # So we need to set the global instances directly or use a different approach
-    from app.core.dependency_injection import (
-        _db,
-        _query_engine,
-        _job_service,
-    )
+    # Initialize dependencies by setting global instances directly
+    # Note: init_dependencies() uses global settings, so we set globals manually for tests
     import app.core.dependency_injection as di
     
-    # Set global instances
+    # Set global instances that the API endpoints depend on
     di._db = test_db
     di._query_engine = query_engine
     di._job_service = job_service
+    di._job_repository = job_repository
+    di._job_run_repository = job_run_repository
+    di._saas_client = saas_client
     
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
