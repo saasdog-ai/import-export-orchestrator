@@ -1,0 +1,72 @@
+#!/bin/bash
+# Git pre-push hook to run linting and tests before pushing
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+echo ""
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check if we're in the right directory
+if [ ! -f "pyproject.toml" ]; then
+    echo -e "${RED}Error: pyproject.toml not found. Are you in the project root?${NC}"
+    exit 1
+fi
+
+# Step 1: Run linter
+echo -e "${YELLOW}Step 1: Running linter (ruff check)...${NC}"
+if ! ruff check app tests; then
+    echo -e "${RED}❌ Linter failed! Please fix linting errors before pushing.${NC}"
+    echo -e "${YELLOW}Run: ruff check --fix app tests${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Linter passed${NC}"
+echo ""
+
+# Step 2: Check code formatting
+echo -e "${YELLOW}Step 2: Checking code formatting (ruff format)...${NC}"
+if ! ruff format --check app tests; then
+    echo -e "${RED}❌ Code formatting check failed!${NC}"
+    echo -e "${YELLOW}Run: ruff format app tests${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Code formatting check passed${NC}"
+echo ""
+
+# Step 3: Run type checker (optional - can be slow)
+echo -e "${YELLOW}Step 3: Running type checker (mypy)...${NC}"
+if ! mypy app; then
+    echo -e "${YELLOW}⚠️  Type checker found issues (non-blocking)${NC}"
+    echo -e "${YELLOW}Consider fixing type errors for better code quality${NC}"
+    # Don't fail on type errors - they're warnings
+fi
+echo -e "${GREEN}✅ Type checker completed${NC}"
+echo ""
+
+# Step 4: Run unit tests
+echo -e "${YELLOW}Step 4: Running unit tests...${NC}"
+if ! pytest tests/unit/ -v --tb=short; then
+    echo -e "${RED}❌ Unit tests failed! Please fix failing tests before pushing.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Unit tests passed${NC}"
+echo ""
+
+# Step 5: Check test coverage (optional)
+echo -e "${YELLOW}Step 5: Checking test coverage...${NC}"
+COVERAGE=$(pytest tests/unit/ --cov=app --cov-report=term-missing -q 2>&1 | grep "TOTAL" | awk '{print $NF}' | sed 's/%//')
+if [ -z "$COVERAGE" ]; then
+    echo -e "${YELLOW}⚠️  Could not determine coverage${NC}"
+else
+    echo -e "${GREEN}✅ Test coverage: ${COVERAGE}%${NC}"
+fi
+echo ""
+
+echo -e "${GREEN}✅ All pre-push checks passed! Ready to push.${NC}"
+exit 0
+

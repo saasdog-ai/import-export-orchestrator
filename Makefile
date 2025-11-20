@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint format mypy clean run docker-build docker-up docker-down docker-logs migrate migrate-upgrade migrate-downgrade
+.PHONY: help install install-dev test lint format mypy clean run docker-build docker-up docker-down docker-logs migrate migrate-upgrade migrate-downgrade check pre-push
 
 help:
 	@echo "Available commands:"
@@ -8,6 +8,8 @@ help:
 	@echo "  make lint          - Run ruff linter"
 	@echo "  make format        - Format code with ruff"
 	@echo "  make mypy          - Run mypy type checker"
+	@echo "  make check         - Run all checks (lint, format, type, tests)"
+	@echo "  make pre-push      - Run pre-push checks (lint, format, tests)"
 	@echo "  make clean         - Clean build artifacts"
 	@echo "  make run           - Run the application locally"
 	@echo "  make docker-build  - Build Docker image"
@@ -64,4 +66,10 @@ migrate-upgrade:
 
 migrate-downgrade:
 	alembic downgrade -1
+
+check: lint format mypy test
+	@echo "✅ All checks passed!"
+
+pre-push: lint format test
+	@echo "✅ Pre-push checks passed! Ready to push."
 

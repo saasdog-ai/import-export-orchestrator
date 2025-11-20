@@ -85,6 +85,9 @@ docker-compose.override.yml
 logs/
 *.log
 
+# Scripts (keep scripts directory, but ignore temp files)
+scripts/*.tmp
+scripts/*.bak
 # Coverage reports
 coverage.xml
 htmlcov/
