@@ -84,10 +84,9 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
 
     job_id = create_response.json()["id"]
 
-    # Get all runs (no filter)
+    # Get all runs (no filter) - verify endpoint works
     response = await test_client_app.get(f"/jobs/{job_id}/runs")
     assert response.status_code == 200
-    all_runs = response.json()
 
     # Get runs with start_date filter (future date - should return empty)
     future_date = datetime.utcnow() + timedelta(days=1)
@@ -129,10 +128,9 @@ async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
     """Test getting client jobs with date filtering."""
     from datetime import datetime, timedelta
 
-    # Get all jobs (no filter)
+    # Get all jobs (no filter) - verify endpoint works
     response = await test_client_app.get("/jobs")
     assert response.status_code == 200
-    all_jobs = response.json()
 
     # Get jobs with start_date filter (future date - should return empty)
     future_date = datetime.utcnow() + timedelta(days=1)
