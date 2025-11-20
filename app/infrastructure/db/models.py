@@ -49,11 +49,15 @@ class JobRunModel(Base):
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     result_metadata = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    created_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        nullable=False,
+    )
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
         nullable=False,
     )
 
