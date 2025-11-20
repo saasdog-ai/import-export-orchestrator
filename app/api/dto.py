@@ -17,9 +17,13 @@ from app.domain.entities import (
 
 
 class JobDefinitionCreate(BaseModel):
-    """DTO for creating a job definition."""
+    """DTO for creating a job definition.
 
-    client_id: UUID
+    Note: client_id is optional as it's extracted from JWT token.
+    If provided, it must match the authenticated client_id.
+    """
+
+    client_id: UUID | None = None
     name: str
     job_type: JobType
     export_config: ExportConfig | None = None

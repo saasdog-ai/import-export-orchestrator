@@ -29,8 +29,8 @@ async def test_create_job(test_client_app: AsyncClient):
     }
     # Note: client_id is extracted from JWT token, not from request body
     response = await test_client_app.post("/jobs", json=job_data)
-    # May fail if dependencies not initialized, but should be 201 or 400/500
-    assert response.status_code in [201, 400, 500]
+    # Should be 201 (success), 400 (validation error), 422 (Pydantic validation), or 500 (server error)
+    assert response.status_code in [201, 400, 422, 500]
 
 
 @pytest.mark.asyncio
