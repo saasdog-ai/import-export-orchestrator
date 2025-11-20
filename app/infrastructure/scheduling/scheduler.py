@@ -1,6 +1,7 @@
 """Pluggable scheduler implementation using APScheduler."""
 
 from collections.abc import Callable
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,8 +19,8 @@ class SchedulerInterface:
         func: Callable,
         cron_expression: str,
         job_id: str,
-        *args: any,
-        **kwargs: any,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Add a cron-scheduled job."""
         raise NotImplementedError
@@ -64,8 +65,8 @@ class APSchedulerService(SchedulerInterface):
         func: Callable,
         cron_expression: str,
         job_id: str,
-        *args: any,
-        **kwargs: any,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Add a cron-scheduled job."""
         if not self.scheduler:
