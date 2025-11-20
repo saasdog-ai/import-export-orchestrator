@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 try:
     from azure.core.exceptions import AzureError
-    from azure.storage.queue import QueueMessage, QueueServiceClient
+    from azure.storage.queue import QueueServiceClient
 except ImportError:
     QueueServiceClient = None
     logger.warning("azure-storage-queue not installed. Azure queue will not be available.")

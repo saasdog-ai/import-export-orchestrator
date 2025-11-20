@@ -5,9 +5,6 @@ from typing import Any
 from sqlalchemy import and_, not_, or_
 
 from app.core.logging import get_logger
-
-logger = get_logger(__name__)
-
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
@@ -21,6 +18,8 @@ from app.infrastructure.query.schema import (
     validate_field_path,
 )
 from app.infrastructure.saas.client import SaaSApiClientInterface
+
+logger = get_logger(__name__)
 
 
 class ExportQueryEngine:
