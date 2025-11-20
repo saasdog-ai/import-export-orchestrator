@@ -24,7 +24,39 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     "",
     response_model=JobDefinitionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={400: {"model": ErrorResponse}},
+    summary="Create job definition",
+    description="Create a new import or export job definition with optional scheduling.",
+    responses={
+        201: {
+            "description": "Job definition created successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "client_id": "00000000-0000-0000-0000-000000000000",
+                        "name": "Daily Bill Export",
+                        "job_type": "export",
+                        "export_config": {
+                            "entity": "bill",
+                            "fields": ["id", "amount", "date"],
+                            "filters": None,
+                            "sort": None,
+                            "limit": 100,
+                            "offset": 0,
+                        },
+                        "import_config": None,
+                        "cron_schedule": "0 0 * * *",
+                        "enabled": True,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z",
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid request data", "model": ErrorResponse},
+        403: {"description": "Client ID mismatch", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
 )
 async def create_job(
     job_data: JobDefinitionCreate,
@@ -36,6 +68,29 @@ async def create_job(
 
     The client_id is extracted from the JWT token. If job_data contains a client_id,
     it must match the authenticated client_id from the token.
+
+    **Request Body:**
+    - `name`: Job name (required)
+    - `job_type`: Either "import" or "export" (required)
+    - `export_config`: Export configuration (required for export jobs)
+    - `import_config`: Import configuration (required for import jobs)
+    - `cron_schedule`: Optional cron expression for scheduled execution
+    - `enabled`: Whether the job is enabled (default: true)
+
+    **Example Request:**
+    ```json
+    {
+        "name": "Daily Bill Export",
+        "job_type": "export",
+        "export_config": {
+            "entity": "bill",
+            "fields": ["id", "amount", "date"],
+            "limit": 100
+        },
+        "cron_schedule": "0 0 * * *",
+        "enabled": true
+    }
+    ```
     """
     try:
         from app.domain.entities import JobDefinition
@@ -94,7 +149,15 @@ async def get_job(
 @router.put(
     "/{job_id}",
     response_model=JobDefinitionResponse,
-    responses={404: {"model": ErrorResponse}},
+    summary="Update job definition",
+    description="Update an existing job definition. Only the authenticated client can update their own jobs.",
+    responses={
+        200: {
+            "description": "Job definition updated successfully",
+        },
+        403: {"description": "Access denied", "model": ErrorResponse},
+        404: {"description": "Job not found", "model": ErrorResponse},
+    },
 )
 async def update_job(
     job_id: UUID,
@@ -268,6 +331,13 @@ async def get_job_run(
 @router.get(
     "",
     response_model=list[JobDefinitionResponse],
+    summary="Get client jobs",
+    description="Get all job definitions for the authenticated client, optionally filtered by date range.",
+    responses={
+        200: {
+            "description": "List of job definitions",
+        },
+    },
 )
 async def get_client_jobs(
     start_date: Annotated[

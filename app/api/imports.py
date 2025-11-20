@@ -23,10 +23,53 @@ settings = get_settings()
 
 @router.post(
     "/upload",
+    summary="Upload and validate import file",
+    description="""
+    Phase 1: Upload a file, validate its format and content, then store it temporarily in cloud storage.
+
+    This endpoint performs:
+    1. File format validation (extension, size, encoding)
+    2. Content validation (required fields, data types, malicious input detection)
+    3. Temporary storage in cloud storage (if configured)
+
+    If validation succeeds, returns a `file_path` that can be used in Phase 2 (`/execute`).
+    If validation fails, returns detailed error information including row and field locations.
+    """,
     responses={
-        200: {"description": "File uploaded and validated successfully"},
-        400: {"model": ErrorResponse},
-        413: {"model": ErrorResponse},
+        200: {
+            "description": "File uploaded and validated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "File validated and uploaded successfully",
+                        "file_path": "imports/temp/550e8400-e29b-41d4-a716-446655440000/bills.csv",
+                        "record_count": 100,
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "Validation failed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "message": "Validation failed",
+                        "errors": [
+                            {
+                                "row": 2,
+                                "field": "amount",
+                                "error": "Field 'amount' must be a valid number",
+                            }
+                        ],
+                    }
+                }
+            },
+            "model": ErrorResponse,
+        },
+        413: {"description": "File too large", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse},
     },
 )
 async def upload_import_file(
@@ -139,10 +182,34 @@ class ExecuteImportRequest(BaseModel):
 
 @router.post(
     "/execute",
+    summary="Execute import job",
+    description="""
+    Phase 2: Create and execute an import job from a previously validated file.
+
+    This endpoint:
+    1. Creates an import job definition
+    2. Triggers the import job execution
+    3. Returns the job run ID for tracking
+
+    The `file_path` should be obtained from Phase 1 (`/upload`) endpoint.
+    """,
     responses={
-        201: {"description": "Import job created and started"},
-        400: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
+        201: {
+            "description": "Import job created and triggered successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Import job created and triggered",
+                        "job_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "run_id": "550e8400-e29b-41d4-a716-446655440000",
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid request", "model": ErrorResponse},
+        404: {"description": "File not found", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse},
     },
 )
 async def execute_import(

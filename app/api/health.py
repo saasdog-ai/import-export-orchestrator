@@ -12,19 +12,65 @@ from app.infrastructure.db.database import Database
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Basic health check",
+    description="Returns the health status of the API service.",
+    responses={
+        200: {
+            "description": "Service is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "timestamp": "2024-01-01T12:00:00Z",
+                    }
+                }
+            },
+        },
+    },
+)
 async def health_check():
-    """Basic health check endpoint."""
+    """
+    Basic health check endpoint.
+
+    Returns the current health status of the API service.
+    This endpoint does not check database connectivity.
+    """
     return HealthResponse(status="healthy", timestamp=datetime.now(UTC))
 
 
 @router.get(
     "/health/db",
     response_model=HealthResponse,
-    responses={503: {"model": ErrorResponse}},
+    summary="Database health check",
+    description="Checks the connectivity and health of the database connection.",
+    responses={
+        200: {
+            "description": "Database is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "timestamp": "2024-01-01T12:00:00Z",
+                    }
+                }
+            },
+        },
+        503: {
+            "description": "Database connection failed",
+            "model": ErrorResponse,
+        },
+    },
 )
 async def health_check_db(db: Database = Depends(get_database)):
-    """Database connectivity health check."""
+    """
+    Database connectivity health check.
+
+    Performs a test query to verify database connectivity.
+    Returns 503 if the database is unreachable.
+    """
     try:
         async with db.async_session_maker() as session:
             # Test database connection
