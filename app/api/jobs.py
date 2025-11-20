@@ -1,6 +1,6 @@
 """API routes for job management."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -267,13 +267,20 @@ async def get_client_jobs(
     """
     try:
         # Convert timezone-aware datetimes to naive UTC if needed
-        if start_date and start_date.tzinfo is not None:
-            start_date = start_date.replace(tzinfo=None)
-        if end_date and end_date.tzinfo is not None:
-            end_date = end_date.replace(tzinfo=None)
+        # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
+        if start_date:
+            if start_date.tzinfo is not None:
+                # Convert to UTC naive datetime
+                start_date = start_date.astimezone().replace(tzinfo=None)
+        if end_date:
+            if end_date.tzinfo is not None:
+                # Convert to UTC naive datetime
+                end_date = end_date.astimezone().replace(tzinfo=None)
         jobs = await job_service.get_jobs_by_client(
             authenticated_client_id, start_date=start_date, end_date=end_date
         )
         return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail) from e
