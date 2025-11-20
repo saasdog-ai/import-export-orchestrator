@@ -18,7 +18,7 @@ class SaaSApiClientInterface:
     """Interface for SaaS API client."""
 
     async def fetch_data(
-        self, entity: ExportEntity, filters: dict[str, Any] = None
+        self, entity: ExportEntity, filters: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
         """Fetch data from SaaS API."""
         raise NotImplementedError
@@ -31,7 +31,7 @@ class SaaSApiClientInterface:
 class MockSaaSApiClient(SaaSApiClientInterface):
     """Mock implementation of SaaS API client with stateful data storage."""
 
-    def __init__(self, data_file: str = None):
+    def __init__(self, data_file: str | None = None):
         """
         Initialize mock client with sample data.
 
@@ -95,7 +95,12 @@ class MockSaaSApiClient(SaaSApiClientInterface):
             "created_at": "2024-01-01T08:00:00Z",
         }
 
-        self._sample_data: dict[ExportEntity, list[dict[str, Any]]] = {
+        # Initialize _sample_data if not already set
+        if not hasattr(self, "_sample_data"):
+            self._sample_data: dict[ExportEntity, list[dict[str, Any]]] = {}
+        
+        # Populate with default data
+        self._sample_data = {
             ExportEntity.BILL: [
                 {
                     "id": str(uuid4()),
@@ -172,7 +177,7 @@ class MockSaaSApiClient(SaaSApiClientInterface):
             logger.warning(f"Failed to save data to {self.data_file}: {e}")
 
     async def fetch_data(
-        self, entity: ExportEntity, filters: dict[str, Any] = None
+        self, entity: ExportEntity, filters: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
         """Fetch mock data for an entity."""
         logger.info(f"Fetching {entity.value} data (mock)")

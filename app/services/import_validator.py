@@ -22,7 +22,7 @@ class ValidationError(Exception):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert error to dictionary for API response."""
-        error = {"message": self.message}
+        error: dict[str, Any] = {"message": self.message}
         if self.row is not None:
             error["row"] = self.row
         if self.field is not None:
@@ -143,8 +143,9 @@ class ImportValidator:
                 # Validate each data row
                 row_num = 1  # Start at 1 (header is row 0)
                 for row in reader:
+                    fieldnames_list = list(reader.fieldnames) if reader.fieldnames else []
                     row_errors = ImportValidator._validate_row(
-                        row, row_num, entity, reader.fieldnames
+                        row, row_num, entity, fieldnames_list
                     )
                     errors.extend(row_errors)
                     row_num += 1

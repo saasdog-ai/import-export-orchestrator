@@ -107,6 +107,11 @@ show_error_codes = true
 module = [
     "apscheduler.*",
     "alembic.*",
+    "boto3.*",
+    "botocore.*",
+    "azure.*",
+    "google.cloud.*",
+    "google.auth.*",
 ]
 ignore_missing_imports = true
 
