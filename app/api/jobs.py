@@ -82,7 +82,7 @@ async def get_job(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             ) from e
-        return JobDefinitionResponse.model_validate(job.model_dump()) from e
+        return JobDefinitionResponse.model_validate(job.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except Exception as e:

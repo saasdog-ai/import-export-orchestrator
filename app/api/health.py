@@ -34,5 +34,5 @@ async def health_check_db(db: Database = Depends(get_database)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection failed: {str(e) from e}",
+            detail=f"Database connection failed: {str(e)}",
         ) from e

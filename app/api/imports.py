@@ -114,7 +114,7 @@ async def upload_import_file(
                 os.remove(temp_file_path)
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to upload file to cloud storage: {str(e) from e}",
+                    detail=f"Failed to upload file to cloud storage: {str(e)}",
                 ) from e
         else:
             # No cloud storage - keep file locally
@@ -127,17 +127,17 @@ async def upload_import_file(
                     "entity": entity.value,
                     "filename": file.filename,
                 },
-            ) from e
+            )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing file upload: {str(e) from e}",
+            detail=f"Error processing file upload: {str(e)}",
         ) from e
 class ExecuteImportRequest(BaseModel):
     """Request body for executing an import from a validated file."""
-    file_path: str = Field(..., description="Path to validated file in cloud storage") from e
+    file_path: str = Field(..., description="Path to validated file in cloud storage")
     entity: ExportEntity = Field(..., description="Entity type to import")
 @router.post(
     "/execute",

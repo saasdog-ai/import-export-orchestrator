@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
 from app.api.imports import ExecuteImportRequest, execute_import, upload_import_file
 from app.domain.entities import ExportEntity, JobDefinition, JobRun, JobStatus, JobType
