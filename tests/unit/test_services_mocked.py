@@ -151,7 +151,9 @@ async def test_get_jobs_by_client(job_service, mock_job_repository, test_client_
     # Verify
     assert len(result) == 2
     assert all(job.client_id == test_client_id for job in result)
-    mock_job_repository.get_by_client_id.assert_called_once_with(test_client_id)
+    mock_job_repository.get_by_client_id.assert_called_once_with(
+        test_client_id, start_date=None, end_date=None
+    )
 
 
 @pytest.mark.asyncio
