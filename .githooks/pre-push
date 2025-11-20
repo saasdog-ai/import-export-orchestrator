@@ -79,7 +79,12 @@ set -e  # Re-enable exit on error
 # Check for actual test failures (not just errors)
 FAILURES=$(echo "$TEST_OUTPUT" | grep -c "FAILED" || echo "0")
 ERRORS=$(echo "$TEST_OUTPUT" | grep -c "ERROR" || echo "0")
-PASSED=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" || echo "0")
+PASSED=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" | head -1 || echo "0")
+
+# Ensure PASSED is a valid integer
+if [ -z "$PASSED" ] || [ "$PASSED" = "" ]; then
+    PASSED=0
+fi
 
 if [ "$FAILURES" -gt 0 ]; then
     echo -e "${RED}❌ Unit tests failed! ($FAILURES failures)${NC}"
