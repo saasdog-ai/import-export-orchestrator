@@ -68,11 +68,11 @@ else
 fi
 echo ""
 
-# Step 4: Run unit tests
-echo -e "${YELLOW}Step 4: Running unit tests...${NC}"
-# Run tests and capture output
+# Step 4: Run unit tests (exclude integration tests)
+echo -e "${YELLOW}Step 4: Running unit tests (excluding integration tests)...${NC}"
+# Run tests and capture output - exclude integration marked tests
 set +e  # Temporarily disable exit on error for test parsing
-TEST_OUTPUT=$(pytest tests/unit/ -v --tb=line -q 2>&1)
+TEST_OUTPUT=$(pytest tests/unit/ -v --tb=line -q -m "not integration" 2>&1)
 TEST_EXIT_CODE=$?
 set -e  # Re-enable exit on error
 

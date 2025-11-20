@@ -1,4 +1,8 @@
-"""Unit tests for repositories."""
+"""Unit tests for repositories.
+
+Note: These tests use real database connections and should be considered integration tests.
+For true unit tests with mocked dependencies, see test_repositories_mocked.py
+"""
 
 import pytest
 
@@ -8,6 +12,9 @@ from app.domain.entities import (
     JobStatus,
 )
 from app.infrastructure.db.repositories import JobRepository, JobRunRepository
+
+# Mark these as integration tests since they use real DB
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio

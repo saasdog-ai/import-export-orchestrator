@@ -201,10 +201,70 @@ async def job_service(
 
 
 @pytest.fixture
-async def test_client_app():
-    """Create a test client for FastAPI."""
+async def test_client_app(test_db: Database):
+    """Create a test client for FastAPI with initialized dependencies."""
     from httpx import AsyncClient
     from httpx._transports.asgi import ASGITransport
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
+    
+    # Initialize dependencies for integration tests
+    from app.core.dependency_injection import init_dependencies, shutdown_dependencies
+    from app.infrastructure.saas.client import MockSaaSApiClient
+    from app.infrastructure.query.engine import ExportQueryEngine
+    from app.services.job_service import JobService
+    from app.infrastructure.db.repositories import JobRepository, JobRunRepository
+    from app.services.job_runner import JobRunnerService
+    from app.services.scheduler_service import SchedulerService
+    from app.infrastructure.scheduling.scheduler import APSchedulerService
+    
+    # Create services
+    saas_client = MockSaaSApiClient()
+    query_engine = ExportQueryEngine(test_db, saas_client)
+    job_repository = JobRepository(test_db)
+    job_run_repository = JobRunRepository(test_db)
+    scheduler = APSchedulerService(timezone="UTC")
+    job_runner = JobRunnerService(
+        job_repository=job_repository,
+        job_run_repository=job_run_repository,
+        query_engine=query_engine,
+        saas_client=saas_client,
+        max_workers=2,
+    )
+    await job_runner.start()
+    scheduler_service = SchedulerService(
+        scheduler=scheduler,
+        job_repository=job_repository,
+        job_run_repository=job_run_repository,
+        job_runner=job_runner,
+    )
+    job_service = JobService(
+        job_repository=job_repository,
+        job_run_repository=job_run_repository,
+        scheduler_service=scheduler_service,
+        job_runner=job_runner,
+    )
+    
+    # Initialize dependencies using the function signature
+    # Note: init_dependencies() doesn't take parameters, it uses global settings
+    # So we need to set the global instances directly or use a different approach
+    from app.core.dependency_injection import (
+        _db,
+        _query_engine,
+        _job_service,
+    )
+    import app.core.dependency_injection as di
+    
+    # Set global instances
+    di._db = test_db
+    di._query_engine = query_engine
+    di._job_service = job_service
+    
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            yield client
+    finally:
+        # Cleanup
+        await job_runner.stop()
+        # Reset globals
+        di._db = None
+        di._query_engine = None
+        di._job_service = None

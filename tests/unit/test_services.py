@@ -1,4 +1,8 @@
-"""Unit tests for services."""
+"""Unit tests for services.
+
+Note: These tests use real database connections and should be considered integration tests.
+For true unit tests with mocked dependencies, see test_services_mocked.py
+"""
 
 from uuid import uuid4
 
@@ -12,6 +16,9 @@ from app.domain.entities import (
     JobType,
 )
 from app.services.job_service import JobService
+
+# Mark these as integration tests since they use real DB
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
