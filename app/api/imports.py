@@ -113,7 +113,7 @@ async def upload_import_file(
                 )
             except Exception as e:
                 os.remove(temp_file_path)
-                raise HTTPException(
+                raise HTTPException( from e
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to upload file to cloud storage: {str(e)}",
                 )
@@ -133,9 +133,9 @@ async def upload_import_file(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
+        raise HTTPException( from e
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing file upload: {str(e)}",
+            detail=f"Error processing file upload: {str(e) from e}",
         )
 
 
@@ -210,6 +210,6 @@ async def execute_import(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e) from e)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)

@@ -32,7 +32,7 @@ async def health_check_db(db: Database = Depends(get_database)):
             result.scalar()
         return HealthResponse(status="healthy", timestamp=datetime.utcnow())
     except Exception as e:
-        raise HTTPException(
+        raise HTTPException( from e
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection failed: {str(e)}",
+            detail=f"Database connection failed: {str(e) from e}",
         )

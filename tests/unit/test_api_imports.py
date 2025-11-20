@@ -179,7 +179,7 @@ async def test_execute_import_value_error(mock_job_service, test_client_id):
 
     mock_job_service.create_job = AsyncMock(side_effect=ValueError("Invalid job"))
 
-    with pytest.raises(Exception):  # HTTPException
+    with pytest.raises(HTTPException):  # HTTPException
         await execute_import(
             request=request,
             authenticated_client_id=test_client_id,
@@ -197,7 +197,7 @@ async def test_execute_import_generic_error(mock_job_service, test_client_id):
 
     mock_job_service.create_job = AsyncMock(side_effect=Exception("Unexpected error"))
 
-    with pytest.raises(Exception):  # HTTPException
+    with pytest.raises(HTTPException):  # HTTPException
         await execute_import(
             request=request,
             authenticated_client_id=test_client_id,
