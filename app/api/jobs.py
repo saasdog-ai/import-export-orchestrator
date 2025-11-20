@@ -162,15 +162,13 @@ async def get_job_runs(
     start_date: Annotated[
         datetime | None,
         Query(
-            default=None,
-            description="Filter runs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
+            description="Filter runs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"
         ),
     ] = None,
     end_date: Annotated[
         datetime | None,
         Query(
-            default=None,
-            description="Filter runs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
+            description="Filter runs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)"
         ),
     ] = None,
     authenticated_client_id: UUID = Depends(get_current_client_id),
@@ -240,15 +238,13 @@ async def get_client_jobs(
     start_date: Annotated[
         datetime | None,
         Query(
-            default=None,
-            description="Filter jobs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
+            description="Filter jobs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"
         ),
     ] = None,
     end_date: Annotated[
         datetime | None,
         Query(
-            default=None,
-            description="Filter jobs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
+            description="Filter jobs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)"
         ),
     ] = None,
     authenticated_client_id: UUID = Depends(get_current_client_id),
