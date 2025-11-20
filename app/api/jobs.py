@@ -58,9 +58,9 @@ async def create_job(
         created_job = await job_service.create_job(job)
         return JobDefinitionResponse.model_validate(created_job.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.get(
@@ -81,12 +81,12 @@ async def get_job(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
-        return JobDefinitionResponse.model_validate(job.model_dump())
+            ) from e
+        return JobDefinitionResponse.model_validate(job.model_dump()) from e
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.put(
@@ -108,7 +108,7 @@ async def update_job(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
+            ) from e
 
         # Merge updates
         update_dict = job_data.model_dump(exclude_unset=True)
@@ -118,9 +118,9 @@ async def update_job(
         updated_job = await job_service.update_job(existing_job)
         return JobDefinitionResponse.model_validate(updated_job.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.post(
@@ -142,13 +142,13 @@ async def run_job(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
+            ) from e
         job_run = await job_service.run_job(job_id)
         return JobRunResponse.model_validate(job_run.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.get(
@@ -168,13 +168,13 @@ async def get_job_runs(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
-        runs = await job_service.get_job_runs(job_id)
+            ) from e
+        runs = await job_service.get_job_runs(job_id) from e
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.get(
@@ -196,13 +196,13 @@ async def get_job_run(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
+            ) from e
         job_run = await job_service.get_job_run(run_id)
         return JobRunResponse.model_validate(job_run.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.get(
@@ -223,4 +223,4 @@ async def get_client_jobs(
         jobs = await job_service.get_jobs_by_client(authenticated_client_id)
         return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e

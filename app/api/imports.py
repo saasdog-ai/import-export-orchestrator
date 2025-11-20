@@ -113,10 +113,10 @@ async def upload_import_file(
                 )
             except Exception as e:
                 os.remove(temp_file_path)
-                raise HTTPException( from e
+                raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to upload file to cloud storage: {str(e)}",
-                )
+                    detail=f"Failed to upload file to cloud storage: {str(e) from e}",
+                ) from e
         else:
             # No cloud storage - keep file locally
             return JSONResponse(
@@ -128,15 +128,15 @@ async def upload_import_file(
                     "entity": entity.value,
                     "filename": file.filename,
                 },
-            )
+            ) from e
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException( from e
+        raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing file upload: {str(e) from e}",
-        )
+        ) from e
 
 
 from pydantic import BaseModel, Field
@@ -145,7 +145,7 @@ from pydantic import BaseModel, Field
 class ExecuteImportRequest(BaseModel):
     """Request body for executing an import from a validated file."""
 
-    file_path: str = Field(..., description="Path to validated file in cloud storage")
+    file_path: str = Field(..., description="Path to validated file in cloud storage") from e
     entity: ExportEntity = Field(..., description="Entity type to import")
 
 
@@ -210,6 +210,6 @@ async def execute_import(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e

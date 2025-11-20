@@ -77,9 +77,9 @@ async def create_export(
             error_message=job_run.error_message,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.post(
@@ -120,9 +120,9 @@ async def preview_export(
             offset=0,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.get(
@@ -145,13 +145,13 @@ async def get_export_result(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
+            ) from e
 
         if not job.export_config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Job is not an export job",
-            )
+            ) from e
 
         # If job is completed and has a remote file, add download URL to metadata
         result_metadata = job_run.result_metadata or {}
@@ -172,9 +172,9 @@ async def get_export_result(
             error_message=job_run.error_message,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
 
 
 @router.get(
@@ -197,19 +197,19 @@ async def get_export_download_url(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
-            )
+            ) from e
 
         if not job.export_config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Job is not an export job",
-            )
+            ) from e
 
         if job_run.status != JobStatus.SUCCEEDED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Job run is not completed. Current status: {job_run.status.value}",
-            )
+            ) from e
 
         result_metadata = job_run.result_metadata or {}
         remote_file_path = result_metadata.get("remote_file_path")
@@ -218,14 +218,14 @@ async def get_export_download_url(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Export file not found. File may not have been uploaded to cloud storage.",
-            )
+            ) from e
 
         cloud_storage = get_cloud_storage()
         if not cloud_storage:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Cloud storage not configured",
-            )
+            ) from e
 
         # Validate expiration_seconds (max 7 days for security)
         max_expiration = 7 * 24 * 60 * 60  # 7 days
@@ -244,8 +244,8 @@ async def get_export_download_url(
             "file_path": remote_file_path,
         }
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))) from e
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) from e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))) from e
