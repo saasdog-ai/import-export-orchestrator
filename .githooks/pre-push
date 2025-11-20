@@ -38,14 +38,9 @@ fi
 echo -e "${GREEN}✅ Code formatting check passed${NC}"
 echo ""
 
-# Step 3: Run type checker (optional - can be slow)
-echo -e "${YELLOW}Step 3: Running type checker (mypy)...${NC}"
-if ! mypy app; then
-    echo -e "${YELLOW}⚠️  Type checker found issues (non-blocking)${NC}"
-    echo -e "${YELLOW}Consider fixing type errors for better code quality${NC}"
-    # Don't fail on type errors - they're warnings
-fi
-echo -e "${GREEN}✅ Type checker completed${NC}"
+# Step 3: Run type checker (optional - can be slow, skip for now)
+echo -e "${YELLOW}Step 3: Skipping type checker (mypy) - optional${NC}"
+echo -e "${YELLOW}💡 Run 'mypy app' manually if needed${NC}"
 echo ""
 
 # Step 4: Run unit tests
