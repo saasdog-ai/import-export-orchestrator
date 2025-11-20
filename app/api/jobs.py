@@ -1,6 +1,6 @@
 """API routes for job management."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -198,10 +198,10 @@ async def get_job_runs(
         # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
         if start_date and start_date.tzinfo is not None:
             # Convert to UTC first, then remove timezone info
-            start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
+            start_date = start_date.astimezone(UTC).replace(tzinfo=None)
         if end_date and end_date.tzinfo is not None:
             # Convert to UTC first, then remove timezone info
-            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
+            end_date = end_date.astimezone(UTC).replace(tzinfo=None)
         runs = await job_service.get_job_runs(job_id, start_date=start_date, end_date=end_date)
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
@@ -278,15 +278,18 @@ async def get_client_jobs(
         # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
         if start_date and start_date.tzinfo is not None:
             # Convert to UTC first, then remove timezone info
-            start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
+            start_date = start_date.astimezone(UTC).replace(tzinfo=None)
         if end_date and end_date.tzinfo is not None:
             # Convert to UTC first, then remove timezone info
-            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
+            end_date = end_date.astimezone(UTC).replace(tzinfo=None)
         jobs = await job_service.get_jobs_by_client(
             authenticated_client_id, start_date=start_date, end_date=end_date
         )
         return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
     except Exception as e:
         import traceback
+
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail) from e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail
+        ) from e
