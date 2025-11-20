@@ -5,6 +5,18 @@ from uuid import UUID
 
 from sqlalchemy import select, update
 
+from app.domain.entities import (
+    JobDefinition,
+    JobRun,
+    JobStatus,
+    JobType,
+)
+from app.infrastructure.db.database import Database
+from app.infrastructure.db.models import (
+    JobDefinitionModel,
+    JobRunModel,
+)
+
 
 def _to_naive_utc(dt: datetime | None) -> datetime | None:
     """Convert timezone-aware datetime to naive UTC datetime for database storage."""
@@ -24,18 +36,6 @@ def _to_aware_utc(dt: datetime | None) -> datetime | None:
         # Assume naive datetime is UTC and add timezone info
         return dt.replace(tzinfo=UTC)
     return dt
-
-from app.domain.entities import (
-    JobDefinition,
-    JobRun,
-    JobStatus,
-    JobType,
-)
-from app.infrastructure.db.database import Database
-from app.infrastructure.db.models import (
-    JobDefinitionModel,
-    JobRunModel,
-)
 
 
 class JobRepository:
