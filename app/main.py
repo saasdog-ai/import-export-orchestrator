@@ -120,11 +120,54 @@ app.include_router(exports.router)
 app.include_router(imports.router)
 
 
-@app.get("/")
+def custom_openapi():
+    """Generate custom OpenAPI schema with OpenAPI 3.1 support."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        openapi_version="3.1.0",  # Use OpenAPI 3.1.0
+    )
+    # Add additional metadata for OpenAPI 3.1
+    openapi_schema["info"]["x-logo"] = {
+        "url": "https://fastapi.tiangolo.com/img/logo-margin/logo-teal.png"
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+
+@app.get(
+    "/",
+    summary="Root endpoint",
+    description="Returns basic information about the API service.",
+    tags=["health"],
+    response_description="Service information including name, version, and status.",
+)
 async def root():
-    """Root endpoint."""
+    """
+    Root endpoint providing service information.
+
+    Returns basic metadata about the API service including:
+    - Service name
+    - API version
+    - Current status
+    - Documentation URLs
+    """
     return {
         "name": settings.app_name,
         "version": "0.1.0",
         "status": "running",
+        "docs": {
+            "swagger": "/docs",
+            "redoc": "/redoc",
+            "openapi": "/openapi.json",
+        },
     }
