@@ -1,6 +1,6 @@
 """Unit tests for repositories with mocked database."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -60,8 +60,8 @@ async def test_create_job(mock_db, mock_session):
         name=test_job.name,
         job_type=test_job.job_type.value,
         enabled=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     db_model.export_config = {"entity": "bill", "fields": ["id", "amount"]}
 
@@ -97,8 +97,8 @@ async def test_get_job_by_id(mock_db, mock_session):
         name="Test Job",
         job_type=JobType.EXPORT.value,
         enabled=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     # Set export_config as JSON
     db_model.export_config = {
@@ -186,8 +186,8 @@ async def test_create_job_run(mock_db, mock_session):
         id=job_run.id,
         job_id=job_id,
         status=JobStatus.PENDING.value,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     # Mock session context manager
@@ -216,15 +216,15 @@ async def test_update_job_run_status(mock_db, mock_session):
 
     run_id = uuid4()
     job_id = uuid4()
-    started_at = datetime.utcnow()
+    started_at = datetime.now(UTC)
 
     db_model = JobRunModel(
         id=run_id,
         job_id=job_id,
         status=JobStatus.RUNNING.value,
         started_at=started_at,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     # Mock session context manager

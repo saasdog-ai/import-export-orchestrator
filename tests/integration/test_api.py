@@ -60,7 +60,7 @@ async def test_preview_export(test_client_app: AsyncClient):
 @pytest.mark.asyncio
 async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
     """Test getting job runs with date filtering."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
     from uuid import UUID
 
     # Default client_id when auth is disabled
@@ -89,17 +89,17 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
     assert response.status_code == 200
 
     # Get runs with start_date filter (future date - should return empty)
-    future_date = datetime.utcnow() + timedelta(days=1)
+    future_date = datetime.now(UTC) + timedelta(days=1)
     # Format datetime for URL (remove microseconds and ensure Z suffix)
-    future_date_str = future_date.replace(microsecond=0).isoformat() + "Z"
+    future_date_str = future_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(f"/jobs/{job_id}/runs?start_date={future_date_str}")
     assert response.status_code == 200
     future_runs = response.json()
     assert len(future_runs) == 0
 
     # Get runs with end_date filter (past date - might return empty or some runs)
-    past_date = datetime.utcnow() - timedelta(days=1)
-    past_date_str = past_date.replace(microsecond=0).isoformat() + "Z"
+    past_date = datetime.now(UTC) - timedelta(days=1)
+    past_date_str = past_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(f"/jobs/{job_id}/runs?end_date={past_date_str}")
     assert response.status_code == 200
     past_runs = response.json()
@@ -109,10 +109,10 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
         assert run_date <= past_date
 
     # Get runs with date range filter
-    start_date = datetime.utcnow() - timedelta(days=1)
-    end_date = datetime.utcnow() + timedelta(days=1)
-    start_date_str = start_date.replace(microsecond=0).isoformat() + "Z"
-    end_date_str = end_date.replace(microsecond=0).isoformat() + "Z"
+    start_date = datetime.now(UTC) - timedelta(days=1)
+    end_date = datetime.now(UTC) + timedelta(days=1)
+    start_date_str = start_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    end_date_str = end_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(
         f"/jobs/{job_id}/runs?start_date={start_date_str}&end_date={end_date_str}"
     )
@@ -127,23 +127,23 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
 @pytest.mark.asyncio
 async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
     """Test getting client jobs with date filtering."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     # Get all jobs (no filter) - verify endpoint works
     response = await test_client_app.get("/jobs")
     assert response.status_code == 200
 
     # Get jobs with start_date filter (future date - should return empty)
-    future_date = datetime.utcnow() + timedelta(days=1)
-    future_date_str = future_date.replace(microsecond=0).isoformat() + "Z"
+    future_date = datetime.now(UTC) + timedelta(days=1)
+    future_date_str = future_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(f"/jobs?start_date={future_date_str}")
     assert response.status_code == 200
     future_jobs = response.json()
     assert len(future_jobs) == 0
 
     # Get jobs with end_date filter (past date)
-    past_date = datetime.utcnow() - timedelta(days=1)
-    past_date_str = past_date.replace(microsecond=0).isoformat() + "Z"
+    past_date = datetime.now(UTC) - timedelta(days=1)
+    past_date_str = past_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(f"/jobs?end_date={past_date_str}")
     assert response.status_code == 200
     past_jobs = response.json()
@@ -153,10 +153,10 @@ async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
         assert job_date <= past_date
 
     # Get jobs with date range filter
-    start_date = datetime.utcnow() - timedelta(days=1)
-    end_date = datetime.utcnow() + timedelta(days=1)
-    start_date_str = start_date.replace(microsecond=0).isoformat() + "Z"
-    end_date_str = end_date.replace(microsecond=0).isoformat() + "Z"
+    start_date = datetime.now(UTC) - timedelta(days=1)
+    end_date = datetime.now(UTC) + timedelta(days=1)
+    start_date_str = start_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    end_date_str = end_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(
         f"/jobs?start_date={start_date_str}&end_date={end_date_str}"
     )

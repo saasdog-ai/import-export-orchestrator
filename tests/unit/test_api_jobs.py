@@ -343,8 +343,10 @@ async def test_get_job_runs_with_date_filter(mock_job_service, authenticated_cli
         JobRun(id=uuid4(), job_id=sample_job.id, status=JobStatus.PENDING),
     ]
 
-    start_date = datetime.utcnow()
-    end_date = datetime.utcnow()
+    from datetime import UTC
+
+    start_date = datetime.now(UTC)
+    end_date = datetime.now(UTC)
 
     mock_job_service.get_job = AsyncMock(return_value=sample_job)
     mock_job_service.get_job_runs = AsyncMock(return_value=runs)
@@ -360,8 +362,13 @@ async def test_get_job_runs_with_date_filter(mock_job_service, authenticated_cli
 
     # Verify
     assert len(result) == 1
+    # The API converts timezone-aware datetimes to naive UTC before calling the service
+    expected_start = (
+        start_date.astimezone(UTC).replace(tzinfo=None) if start_date.tzinfo else start_date
+    )
+    expected_end = end_date.astimezone(UTC).replace(tzinfo=None) if end_date.tzinfo else end_date
     mock_job_service.get_job_runs.assert_called_once_with(
-        sample_job.id, start_date=start_date, end_date=end_date
+        sample_job.id, start_date=expected_start, end_date=expected_end
     )
 
 
@@ -449,8 +456,10 @@ async def test_get_client_jobs_with_date_filter(mock_job_service, authenticated_
         ),
     ]
 
-    start_date = datetime.utcnow()
-    end_date = datetime.utcnow()
+    from datetime import UTC
+
+    start_date = datetime.now(UTC)
+    end_date = datetime.now(UTC)
 
     mock_job_service.get_jobs_by_client = AsyncMock(return_value=jobs)
 
@@ -464,6 +473,11 @@ async def test_get_client_jobs_with_date_filter(mock_job_service, authenticated_
 
     # Verify
     assert len(result) == 1
+    # The API converts timezone-aware datetimes to naive UTC before calling the service
+    expected_start = (
+        start_date.astimezone(UTC).replace(tzinfo=None) if start_date.tzinfo else start_date
+    )
+    expected_end = end_date.astimezone(UTC).replace(tzinfo=None) if end_date.tzinfo else end_date
     mock_job_service.get_jobs_by_client.assert_called_once_with(
-        authenticated_client_id, start_date=start_date, end_date=end_date
+        authenticated_client_id, start_date=expected_start, end_date=expected_end
     )

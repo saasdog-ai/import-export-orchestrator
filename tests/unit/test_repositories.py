@@ -52,7 +52,7 @@ async def test_get_jobs_by_client_with_date_filter(
     job_repository: JobRepository, test_client_id, test_job: JobDefinition
 ):
     """Test getting jobs by client ID with date filtering."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     # Create a job
     await job_repository.create(test_job)
@@ -62,19 +62,19 @@ async def test_get_jobs_by_client_with_date_filter(
     assert len(all_jobs) >= 1
 
     # Filter by start_date (should include the job we just created)
-    future_date = datetime.utcnow() + timedelta(days=1)
+    future_date = datetime.now(UTC) + timedelta(days=1)
     future_jobs = await job_repository.get_by_client_id(test_client_id, start_date=future_date)
     assert len(future_jobs) == 0  # No jobs created in the future
 
     # Filter by end_date (should include the job we just created)
-    past_date = datetime.utcnow() - timedelta(days=1)
+    past_date = datetime.now(UTC) - timedelta(days=1)
     await job_repository.get_by_client_id(test_client_id, end_date=past_date)
     # The job we created should be after past_date, so it might not be in results
     # But we can verify the filtering works by calling the method
 
     # Filter by date range (should include the job)
-    start_date = datetime.utcnow() - timedelta(days=1)
-    end_date = datetime.utcnow() + timedelta(days=1)
+    start_date = datetime.now(UTC) - timedelta(days=1)
+    end_date = datetime.now(UTC) + timedelta(days=1)
     range_jobs = await job_repository.get_by_client_id(
         test_client_id, start_date=start_date, end_date=end_date
     )
@@ -108,7 +108,7 @@ async def test_update_job_run_status(
     test_job: JobDefinition,
 ):
     """Test updating job run status."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     # Create job and run
     created_job = await job_repository.create(test_job)
@@ -123,7 +123,7 @@ async def test_update_job_run_status(
     updated_run = await job_run_repository.update_status(
         created_run.id,
         JobStatus.RUNNING,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(UTC),
     )
     assert updated_run.status == JobStatus.RUNNING
     assert updated_run.started_at is not None
@@ -136,7 +136,7 @@ async def test_get_job_runs_with_date_filter(
     test_job: JobDefinition,
 ):
     """Test getting job runs with date filtering."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     # Create job and multiple runs
     created_job = await job_repository.create(test_job)
@@ -156,18 +156,18 @@ async def test_get_job_runs_with_date_filter(
     assert len(all_runs) >= 2
 
     # Filter by start_date (should include both runs)
-    past_date = datetime.utcnow() - timedelta(days=1)
+    past_date = datetime.now(UTC) - timedelta(days=1)
     past_runs = await job_run_repository.get_by_job_id(created_job.id, start_date=past_date)
     assert len(past_runs) >= 2
 
     # Filter by future start_date (should return empty)
-    future_date = datetime.utcnow() + timedelta(days=1)
+    future_date = datetime.now(UTC) + timedelta(days=1)
     future_runs = await job_run_repository.get_by_job_id(created_job.id, start_date=future_date)
     assert len(future_runs) == 0
 
     # Filter by date range
-    start_date = datetime.utcnow() - timedelta(days=1)
-    end_date = datetime.utcnow() + timedelta(days=1)
+    start_date = datetime.now(UTC) - timedelta(days=1)
+    end_date = datetime.now(UTC) + timedelta(days=1)
     range_runs = await job_run_repository.get_by_job_id(
         created_job.id, start_date=start_date, end_date=end_date
     )
