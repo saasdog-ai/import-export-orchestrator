@@ -169,7 +169,7 @@ async def get_job_runs(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             ) from e
-        runs = await job_service.get_job_runs(job_id)
+        runs = await job_service.get_job_runs(job_id) from e
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
