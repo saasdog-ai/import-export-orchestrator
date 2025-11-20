@@ -27,7 +27,26 @@ router = APIRouter(prefix="/exports", tags=["exports"])
     "",
     response_model=ExportResultResponseDTO,
     status_code=status.HTTP_201_CREATED,
-    responses={400: {"model": ErrorResponse}},
+    summary="Create export job",
+    description="Create and immediately trigger an export job. Returns the job run ID for tracking.",
+    responses={
+        201: {
+            "description": "Export job created and triggered successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "run_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "entity": "bill",
+                        "status": "pending",
+                        "result_metadata": None,
+                        "error_message": None,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid export request", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
 )
 async def create_export(
     export_request: ExportRequest,
@@ -39,6 +58,31 @@ async def create_export(
 
     The client_id is extracted from the JWT token, not from the URL path.
     This prevents clients from accessing other clients' data by manipulating URLs.
+
+    **Request Body:**
+    - `entity`: Entity type to export (bill, invoice, vendor, project)
+    - `fields`: List of fields to include in the export
+    - `filters`: Optional filters to apply
+    - `sort`: Optional sorting configuration
+    - `limit`: Maximum number of records (default: 100)
+    - `offset`: Number of records to skip (default: 0)
+
+    **Example Request:**
+    ```json
+    {
+        "entity": "bill",
+        "fields": ["id", "amount", "date", "vendor.name"],
+        "filters": [
+            {
+                "field": "amount",
+                "operator": "gte",
+                "value": 1000
+            }
+        ],
+        "sort": [{"field": "date", "direction": "desc"}],
+        "limit": 50
+    }
+    ```
     """
     try:
         from uuid import uuid4

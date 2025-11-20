@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from app.api import exports, health, imports, jobs
 from app.core.config import get_settings
@@ -45,9 +46,63 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
-    description="Backend job runner service for async import/export operations with scheduling and filtering",
+    description="""
+    ## Import/Export Orchestrator API
+    
+    A comprehensive backend service for managing asynchronous import and export operations 
+    with advanced scheduling, filtering, and cloud storage integration.
+    
+    ### Features
+    
+    - **Job Management**: Create, update, and manage import/export job definitions
+    - **Scheduled Jobs**: Support for cron-based job scheduling
+    - **Date Filtering**: Filter jobs and runs by date ranges
+    - **Cloud Storage**: Integration with AWS S3, Azure Blob Storage, and GCP Cloud Storage
+    - **Multi-Phase Imports**: Upload, validate, and execute import operations
+    - **Export Operations**: Query and export data with advanced filtering and sorting
+    
+    ### Authentication
+    
+    The API uses JWT token-based authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-token>
+    ```
+    
+    ### API Documentation
+    
+    - **Swagger UI**: `/docs` - Interactive API documentation
+    - **ReDoc**: `/redoc` - Alternative API documentation
+    - **OpenAPI JSON**: `/openapi.json` - OpenAPI 3.1 specification
+    """,
     version="0.1.0",
     lifespan=lifespan,
+    terms_of_service="https://example.com/terms/",
+    contact={
+        "name": "API Support",
+        "email": "support@example.com",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=[
+        {
+            "name": "health",
+            "description": "Health check endpoints for monitoring service availability and database connectivity.",
+        },
+        {
+            "name": "jobs",
+            "description": "Job management operations. Create, update, and manage import/export job definitions with scheduling support.",
+        },
+        {
+            "name": "exports",
+            "description": "Export operations. Create export jobs, preview data, and download exported files.",
+        },
+        {
+            "name": "imports",
+            "description": "Import operations. Upload files, validate data, and execute import jobs.",
+        },
+    ],
 )
 
 # Configure CORS

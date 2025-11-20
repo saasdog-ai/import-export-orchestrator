@@ -156,6 +156,33 @@ async def run_job(
 @router.get(
     "/{job_id}/runs",
     response_model=list[JobRunResponse],
+    summary="Get job runs",
+    description="Retrieve all runs for a specific job, optionally filtered by date range.",
+    responses={
+        200: {
+            "description": "List of job runs",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "job_id": "123e4567-e89b-12d3-a456-426614174000",
+                            "status": "succeeded",
+                            "started_at": "2024-01-01T12:00:00Z",
+                            "completed_at": "2024-01-01T12:05:00Z",
+                            "error_message": None,
+                            "result_metadata": {"records_exported": 100},
+                            "created_at": "2024-01-01T12:00:00Z",
+                            "updated_at": "2024-01-01T12:05:00Z",
+                        }
+                    ]
+                }
+            },
+        },
+        403: {"description": "Access denied. Job does not belong to authenticated client."},
+        404: {"description": "Job not found."},
+        500: {"description": "Internal server error."},
+    },
 )
 async def get_job_runs(
     job_id: UUID,
