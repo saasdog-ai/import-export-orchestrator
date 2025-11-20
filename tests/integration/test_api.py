@@ -88,7 +88,6 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
     response = await test_client_app.get(f"/jobs/{job_id}/runs")
     assert response.status_code == 200
     all_runs = response.json()
-    initial_count = len(all_runs)
 
     # Get runs with start_date filter (future date - should return empty)
     future_date = datetime.utcnow() + timedelta(days=1)
@@ -129,16 +128,11 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
 async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
     """Test getting client jobs with date filtering."""
     from datetime import datetime, timedelta
-    from uuid import UUID
-
-    # Default client_id when auth is disabled
-    default_client_id = UUID("00000000-0000-0000-0000-000000000000")
 
     # Get all jobs (no filter)
     response = await test_client_app.get("/jobs")
     assert response.status_code == 200
     all_jobs = response.json()
-    initial_count = len(all_jobs)
 
     # Get jobs with start_date filter (future date - should return empty)
     future_date = datetime.utcnow() + timedelta(days=1)
