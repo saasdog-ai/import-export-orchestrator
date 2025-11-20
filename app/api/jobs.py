@@ -1,8 +1,9 @@
 """API routes for job management."""
 
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.dto import (
     ErrorResponse,
@@ -157,10 +158,29 @@ async def run_job(
 )
 async def get_job_runs(
     job_id: UUID,
+    start_date: datetime | None = Query(
+        default=None,
+        description="Filter runs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
+    ),
+    end_date: datetime | None = Query(
+        default=None,
+        description="Filter runs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
+    ),
     authenticated_client_id: UUID = Depends(get_current_client_id),
     job_service: JobService = Depends(get_job_service),
 ):
-    """Get all runs for a job."""
+    """
+    Get all runs for a job, optionally filtered by date range.
+
+    Query Parameters:
+    - start_date: Filter runs created after this date/time (ISO 8601 format)
+    - end_date: Filter runs created before this date/time (ISO 8601 format)
+
+    Examples:
+    - Get all runs: GET /jobs/{job_id}/runs
+    - Get runs after a date: GET /jobs/{job_id}/runs?start_date=2024-01-01T00:00:00Z
+    - Get runs in a date range: GET /jobs/{job_id}/runs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z
+    """
     try:
         # Verify job exists and belongs to authenticated client
         job = await job_service.get_job(job_id)
@@ -169,7 +189,7 @@ async def get_job_runs(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             )
-        runs = await job_service.get_job_runs(job_id)
+        runs = await job_service.get_job_runs(job_id, start_date=start_date, end_date=end_date)
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -210,17 +230,36 @@ async def get_job_run(
     response_model=list[JobDefinitionResponse],
 )
 async def get_client_jobs(
+    start_date: datetime | None = Query(
+        default=None,
+        description="Filter jobs created after this date/time (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)",
+    ),
+    end_date: datetime | None = Query(
+        default=None,
+        description="Filter jobs created before this date/time (ISO 8601 format, e.g., 2024-12-31T23:59:59Z)",
+    ),
     authenticated_client_id: UUID = Depends(get_current_client_id),
     job_service: JobService = Depends(get_job_service),
 ):
     """
-    Get all jobs for the authenticated client.
+    Get all jobs for the authenticated client, optionally filtered by date range.
 
     The client_id is extracted from the JWT token. This endpoint returns
     all jobs belonging to the authenticated client.
+
+    Query Parameters:
+    - start_date: Filter jobs created after this date/time (ISO 8601 format)
+    - end_date: Filter jobs created before this date/time (ISO 8601 format)
+
+    Examples:
+    - Get all jobs: GET /jobs
+    - Get jobs after a date: GET /jobs?start_date=2024-01-01T00:00:00Z
+    - Get jobs in a date range: GET /jobs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z
     """
     try:
-        jobs = await job_service.get_jobs_by_client(authenticated_client_id)
+        jobs = await job_service.get_jobs_by_client(
+            authenticated_client_id, start_date=start_date, end_date=end_date
+        )
         return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e

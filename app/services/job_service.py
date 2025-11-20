@@ -48,9 +48,16 @@ class JobService:
             raise ValueError(f"Job not found: {job_id}")
         return job
 
-    async def get_jobs_by_client(self, client_id: UUID) -> list[JobDefinition]:
-        """Get all jobs for a client."""
-        return await self.job_repository.get_by_client_id(client_id)
+    async def get_jobs_by_client(
+        self,
+        client_id: UUID,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[JobDefinition]:
+        """Get all jobs for a client, optionally filtered by date range."""
+        return await self.job_repository.get_by_client_id(
+            client_id, start_date=start_date, end_date=end_date
+        )
 
     async def update_job(self, job: JobDefinition) -> JobDefinition:
         """Update a job definition."""
@@ -107,6 +114,13 @@ class JobService:
             raise ValueError(f"Job run not found: {run_id}")
         return job_run
 
-    async def get_job_runs(self, job_id: UUID) -> list[JobRun]:
-        """Get all runs for a job."""
-        return await self.job_run_repository.get_by_job_id(job_id)
+    async def get_job_runs(
+        self,
+        job_id: UUID,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[JobRun]:
+        """Get all runs for a job, optionally filtered by date range."""
+        return await self.job_run_repository.get_by_job_id(
+            job_id, start_date=start_date, end_date=end_date
+        )

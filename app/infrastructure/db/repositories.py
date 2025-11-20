@@ -54,12 +54,23 @@ class JobRepository:
             db_job = result.scalar_one_or_none()
             return self._model_to_entity(db_job) if db_job else None
 
-    async def get_by_client_id(self, client_id: UUID) -> list[JobDefinition]:
-        """Get all job definitions for a client."""
+    async def get_by_client_id(
+        self,
+        client_id: UUID,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[JobDefinition]:
+        """Get all job definitions for a client, optionally filtered by date range."""
         async with self.db.async_session_maker() as session:
-            result = await session.execute(
-                select(JobDefinitionModel).where(JobDefinitionModel.client_id == client_id)
-            )
+            query = select(JobDefinitionModel).where(JobDefinitionModel.client_id == client_id)
+
+            # Apply date filters
+            if start_date:
+                query = query.where(JobDefinitionModel.created_at >= start_date)
+            if end_date:
+                query = query.where(JobDefinitionModel.created_at <= end_date)
+
+            result = await session.execute(query.order_by(JobDefinitionModel.created_at.desc()))
             db_jobs = result.scalars().all()
             return [self._model_to_entity(db_job) for db_job in db_jobs]
 
@@ -145,14 +156,23 @@ class JobRunRepository:
             db_run = result.scalar_one_or_none()
             return self._model_to_entity(db_run) if db_run else None
 
-    async def get_by_job_id(self, job_id: UUID) -> list[JobRun]:
-        """Get all runs for a job."""
+    async def get_by_job_id(
+        self,
+        job_id: UUID,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[JobRun]:
+        """Get all runs for a job, optionally filtered by date range."""
         async with self.db.async_session_maker() as session:
-            result = await session.execute(
-                select(JobRunModel)
-                .where(JobRunModel.job_id == job_id)
-                .order_by(JobRunModel.created_at.desc())
-            )
+            query = select(JobRunModel).where(JobRunModel.job_id == job_id)
+
+            # Apply date filters
+            if start_date:
+                query = query.where(JobRunModel.created_at >= start_date)
+            if end_date:
+                query = query.where(JobRunModel.created_at <= end_date)
+
+            result = await session.execute(query.order_by(JobRunModel.created_at.desc()))
             db_runs = result.scalars().all()
             return [self._model_to_entity(db_run) for db_run in db_runs]
 
