@@ -17,6 +17,8 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: test_job_runner
+          TZ: UTC
+          PGTZ: UTC
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -72,6 +74,7 @@ jobs:
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_job_runner
+          TZ: UTC
         run: |
           pytest --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=35 -v
 
