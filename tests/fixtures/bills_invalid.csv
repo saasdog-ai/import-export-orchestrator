@@ -1,0 +1,8 @@
+id,amount,date,description,status
+,1500.00,2024-02-01,Office supplies,paid
+,invalid_amount,2024-02-05,Marketing materials,pending
+,2200.50,invalid-date,Office furniture,paid
+,,2024-01-15,Missing amount and date,paid
+,1000.50,2024-01-15,<script>alert('xss')</script>,paid
+,500.00,2024-02-10,'; DROP TABLE bills; --,paid
+

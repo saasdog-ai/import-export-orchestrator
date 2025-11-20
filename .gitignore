@@ -1,0 +1,111 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+*.log
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!terraform.tfvars.example
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.crt
+*.secret
+
+# Local overrides
+local/
+override/
+
+# Docker
+docker-compose.override.yml
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+
+# Coverage reports
+coverage.xml
+htmlcov/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+
+# Python package info
+*.egg-info/
+dist/
+build/
+
+# Exported files (local test files)
+exported_*.csv
+exported_*.json
+
+# Temporary test scripts (optional - you may want to keep these)
+# test_import.py
+# test_import_validation.py
+# run_sample_export.py
+# check_job_status.py
+# export_steps.sh
+# export_with_curl.sh

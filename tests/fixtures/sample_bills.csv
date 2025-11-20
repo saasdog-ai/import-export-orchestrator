@@ -1,0 +1,5 @@
+id,amount,date,description,status
+,1500.00,2024-02-01,New office furniture,paid
+,2200.50,2024-02-05,Marketing campaign,pending
+existing-bill-id,1000.50,2024-01-15,Updated office supplies,paid
+

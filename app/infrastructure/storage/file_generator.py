@@ -1,0 +1,136 @@
+"""File generation utilities for exports."""
+
+import csv
+import json
+import os
+import tempfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+from app.core.logging import get_logger
+from app.domain.entities import ExportConfig, ExportEntity
+
+logger = get_logger(__name__)
+
+
+class FileGenerator:
+    """Utility for generating export files."""
+
+    @staticmethod
+    def generate_csv_file(
+        data: List[Dict[str, Any]], fields: List[str], output_dir: Optional[str] = None
+    ) -> str:
+        """
+        Generate a CSV file from data.
+
+        Args:
+            data: List of dictionaries containing the data
+            fields: List of field names to include in CSV
+            output_dir: Directory to save the file (default: temp directory)
+
+        Returns:
+            Path to the generated CSV file
+        """
+        if output_dir is None:
+            output_dir = tempfile.gettempdir()
+
+        # Create output directory if it doesn't exist
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        # Generate unique filename
+        filename = f"export_{uuid4().hex[:8]}.csv"
+        file_path = os.path.join(output_dir, filename)
+
+        if not data:
+            # Create empty CSV with headers
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader()
+        else:
+            # Write data to CSV
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader()
+                for row in data:
+                    # Flatten nested fields (e.g., "vendor.name" -> extract from nested dict)
+                    flat_row = {}
+                    for field in fields:
+                        value = FileGenerator._get_nested_value(row, field)
+                        flat_row[field] = value
+                    writer.writerow(flat_row)
+
+        logger.info(f"Generated CSV file: {file_path} ({len(data)} records)")
+        return file_path
+
+    @staticmethod
+    def generate_json_file(
+        data: List[Dict[str, Any]], output_dir: Optional[str] = None
+    ) -> str:
+        """
+        Generate a JSON file from data.
+
+        Args:
+            data: List of dictionaries containing the data
+            output_dir: Directory to save the file (default: temp directory)
+
+        Returns:
+            Path to the generated JSON file
+        """
+        if output_dir is None:
+            output_dir = tempfile.gettempdir()
+
+        # Create output directory if it doesn't exist
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        # Generate unique filename
+        filename = f"export_{uuid4().hex[:8]}.json"
+        file_path = os.path.join(output_dir, filename)
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Generated JSON file: {file_path} ({len(data)} records)")
+        return file_path
+
+    @staticmethod
+    def _get_nested_value(data: Dict[str, Any], field_path: str) -> Any:
+        """
+        Get nested value from dictionary using dot notation.
+
+        Args:
+            data: Dictionary to extract value from
+            field_path: Field path (e.g., "vendor.name" or "amount")
+
+        Returns:
+            The value at the field path, or None if not found
+        """
+        parts = field_path.split(".")
+        value = data
+        for part in parts:
+            if isinstance(value, dict):
+                value = value.get(part)
+            else:
+                return None
+            if value is None:
+                return None
+        return value
+
+    @staticmethod
+    def get_file_extension(format_type: str) -> str:
+        """Get file extension for format type."""
+        format_map = {
+            "csv": ".csv",
+            "json": ".json",
+        }
+        return format_map.get(format_type.lower(), ".csv")
+
+    @staticmethod
+    def get_content_type(format_type: str) -> str:
+        """Get MIME content type for format type."""
+        format_map = {
+            "csv": "text/csv",
+            "json": "application/json",
+        }
+        return format_map.get(format_type.lower(), "text/csv")
+
