@@ -262,4 +262,6 @@ async def test_get_job_runs(job_service, mock_job_repository, mock_job_run_repos
     assert len(result) == 2
     assert all(run.job_id == job_id for run in result)
     # Verify repositories were called
-    mock_job_run_repository.get_by_job_id.assert_called_once_with(job_id)
+    mock_job_run_repository.get_by_job_id.assert_called_once_with(
+        job_id, start_date=None, end_date=None
+    )
