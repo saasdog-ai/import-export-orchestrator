@@ -185,14 +185,6 @@ async def test_create_job_run(mock_db, mock_session):
         status=JobStatus.PENDING,
     )
 
-    db_model = JobRunModel(
-        id=job_run.id,
-        job_id=job_id,
-        status=JobStatus.PENDING.value,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-    )
-
     # Mock transaction context manager (used by create method)
     mock_db.transaction.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.transaction.return_value.__aexit__ = AsyncMock(return_value=None)
