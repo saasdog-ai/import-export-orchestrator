@@ -56,7 +56,7 @@ class JobRepository:
             f"job_type={job.job_type.value}, name={job.name}, enabled={job.enabled}"
         )
 
-        async with self.db.async_session_maker() as session:
+        async with self.db.transaction() as session:
             db_job = JobDefinitionModel(
                 id=job.id,
                 client_id=job.client_id,
@@ -70,7 +70,7 @@ class JobRepository:
                 updated_at=_to_naive_utc(job.updated_at),
             )
             session.add(db_job)
-            await session.commit()
+            await session.flush()  # Flush to get ID, but don't commit yet
             await session.refresh(db_job)
             result = self._model_to_entity(db_job)
 
@@ -157,7 +157,7 @@ class JobRepository:
             f"has_cron_schedule={'yes' if job.cron_schedule else 'no'}"
         )
 
-        async with self.db.async_session_maker() as session:
+        async with self.db.transaction() as session:
             await session.execute(
                 update(JobDefinitionModel)
                 .where(JobDefinitionModel.id == job.id)
@@ -171,13 +171,18 @@ class JobRepository:
                     updated_at=_to_naive_utc(datetime.now(UTC)),
                 )
             )
-            await session.commit()
-            result = await self.get_by_id(job.id)
+            # Refresh to get updated entity
+            await session.flush()
+            result = await session.execute(
+                select(JobDefinitionModel).where(JobDefinitionModel.id == job.id)
+            )
+            db_job = result.scalar_one()
+            entity = self._model_to_entity(db_job)
 
             # Log database operation output
-            logger.info(f"DB job updated: job_id={result.id}, updated_at={result.updated_at}")
+            logger.info(f"DB job updated: job_id={entity.id}, updated_at={entity.updated_at}")
 
-            return result
+            return entity
 
     def _model_to_entity(self, db_job: JobDefinitionModel) -> JobDefinition:
         """Convert database model to domain entity."""
@@ -212,7 +217,7 @@ class JobRunRepository:
             f"status={job_run.status.value}"
         )
 
-        async with self.db.async_session_maker() as session:
+        async with self.db.transaction() as session:
             db_run = JobRunModel(
                 id=job_run.id,
                 job_id=job_run.job_id,
@@ -225,7 +230,7 @@ class JobRunRepository:
                 updated_at=_to_naive_utc(job_run.updated_at),
             )
             session.add(db_run)
-            await session.commit()
+            await session.flush()  # Flush to get ID, but don't commit yet
             await session.refresh(db_run)
             result = self._model_to_entity(db_run)
 
@@ -307,7 +312,7 @@ class JobRunRepository:
             f"has_metadata={'yes' if result_metadata else 'no'}"
         )
 
-        async with self.db.async_session_maker() as session:
+        async with self.db.transaction() as session:
             update_values = {
                 "status": status.value,
                 "updated_at": _to_naive_utc(datetime.now(UTC)),
@@ -324,16 +329,19 @@ class JobRunRepository:
             await session.execute(
                 update(JobRunModel).where(JobRunModel.id == run_id).values(**update_values)
             )
-            await session.commit()
-            result = await self.get_by_id(run_id)
+            # Refresh to get updated entity
+            await session.flush()
+            result = await session.execute(select(JobRunModel).where(JobRunModel.id == run_id))
+            db_run = result.scalar_one()
+            entity = self._model_to_entity(db_run)
 
             # Log database operation output
             logger.info(
-                f"DB job run status updated: run_id={run_id}, status={result.status.value}, "
-                f"updated_at={result.updated_at}"
+                f"DB job run status updated: run_id={run_id}, status={entity.status.value}, "
+                f"updated_at={entity.updated_at}"
             )
 
-            return result
+            return entity
 
     def _model_to_entity(self, db_run: JobRunModel) -> JobRun:
         """Convert database model to domain entity."""

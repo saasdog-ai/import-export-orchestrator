@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import Request
 from fastapi.security import HTTPBearer
 
+from app.core.constants import DEFAULT_CLIENT_ID
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -177,14 +178,14 @@ class JWTAuthBackend(AuthBackendInterface):
         if not token:
             if not self.enabled:
                 # Return a default client ID for development when auth is disabled
-                return UUID("00000000-0000-0000-0000-000000000000")
+                return DEFAULT_CLIENT_ID
             return None
 
         payload = await self.validate_token(token)
         if not payload:
             if not self.enabled:
                 # Return a default client ID for development when auth is disabled
-                return UUID("00000000-0000-0000-0000-000000000000")
+                return DEFAULT_CLIENT_ID
             return None
 
         # Extract client_id from token payload
@@ -193,7 +194,7 @@ class JWTAuthBackend(AuthBackendInterface):
         if not client_id_str:
             if not self.enabled:
                 # Return a default client ID for development when auth is disabled
-                return UUID("00000000-0000-0000-0000-000000000000")
+                return DEFAULT_CLIENT_ID
             return None
 
         try:
@@ -201,7 +202,7 @@ class JWTAuthBackend(AuthBackendInterface):
         except (ValueError, TypeError):
             if not self.enabled:
                 # Return a default client ID for development when auth is disabled
-                return UUID("00000000-0000-0000-0000-000000000000")
+                return DEFAULT_CLIENT_ID
             return None
 
 
@@ -247,6 +248,6 @@ async def get_current_client_id(request: Request) -> UUID:
             )
         else:
             # For development, return default client ID when auth is disabled
-            return UUID("00000000-0000-0000-0000-000000000000")
+            return DEFAULT_CLIENT_ID
 
     return client_id

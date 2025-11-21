@@ -138,10 +138,10 @@ async def create_job(
         )
 
         return JobDefinitionResponse.model_validate(created_job.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from client ID mismatch check)
+        raise
+    # ApplicationError will be handled by global exception handler
 
 
 @router.get(
@@ -178,10 +178,10 @@ async def get_job(
         )
 
         return JobDefinitionResponse.model_validate(job.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from access denied check)
+        raise
+    # ApplicationError (e.g., NotFoundError) will be handled by global exception handler
 
 
 @router.put(
@@ -238,10 +238,10 @@ async def update_job(
         )
 
         return JobDefinitionResponse.model_validate(updated_job.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from access denied check)
+        raise
+    # ApplicationError (e.g., NotFoundError) will be handled by global exception handler
 
 
 @router.post(
@@ -271,7 +271,8 @@ async def run_job(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             )
-        job_run = await job_service.run_job(job_id)
+        # Pass client_id for authorization check in service layer
+        job_run = await job_service.run_job(job_id, client_id=authenticated_client_id)
 
         # Log response output
         logger.info(
@@ -280,10 +281,10 @@ async def run_job(
         )
 
         return JobRunResponse.model_validate(job_run.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from access denied check)
+        raise
+    # ApplicationError (e.g., NotFoundError) will be handled by global exception handler
 
 
 @router.get(
@@ -378,10 +379,10 @@ async def get_job_runs(
         logger.info(f"Job runs retrieved: job_id={job_id}, run_count={len(runs)}")
 
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from access denied check)
+        raise
+    # ApplicationError (e.g., NotFoundError) will be handled by global exception handler
 
 
 @router.get(
@@ -422,10 +423,10 @@ async def get_job_run(
         )
 
         return JobRunResponse.model_validate(job_run.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from access denied check)
+        raise
+    # ApplicationError (e.g., NotFoundError) will be handled by global exception handler
 
 
 @router.get(
@@ -470,35 +471,27 @@ async def get_client_jobs(
     - Get jobs after a date: GET /jobs?start_date=2024-01-01T00:00:00Z
     - Get jobs in a date range: GET /jobs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z
     """
-    try:
-        # Log request input
-        logger.info(
-            f"Get client jobs request: client_id={authenticated_client_id}, "
-            f"start_date={start_date}, end_date={end_date}"
-        )
+    # Log request input
+    logger.info(
+        f"Get client jobs request: client_id={authenticated_client_id}, "
+        f"start_date={start_date}, end_date={end_date}"
+    )
 
-        # Convert timezone-aware datetimes to naive UTC if needed
-        # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
-        if start_date and start_date.tzinfo is not None:
-            # Convert to UTC first, then remove timezone info
-            start_date = start_date.astimezone(UTC).replace(tzinfo=None)
-        if end_date and end_date.tzinfo is not None:
-            # Convert to UTC first, then remove timezone info
-            end_date = end_date.astimezone(UTC).replace(tzinfo=None)
-        jobs = await job_service.get_jobs_by_client(
-            authenticated_client_id, start_date=start_date, end_date=end_date
-        )
+    # Convert timezone-aware datetimes to naive UTC if needed
+    # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
+    if start_date and start_date.tzinfo is not None:
+        # Convert to UTC first, then remove timezone info
+        start_date = start_date.astimezone(UTC).replace(tzinfo=None)
+    if end_date and end_date.tzinfo is not None:
+        # Convert to UTC first, then remove timezone info
+        end_date = end_date.astimezone(UTC).replace(tzinfo=None)
+    jobs = await job_service.get_jobs_by_client(
+        authenticated_client_id, start_date=start_date, end_date=end_date
+    )
 
-        # Log response output
-        logger.info(
-            f"Client jobs retrieved: client_id={authenticated_client_id}, job_count={len(jobs)}"
-        )
+    # Log response output
+    logger.info(
+        f"Client jobs retrieved: client_id={authenticated_client_id}, job_count={len(jobs)}"
+    )
 
-        return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
-    except Exception as e:
-        import traceback
-
-        error_detail = f"{str(e)}\n{traceback.format_exc()}"
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail
-        ) from e
+    return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]

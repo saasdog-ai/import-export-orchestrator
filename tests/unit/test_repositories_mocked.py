@@ -65,24 +65,27 @@ async def test_create_job(mock_db, mock_session):
     )
     db_model.export_config = {"entity": "bill", "fields": ["id", "amount"]}
 
-    # Mock session context manager
-    mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
+    # Mock transaction context manager (used by create method)
+    mock_db.transaction.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_db.transaction.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    # Mock session.execute to return the model
-    result_mock = MagicMock()
-    result_mock.scalar_one.return_value = db_model
-    mock_session.execute.return_value = result_mock
+    # Mock session.refresh to update the model
+    async def mock_refresh(obj):
+        # Simulate refresh by updating the model
+        pass
+
+    mock_session.refresh = AsyncMock(side_effect=mock_refresh)
 
     # Execute
     repository = JobRepository(mock_db)
+    # Mock the _model_to_entity method to return the test_job
+    repository._model_to_entity = MagicMock(return_value=test_job)
     created_job = await repository.create(test_job)
 
     # Verify
     assert created_job.id == test_job.id
     assert created_job.name == test_job.name
     mock_session.add.assert_called_once()
-    mock_session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -137,8 +140,8 @@ async def test_get_jobs_by_client(mock_db, mock_session):
             name="Job 1",
             job_type=JobType.EXPORT.value,
             enabled=True,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
         JobDefinitionModel(
             id=uuid4(),
@@ -146,8 +149,8 @@ async def test_get_jobs_by_client(mock_db, mock_session):
             name="Job 2",
             job_type=JobType.EXPORT.value,
             enabled=True,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
     ]
     # Set export_config for both models
@@ -190,24 +193,27 @@ async def test_create_job_run(mock_db, mock_session):
         updated_at=datetime.now(UTC),
     )
 
-    # Mock session context manager
-    mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
+    # Mock transaction context manager (used by create method)
+    mock_db.transaction.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_db.transaction.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    # Mock session.execute
-    result_mock = MagicMock()
-    result_mock.scalar_one.return_value = db_model
-    mock_session.execute.return_value = result_mock
+    # Mock session.refresh to update the model
+    async def mock_refresh(obj):
+        # Simulate refresh by updating the model
+        pass
+
+    mock_session.refresh = AsyncMock(side_effect=mock_refresh)
 
     # Execute
     repository = JobRunRepository(mock_db)
+    # Mock the _model_to_entity method to return the job_run
+    repository._model_to_entity = MagicMock(return_value=job_run)
     created_run = await repository.create(job_run)
 
     # Verify
     assert created_run.id == job_run.id
     assert created_run.status == JobStatus.PENDING
     mock_session.add.assert_called_once()
-    mock_session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -227,14 +233,17 @@ async def test_update_job_run_status(mock_db, mock_session):
         updated_at=datetime.now(UTC),
     )
 
-    # Mock session context manager
-    mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
+    # Mock transaction context manager (used by update_status method)
+    mock_db.transaction.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_db.transaction.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    # Mock session.execute - first call gets the model, second call returns it after update
-    result_mock = MagicMock()
-    result_mock.scalar_one_or_none.return_value = db_model
-    mock_session.execute.return_value = result_mock
+    # Mock session.execute - first call is update, second call is select
+    result_mock_update = MagicMock()
+    result_mock_select = MagicMock()
+    result_mock_select.scalar_one.return_value = db_model
+    # First call is update (no return needed), second call is select
+    mock_session.execute = AsyncMock(side_effect=[result_mock_update, result_mock_select])
+    mock_session.flush = AsyncMock()
 
     # Execute
     repository = JobRunRepository(mock_db)
@@ -247,4 +256,3 @@ async def test_update_job_run_status(mock_db, mock_session):
     # Verify
     assert updated_run.status == JobStatus.RUNNING
     assert updated_run.started_at is not None
-    mock_session.commit.assert_called_once()

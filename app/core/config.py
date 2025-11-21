@@ -87,10 +87,48 @@ class Settings(BaseSettings):
         default=1, description="Max messages to receive per poll (default: 1)"
     )
 
+    # CORS
+    allowed_origins: list[str] = Field(
+        default=["*"],
+        description="Allowed CORS origins (use specific domains in production)",
+    )
+
+    # Database pool configuration
+    database_pool_recycle: int = Field(
+        default=3600, description="Connection pool recycle time in seconds (default: 1 hour)"
+    )
+    database_pool_timeout: int = Field(
+        default=30, description="Connection pool timeout in seconds (default: 30)"
+    )
+
     @property
     def database_url_sync(self) -> str:
         """Get synchronous database URL for Alembic migrations."""
         return self.database_url.replace("+asyncpg", "")
+
+    def model_post_init(self, __context: object) -> None:
+        """Validate configuration after initialization."""
+        if self.app_env == "production":
+            self._validate_production_settings()
+
+    def _validate_production_settings(self) -> None:
+        """Validate required settings for production environment."""
+        errors: list[str] = []
+
+        if not self.message_queue_name:
+            errors.append("Message queue must be configured in production (set MESSAGE_QUEUE_NAME)")
+
+        if self.cloud_provider and not self.cloud_storage_bucket:
+            errors.append(
+                "Cloud storage bucket must be configured when cloud provider is set "
+                "(set CLOUD_STORAGE_BUCKET)"
+            )
+
+        if errors:
+            error_message = "Production configuration validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            raise ValueError(error_message)
 
 
 @lru_cache

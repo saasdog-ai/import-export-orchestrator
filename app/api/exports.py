@@ -123,7 +123,8 @@ async def create_export(
         )
 
         created_job = await job_service.create_job(job)
-        job_run = await job_service.run_job(created_job.id)
+        # Pass client_id for authorization check
+        job_run = await job_service.run_job(created_job.id, client_id=authenticated_client_id)
 
         # Log response output
         logger.info(
@@ -138,10 +139,13 @@ async def create_export(
             result_metadata=job_run.result_metadata,
             error_message=job_run.error_message,
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from validation)
+        raise
     except ValueError as e:
+        # Convert ValueError to HTTPException for validation errors
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    # ApplicationError will be handled by global exception handler
 
 
 @router.post(
@@ -198,10 +202,13 @@ async def preview_export(
             limit=preview_request.limit,
             offset=0,
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from validation)
+        raise
     except ValueError as e:
+        # Convert ValueError to HTTPException for validation errors
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    # ApplicationError will be handled by global exception handler
 
 
 @router.get(
@@ -354,9 +361,7 @@ async def get_export_download_url(
             "expires_in_seconds": expiration_seconds,
             "file_path": remote_file_path,
         }
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except HTTPException:
+        # Re-raise HTTP exceptions (e.g., from access denied checks)
         raise
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    # ApplicationError (e.g., NotFoundError) will be handled by global exception handler

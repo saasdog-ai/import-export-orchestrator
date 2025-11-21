@@ -8,6 +8,13 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from app.core.constants import (
+    CONTENT_TYPE_CSV,
+    CONTENT_TYPE_JSON,
+    DEFAULT_EXPORT_LOCAL_PATH,
+    EXPORT_FORMAT_CSV,
+    EXPORT_FORMAT_JSON,
+)
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -26,13 +33,13 @@ class FileGenerator:
         Args:
             data: List of dictionaries containing the data
             fields: List of field names to include in CSV
-            output_dir: Directory to save the file (default: temp directory)
+            output_dir: Directory to save the file (default: from constants)
 
         Returns:
             Path to the generated CSV file
         """
         if output_dir is None:
-            output_dir = tempfile.gettempdir()
+            output_dir = DEFAULT_EXPORT_LOCAL_PATH
 
         # Create output directory if it doesn't exist
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -69,13 +76,13 @@ class FileGenerator:
 
         Args:
             data: List of dictionaries containing the data
-            output_dir: Directory to save the file (default: temp directory)
+            output_dir: Directory to save the file (default: from constants)
 
         Returns:
             Path to the generated JSON file
         """
         if output_dir is None:
-            output_dir = tempfile.gettempdir()
+            output_dir = DEFAULT_EXPORT_LOCAL_PATH
 
         # Create output directory if it doesn't exist
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -117,8 +124,8 @@ class FileGenerator:
     def get_file_extension(format_type: str) -> str:
         """Get file extension for format type."""
         format_map = {
-            "csv": ".csv",
-            "json": ".json",
+            EXPORT_FORMAT_CSV: ".csv",
+            EXPORT_FORMAT_JSON: ".json",
         }
         return format_map.get(format_type.lower(), ".csv")
 
@@ -126,7 +133,7 @@ class FileGenerator:
     def get_content_type(format_type: str) -> str:
         """Get MIME content type for format type."""
         format_map = {
-            "csv": "text/csv",
-            "json": "application/json",
+            EXPORT_FORMAT_CSV: CONTENT_TYPE_CSV,
+            EXPORT_FORMAT_JSON: CONTENT_TYPE_JSON,
         }
-        return format_map.get(format_type.lower(), "text/csv")
+        return format_map.get(format_type.lower(), CONTENT_TYPE_CSV)

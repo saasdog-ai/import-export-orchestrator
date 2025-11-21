@@ -46,7 +46,13 @@ async def init_dependencies() -> None:
         _message_queue
 
     # Database
-    _db = Database(settings.database_url)
+    _db = Database(
+        settings.database_url,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_recycle=settings.database_pool_recycle,
+        pool_timeout=settings.database_pool_timeout,
+    )
     await _db.connect()
 
     # Repositories

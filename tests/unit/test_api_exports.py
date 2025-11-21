@@ -111,8 +111,8 @@ async def test_create_export_success(mock_job_service, authenticated_client_id, 
     assert create_job_call.export_config.offset == 0  # Correct offset
     assert create_job_call.enabled is True  # Job is enabled
 
-    # Verify run_job was called with correct job ID
-    mock_job_service.run_job.assert_called_once_with(job_id)
+    # Verify run_job was called with correct job ID and client_id
+    mock_job_service.run_job.assert_called_once_with(job_id, client_id=authenticated_client_id)
 
     # Verify response matches expected values
     assert result.run_id == run_id

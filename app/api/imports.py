@@ -199,6 +199,9 @@ async def upload_import_file(
             )
     except HTTPException:
         raise
+    except ValueError as e:
+        # Convert ValueError to HTTPException for validation errors
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -287,7 +290,8 @@ async def execute_import(
         )
         # Create and run job
         created_job = await job_service.create_job(job)
-        job_run = await job_service.run_job(created_job.id)
+        # Pass client_id for authorization check
+        job_run = await job_service.run_job(created_job.id, client_id=authenticated_client_id)
 
         # Log response output
         logger.info(
@@ -304,7 +308,16 @@ async def execute_import(
                 "message": "Import job created and started",
             },
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except ValueError as e:
+        # Convert ValueError to HTTPException for validation errors
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+        # Convert generic exceptions to HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error executing import: {str(e)}",
+        ) from e
+    # ApplicationError will be handled by global exception handler

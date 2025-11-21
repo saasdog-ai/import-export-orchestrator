@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.core.constants import ALLOWED_FILE_EXTENSIONS, MAX_FILE_SIZE
 from app.core.logging import get_logger
 from app.domain.entities import ExportEntity
 
@@ -33,11 +34,9 @@ class ValidationError(Exception):
 class ImportValidator:
     """Service for validating import files before processing."""
 
-    # Maximum file size (10MB)
-    MAX_FILE_SIZE = 10 * 1024 * 1024
-
-    # Allowed file extensions
-    ALLOWED_EXTENSIONS = {".csv", ".json"}
+    # Use constants from app.core.constants
+    MAX_FILE_SIZE = MAX_FILE_SIZE
+    ALLOWED_EXTENSIONS = ALLOWED_FILE_EXTENSIONS
 
     # Required fields for each entity
     REQUIRED_FIELDS: dict[ExportEntity, list[str]] = {

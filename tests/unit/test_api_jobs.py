@@ -162,20 +162,20 @@ async def test_get_job_unauthorized(mock_job_service, authenticated_client_id):
 @pytest.mark.asyncio
 async def test_get_job_not_found(mock_job_service, authenticated_client_id):
     """Test getting a non-existent job."""
+    from app.core.exceptions import NotFoundError
+
     # Setup
     job_id = uuid4()
-    mock_job_service.get_job = AsyncMock(side_effect=ValueError(f"Job not found: {job_id}"))
+    mock_job_service.get_job = AsyncMock(side_effect=NotFoundError("Job", str(job_id)))
 
-    # Execute
-    with pytest.raises(HTTPException) as exc_info:
+    # Execute - NotFoundError is an ApplicationError, handled by global exception handler
+    # The global handler converts it to JSONResponse, but in tests we can check the exception
+    with pytest.raises(NotFoundError):
         await get_job(
             job_id=job_id,
             authenticated_client_id=authenticated_client_id,
             job_service=mock_job_service,
         )
-
-    # Verify
-    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
@@ -271,7 +271,7 @@ async def test_run_job_success(mock_job_service, authenticated_client_id, sample
     assert result.id == job_run.id
     assert result.status == JobStatus.PENDING
     mock_job_service.get_job.assert_called_once_with(sample_job.id)
-    mock_job_service.run_job.assert_called_once_with(sample_job.id)
+    mock_job_service.run_job.assert_called_once_with(sample_job.id, client_id=authenticated_client_id)
 
 
 @pytest.mark.asyncio

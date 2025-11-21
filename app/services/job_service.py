@@ -3,6 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from app.core.config import get_settings
+from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.domain.entities import JobDefinition, JobRun, JobStatus
 from app.infrastructure.db.repositories import JobRepository, JobRunRepository
@@ -11,6 +13,7 @@ from app.services.job_runner import JobRunnerService
 from app.services.scheduler_service import SchedulerService
 
 logger = get_logger(__name__)
+settings = get_settings()
 
 
 class JobService:
@@ -46,7 +49,7 @@ class JobService:
         """Get a job definition by ID."""
         job = await self.job_repository.get_by_id(job_id)
         if not job:
-            raise ValueError(f"Job not found: {job_id}")
+            raise NotFoundError("Job", str(job_id))
         return job
 
     async def get_jobs_by_client(
@@ -64,7 +67,7 @@ class JobService:
         """Update a job definition."""
         existing = await self.job_repository.get_by_id(job.id)
         if not existing:
-            raise ValueError(f"Job not found: {job.id}")
+            raise NotFoundError("Job", str(job.id))
 
         updated_job = await self.job_repository.update(job)
 
@@ -76,9 +79,21 @@ class JobService:
         logger.info(f"Updated job '{updated_job.name}' (ID: {updated_job.id})")
         return updated_job
 
-    async def run_job(self, job_id: UUID) -> JobRun:
-        """Manually trigger a job run."""
+    async def run_job(self, job_id: UUID, client_id: UUID | None = None) -> JobRun:
+        """
+        Manually trigger a job run.
+
+        Args:
+            job_id: ID of the job to run
+            client_id: Optional client ID for authorization check (if provided, must match job's client_id)
+        """
         job = await self.get_job(job_id)
+
+        # Ensure the job belongs to the client making the request
+        if client_id and job.client_id != client_id:
+            from app.core.exceptions import ForbiddenError
+
+            raise ForbiddenError(f"Job with ID {job_id} does not belong to client {client_id}")
 
         # Create job run in database
         job_run = JobRun(
@@ -99,10 +114,19 @@ class JobService:
                 f"Queued job run for job '{job.name}' (Run ID: {created_run.id}) to message queue"
             )
         else:
-            # Fallback to in-memory queue if no external queue configured
+            # In production, external queue is mandatory
+            if settings.app_env == "production":
+                from app.core.exceptions import ApplicationError
+
+                raise ApplicationError(
+                    "External message queue is required in production. "
+                    "Configure SQS, Azure Queue, or GCP Pub/Sub.",
+                    error_code="CONFIGURATION_ERROR",
+                )
+            # Fallback to in-memory queue for development only
             await self.job_runner.queue_job_run(job, created_run)
             logger.warning(
-                f"No external queue configured. Using in-memory queue (not recommended for production). "
+                f"No external queue configured. Using in-memory queue (development only). "
                 f"Queued job run for job '{job.name}' (Run ID: {created_run.id})"
             )
 
@@ -112,7 +136,7 @@ class JobService:
         """Get a job run by ID."""
         job_run = await self.job_run_repository.get_by_id(run_id)
         if not job_run:
-            raise ValueError(f"Job run not found: {run_id}")
+            raise NotFoundError("Job run", str(run_id))
         return job_run
 
     async def get_job_runs(

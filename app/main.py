@@ -1,9 +1,11 @@
 """Main FastAPI application entry point."""
 
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import exports, health, imports, jobs
 from app.core.config import get_settings
@@ -13,9 +15,12 @@ from app.core.dependency_injection import (
     init_dependencies,
     shutdown_dependencies,
 )
-from app.core.logging import setup_logging
+from app.core.exceptions import ApplicationError
+from app.core.logging import get_logger, setup_logging
+from app.core.middleware import CorrelationIDMiddleware
 
 settings = get_settings()
+logger = get_logger(__name__)
 
 # Setup logging
 setup_logging()
@@ -104,13 +109,18 @@ app = FastAPI(
     ],
 )
 
+# Add correlation ID middleware
+app.add_middleware(CorrelationIDMiddleware)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure properly for production
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
+    expose_headers=["X-Correlation-ID"],
+    max_age=3600,
 )
 
 # Include routers
@@ -142,6 +152,51 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+# Global exception handlers
+@app.exception_handler(ApplicationError)
+async def application_error_handler(request: Request, exc: ApplicationError) -> JSONResponse:
+    """Handle application-specific errors."""
+    correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
+    logger.error(
+        f"Application error: {exc.error_code} - {exc.message}",
+        extra={
+            "correlation_id": correlation_id,
+            "error_code": exc.error_code,
+            "status_code": exc.status_code,
+            "path": request.url.path,
+            "method": request.method,
+        },
+    )
+    error_response = exc.to_dict()
+    error_response["error"]["correlation_id"] = correlation_id
+    return JSONResponse(status_code=exc.status_code, content=error_response)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle unexpected exceptions."""
+    correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
+    logger.error(
+        f"Unhandled exception: {exc}",
+        exc_info=True,
+        extra={
+            "correlation_id": correlation_id,
+            "path": request.url.path,
+            "method": request.method,
+        },
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An internal error occurred",
+                "correlation_id": correlation_id,
+            }
+        },
+    )
 
 
 @app.get(

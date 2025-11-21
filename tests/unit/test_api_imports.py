@@ -168,6 +168,9 @@ async def test_execute_import_success(mock_job_service, test_client_id):
     assert response.status_code == 201
     mock_job_service.create_job.assert_called_once()
     mock_job_service.run_job.assert_called_once()
+    # Verify run_job was called with client_id
+    call_args = mock_job_service.run_job.call_args
+    assert call_args[1]["client_id"] == test_client_id
 
 
 @pytest.mark.asyncio
