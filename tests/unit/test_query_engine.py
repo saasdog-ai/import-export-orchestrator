@@ -1,6 +1,7 @@
 """Unit tests for query engine with mocked dependencies."""
 
 from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 
@@ -44,7 +45,8 @@ async def test_execute_export_query_basic(query_engine: ExportQueryEngine):
         limit=10,
         offset=0,
     )
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Structure validation
     assert result is not None
@@ -99,7 +101,8 @@ async def test_execute_export_query_with_filters(query_engine: ExportQueryEngine
         filters=filter_group,
         limit=10,
     )
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
     assert result is not None
     assert result["count"] >= 0
 
@@ -119,7 +122,8 @@ async def test_execute_export_query_with_sort(query_engine: ExportQueryEngine):
         sort=[{"field": "date", "direction": "desc"}],
         limit=10,
     )
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
     assert result is not None
     assert len(result["records"]) <= 10
 
@@ -142,10 +146,11 @@ async def test_execute_export_query_pagination(query_engine: ExportQueryEngine):
         limit=2,
         offset=0,
     )
-    result1 = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result1 = await query_engine.execute_export_query(config, client_id=client_id)
 
     config.offset = 2
-    result2 = await query_engine.execute_export_query(config)
+    result2 = await query_engine.execute_export_query(config, client_id=client_id)
 
     assert result1 is not None
     assert result2 is not None
@@ -195,7 +200,8 @@ async def test_apply_filters_complex(query_engine: ExportQueryEngine):
         limit=10,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
     assert result is not None
     assert result["count"] >= 0
 
@@ -223,7 +229,8 @@ async def test_apply_sorting_multiple_fields(query_engine: ExportQueryEngine):
         limit=10,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
     assert result is not None
     assert len(result["records"]) <= 10
 
@@ -262,7 +269,8 @@ async def test_select_fields_nested(query_engine: ExportQueryEngine):
         limit=10,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
     assert result is not None
 
     # Deep validation: Verify ALL records have ONLY the requested fields

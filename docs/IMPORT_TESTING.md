@@ -172,7 +172,7 @@ export_response = httpx.post("http://localhost:8000/exports", json=export_reques
 
 ## Example Test Script
 
-See `test_import.py` for a complete example that:
+See `scripts/examples/test_import.py` for a complete example that:
 1. Creates an import job from CSV
 2. Runs the import
 3. Verifies the data was imported

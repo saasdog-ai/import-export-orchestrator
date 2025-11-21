@@ -169,9 +169,12 @@ async def test_execute_export_job_success(
 
         # Deep validation: Verify calls with correct parameters
         mock_query_engine.execute_export_query.assert_called_once()
-        call_args = mock_query_engine.execute_export_query.call_args[0][0]
-        assert call_args.entity == ExportEntity.BILL
-        assert call_args.fields == ["id", "amount"]
+        call_args = mock_query_engine.execute_export_query.call_args
+        config_arg = call_args[0][0]  # First positional arg (config)
+        client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
+        assert config_arg.entity == ExportEntity.BILL
+        assert config_arg.fields == ["id", "amount"]
+        assert client_id_arg == job.client_id  # Correct client_id
 
         mock_gen_csv.assert_called_once()
         # Verify CSV generation was called with correct data
@@ -260,9 +263,12 @@ async def test_execute_export_job_no_cloud_storage(
 
         # Deep validation: Verify calls with correct parameters
         mock_query_engine.execute_export_query.assert_called_once()
-        call_args = mock_query_engine.execute_export_query.call_args[0][0]
-        assert call_args.entity == ExportEntity.BILL
-        assert call_args.fields == ["id"]
+        call_args = mock_query_engine.execute_export_query.call_args
+        config_arg = call_args[0][0]  # First positional arg (config)
+        client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
+        assert config_arg.entity == ExportEntity.BILL
+        assert config_arg.fields == ["id"]
+        assert client_id_arg == job.client_id  # Correct client_id
 
         mock_gen_csv.assert_called_once()
 
@@ -331,12 +337,14 @@ async def test_execute_import_job_success(
     mock_saas_client.fetch_data.assert_called_once()
     fetch_call = mock_saas_client.fetch_data.call_args
     assert fetch_call[0][0] == ExportEntity.BILL  # Correct entity
+    assert fetch_call[1]["client_id"] == job.client_id  # Correct client_id
 
     mock_saas_client.import_data.assert_called_once()
     import_call = mock_saas_client.import_data.call_args
     assert import_call[0][0].entity == ExportEntity.BILL  # Correct import config entity
+    assert import_call[1]["client_id"] == job.client_id  # Correct client_id
     # Verify data passed to import_data
-    import_data = import_call[0][1]
+    import_data = import_call[1]["data"]
     assert len(import_data) == 2
     assert import_data[0]["id"] == "1"
     assert import_data[0]["amount"] == 100.0

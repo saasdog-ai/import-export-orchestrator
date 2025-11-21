@@ -105,10 +105,5 @@ build/
 exported_*.csv
 exported_*.json
 
-# Temporary test scripts (optional - you may want to keep these)
-# test_import.py
-# test_import_validation.py
-# run_sample_export.py
-# check_job_status.py
-# export_steps.sh
-# export_with_curl.sh
+# Example/test scripts (now in scripts/examples/)
+# These are kept in the repo for reference but are not part of the main application

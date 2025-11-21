@@ -1,6 +1,7 @@
 """Deep validation tests for query engine - comprehensive filter, sort, and pagination checks."""
 
 from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 
@@ -67,7 +68,8 @@ async def test_filter_operators_comprehensive(query_engine):
             limit=100,
         )
 
-        result = await query_engine.execute_export_query(config)
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
+        result = await query_engine.execute_export_query(config, client_id=client_id)
 
         # Deep validation: Verify ALL records match the filter
         for record in result["records"]:
@@ -96,7 +98,8 @@ async def test_filter_in_operator(query_engine):
         limit=100,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify ALL records have amounts in the specified list
     for record in result["records"]:
@@ -125,7 +128,8 @@ async def test_filter_between_operator(query_engine):
         limit=100,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify ALL records have amounts between 500 and 2000
     for record in result["records"]:
@@ -154,7 +158,8 @@ async def test_filter_contains_operator(query_engine):
         limit=100,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify ALL records have descriptions containing "Office" (case-insensitive)
     for record in result["records"]:
@@ -189,7 +194,8 @@ async def test_filter_or_operator(query_engine):
         limit=100,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify ALL records match at least ONE condition
     for record in result["records"]:
@@ -210,7 +216,8 @@ async def test_sort_ascending(query_engine):
         limit=100,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify records are in ascending order
     if len(result["records"]) > 1:
@@ -232,7 +239,8 @@ async def test_pagination_consistency(query_engine):
         limit=1000,
         offset=0,
     )
-    result_all = await query_engine.execute_export_query(config_all)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result_all = await query_engine.execute_export_query(config_all, client_id=client_id)
     all_ids = {record["id"] for record in result_all["records"]}
     total_count = result_all["count"]
 
@@ -248,7 +256,7 @@ async def test_pagination_consistency(query_engine):
             limit=page_size,
             offset=offset,
         )
-        result_page = await query_engine.execute_export_query(config_page)
+        result_page = await query_engine.execute_export_query(config_page, client_id=client_id)
         page_ids = {record["id"] for record in result_page["records"]}
 
         # Deep validation: Verify no duplicates across pages
@@ -279,7 +287,8 @@ async def test_field_selection_excludes_unrequested(query_engine):
         limit=10,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify records have ONLY requested fields
     requested_fields = {"id", "amount"}
@@ -314,7 +323,8 @@ async def test_nested_field_filtering(query_engine):
         limit=100,
     )
 
-    result = await query_engine.execute_export_query(config)
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
 
     # Deep validation: Verify ALL records have vendor.name containing "Acme"
     for record in result["records"]:

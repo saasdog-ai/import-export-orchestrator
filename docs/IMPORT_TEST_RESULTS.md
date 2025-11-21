@@ -143,7 +143,7 @@ Missing required fields in header:
 
 ## Test Script
 
-The test script (`test_import_validation.py`) performs:
+The test script (`scripts/examples/test_import_validation.py`) performs:
 1. File upload to Docker container
 2. API call to `/imports/upload` endpoint
 3. Validation result verification

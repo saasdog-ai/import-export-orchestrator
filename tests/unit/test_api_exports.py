@@ -174,12 +174,15 @@ async def test_preview_export_success(mock_query_engine, authenticated_client_id
         query_engine=mock_query_engine,
     )
 
-    # Deep validation: Verify query engine was called with correct config
+    # Deep validation: Verify query engine was called with correct config and client_id
     mock_query_engine.execute_export_query.assert_called_once()
-    query_call = mock_query_engine.execute_export_query.call_args[0][0]
+    call_args = mock_query_engine.execute_export_query.call_args
+    query_call = call_args[0][0]  # First positional arg (config)
+    client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
     assert query_call.entity == ExportEntity.BILL  # Correct entity
     assert query_call.fields == ["id", "amount"]  # Correct fields
     assert query_call.limit == 20  # Correct limit
+    assert client_id_arg == authenticated_client_id  # Correct client_id
 
     # Deep validation: Verify response data matches preview request
     assert result.count == 5  # Correct total count

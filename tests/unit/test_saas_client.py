@@ -1,7 +1,7 @@
 """Unit tests for SaaS client."""
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -45,24 +45,30 @@ class TestMockSaaSApiClient:
 
     @pytest.mark.asyncio
     async def test_fetch_data_basic(self):
-        """Test basic data fetching."""
+        """Test basic data fetching with client_id filtering."""
         client = MockSaaSApiClient()
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
 
-        data = await client.fetch_data(ExportEntity.BILL)
+        data = await client.fetch_data(ExportEntity.BILL, client_id=client_id)
 
         assert isinstance(data, list)
         assert len(data) > 0
         assert "id" in data[0]
         assert "amount" in data[0]
+        # Verify all records belong to the requested client
+        for record in data:
+            assert record.get("client_id") == str(client_id)
 
     @pytest.mark.asyncio
     async def test_fetch_data_with_filters(self):
-        """Test data fetching with filters."""
+        """Test data fetching with filters and client_id."""
         client = MockSaaSApiClient()
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
 
         # Add a bill with specific amount for filtering
         test_bill = {
             "id": str(uuid4()),
+            "client_id": str(client_id),
             "amount": 9999.99,
             "date": "2024-01-01",
             "description": "Test bill",
@@ -70,18 +76,31 @@ class TestMockSaaSApiClient:
         }
         client._sample_data[ExportEntity.BILL].append(test_bill)
 
-        data = await client.fetch_data(ExportEntity.BILL, filters={"amount": 9999.99})
+        data = await client.fetch_data(
+            ExportEntity.BILL, client_id=client_id, filters={"amount": 9999.99}
+        )
 
-        # Mock client doesn't actually filter, but should return data
+        # Mock client doesn't actually filter, but should return data filtered by client_id
         assert isinstance(data, list)
+        # Verify all records belong to the requested client
+        for record in data:
+            assert record.get("client_id") == str(client_id)
 
     @pytest.mark.asyncio
     async def test_import_data_create_new(self):
-        """Test importing new records."""
+        """Test importing new records with client_id."""
         client = MockSaaSApiClient()
         from app.domain.entities import ImportConfig
 
-        initial_count = len(client._sample_data[ExportEntity.BILL])
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
+        # Count only records for this client
+        initial_count = len(
+            [
+                r
+                for r in client._sample_data[ExportEntity.BILL]
+                if r.get("client_id") == str(client_id)
+            ]
+        )
 
         import_data = [{"amount": "500.00", "date": "2024-02-01", "description": "New bill"}]
 
@@ -90,21 +109,35 @@ class TestMockSaaSApiClient:
             entity=ExportEntity.BILL,
         )
 
-        result = await client.import_data(config, import_data)
+        result = await client.import_data(config, client_id=client_id, data=import_data)
 
         assert result["imported_count"] == 1
         assert result["updated_count"] == 0
         assert result["failed_count"] == 0
-        assert len(client._sample_data[ExportEntity.BILL]) == initial_count + 1
+        # Verify the new record has the correct client_id
+        new_records = [
+            r
+            for r in client._sample_data[ExportEntity.BILL]
+            if r.get("client_id") == str(client_id)
+        ]
+        assert len(new_records) == initial_count + 1
+        # Verify the imported record has client_id
+        imported_record = new_records[-1]
+        assert imported_record.get("client_id") == str(client_id)
 
     @pytest.mark.asyncio
     async def test_import_data_update_existing(self):
-        """Test importing with existing ID (update)."""
+        """Test importing with existing ID (update) and client_id."""
         client = MockSaaSApiClient()
         from app.domain.entities import ImportConfig
 
-        # Get an existing bill ID
-        existing_bill = client._sample_data[ExportEntity.BILL][0]
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
+        # Get an existing bill ID for this client
+        existing_bill = next(
+            b
+            for b in client._sample_data[ExportEntity.BILL]
+            if b.get("client_id") == str(client_id)
+        )
         existing_id = existing_bill["id"]
         initial_count = len(client._sample_data[ExportEntity.BILL])
 
@@ -122,24 +155,26 @@ class TestMockSaaSApiClient:
             entity=ExportEntity.BILL,
         )
 
-        result = await client.import_data(config, import_data)
+        result = await client.import_data(config, client_id=client_id, data=import_data)
 
         assert result["updated_count"] == 1
         assert result["imported_count"] == 0
         assert result["failed_count"] == 0
         assert len(client._sample_data[ExportEntity.BILL]) == initial_count
-        # Verify the bill was updated
+        # Verify the bill was updated and still has correct client_id
         updated_bill = next(
             b for b in client._sample_data[ExportEntity.BILL] if b["id"] == existing_id
         )
         assert updated_bill["amount"] == "9999.99"
+        assert updated_bill.get("client_id") == str(client_id)
 
     @pytest.mark.asyncio
     async def test_import_data_with_errors(self):
-        """Test importing data with validation errors."""
+        """Test importing data with validation errors and client_id."""
         client = MockSaaSApiClient()
         from app.domain.entities import ImportConfig
 
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
         # Import data with missing required fields
         import_data = [
             {"description": "Missing amount and date"}  # Missing required fields
@@ -150,7 +185,7 @@ class TestMockSaaSApiClient:
             entity=ExportEntity.BILL,
         )
 
-        result = await client.import_data(config, import_data)
+        result = await client.import_data(config, client_id=client_id, data=import_data)
 
         # Should have errors for missing required fields
         assert result["failed_count"] > 0
@@ -164,6 +199,7 @@ class TestMockSaaSApiClient:
         client = MockSaaSApiClient(data_file=str(data_file))
         from app.domain.entities import ImportConfig
 
+        client_id = UUID("00000000-0000-0000-0000-000000000000")
         import_data = [{"amount": "500.00", "date": "2024-02-01", "description": "New bill"}]
 
         config = ImportConfig(
@@ -171,7 +207,7 @@ class TestMockSaaSApiClient:
             entity=ExportEntity.BILL,
         )
 
-        await client.import_data(config, import_data)
+        await client.import_data(config, client_id=client_id, data=import_data)
 
         # Verify file was created/updated
         assert data_file.exists()
@@ -184,9 +220,14 @@ class TestMockSaaSApiClient:
         data_file = tmp_path / "test_data.json"
         client = MockSaaSApiClient(data_file=str(data_file))
 
-        # Modify data
+        # Modify data (add client_id for consistency)
         client._sample_data[ExportEntity.BILL].append(
-            {"id": "test-id", "amount": 100.00, "date": "2024-01-01"}
+            {
+                "id": "test-id",
+                "client_id": "00000000-0000-0000-0000-000000000000",
+                "amount": 100.00,
+                "date": "2024-01-01",
+            }
         )
 
         client._save_data()

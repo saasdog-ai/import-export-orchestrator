@@ -178,8 +178,10 @@ async def preview_export(
             offset=0,
         )
 
-        # Execute query to get preview
-        result = await query_engine.execute_export_query(export_config)
+        # Execute query to get preview (pass client_id for security)
+        result = await query_engine.execute_export_query(
+            export_config, client_id=authenticated_client_id
+        )
 
         record_count = len(result.get("records", []))
         # Log response output

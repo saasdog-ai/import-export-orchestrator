@@ -1,6 +1,7 @@
 """Query engine for translating DSL filters to SQLAlchemy expressions."""
 
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import and_, not_, or_
 
@@ -32,8 +33,17 @@ class ExportQueryEngine:
         # Mock models for query building (in real implementation, these would be actual ORM models)
         self._mock_models: dict[ExportEntity, Any] = {}
 
-    async def execute_export_query(self, config: ExportConfig) -> dict[str, Any]:
-        """Execute an export query and return results."""
+    async def execute_export_query(self, config: ExportConfig, client_id: UUID) -> dict[str, Any]:
+        """
+        Execute an export query and return results.
+
+        Args:
+            config: Export configuration (entity, fields, filters, etc.)
+            client_id: Client ID to filter data by (security: ensures data isolation)
+
+        Returns:
+            Dictionary with entity, count, records, limit, and offset
+        """
         # Validate all fields
         for field in config.fields:
             if not validate_field_path(config.entity, field):
@@ -46,10 +56,13 @@ class ExportQueryEngine:
             self._validate_filter_group(config.entity, config.filters)
 
         # Fetch data from SaaS API (main SaaS app)
-        # In production, this would call the actual SaaS API
-        # For now, use the mock client which has sample data
+        # SECURITY: Pass client_id to ensure only data owned by this client is returned
+        # In production, this would call the actual SaaS API with client_id
+        # For now, use the mock client which filters by client_id
         filters_dict = self._filters_to_dict(config.filters) if config.filters else {}
-        all_data = await self.saas_client.fetch_data(config.entity, filters=filters_dict)
+        all_data = await self.saas_client.fetch_data(
+            config.entity, client_id=client_id, filters=filters_dict
+        )
 
         # Apply filters (if SaaS client didn't apply them)
         filtered_data = self._apply_filters(all_data, config)

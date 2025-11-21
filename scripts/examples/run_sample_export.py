@@ -3,16 +3,18 @@
 
 import asyncio
 import json
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 
 
 async def run_sample_export():
     """Create and run a sample export job."""
-    # Generate a client ID (no need to create it in DB - clients managed in main SaaS app)
-    client_id = uuid4()
-    print(f"Using client ID: {client_id}")
+    # Use default client ID (mock data is available for this client)
+    # In production, this would come from the JWT token
+    default_client_id = UUID("00000000-0000-0000-0000-000000000000")
+    client_id = default_client_id
+    print(f"Using client ID: {client_id} (default - has mock data)")
     
     # Create export request
     export_request = {

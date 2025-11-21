@@ -16,8 +16,9 @@ async def test_import_from_csv():
     print("=" * 70)
     print()
     
-    # Path to sample CSV file
-    csv_file_host = Path(__file__).parent / "tests" / "fixtures" / "sample_bills.csv"
+    # Path to sample CSV file (go up to project root, then to tests/fixtures)
+    project_root = Path(__file__).parent.parent.parent
+    csv_file_host = project_root / "tests" / "fixtures" / "sample_bills.csv"
     
     # Check if file exists on host
     if not csv_file_host.exists():

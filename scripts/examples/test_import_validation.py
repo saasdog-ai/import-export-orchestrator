@@ -45,7 +45,9 @@ async def test_import_validation():
             print(f"TEST: {test_case['name']}")
             print(f"{'='*80}")
             
-            file_path = Path(__file__).parent / test_case["file"]
+            # Go up to project root, then navigate to test file
+            project_root = Path(__file__).parent.parent.parent
+            file_path = project_root / test_case["file"]
             
             if not file_path.exists():
                 print(f"❌ Test file not found: {file_path}")

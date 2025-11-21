@@ -189,8 +189,10 @@ class JobRunnerService:
         if not job.export_config:
             raise ValueError("Export job missing export_config")
 
-        # Execute query using query engine
-        result = await self.query_engine.execute_export_query(job.export_config)
+        # Execute query using query engine (pass client_id for security)
+        result = await self.query_engine.execute_export_query(
+            job.export_config, client_id=job.client_id
+        )
 
         records = result.get("records", [])
         count = result.get("count", len(records))
@@ -344,10 +346,12 @@ class JobRunnerService:
                 )
                 return
 
-            # Import data with detailed error reporting
+            # Import data with detailed error reporting (pass client_id for security)
             import_errors = []
             try:
-                result = await self.saas_client.import_data(job.import_config, data)
+                result = await self.saas_client.import_data(
+                    job.import_config, client_id=job.client_id, data=data
+                )
 
                 # Check if import_data returned errors
                 if isinstance(result, dict) and "errors" in result:
@@ -410,10 +414,14 @@ class JobRunnerService:
         else:
             # Fallback: Fetch data from SaaS API (for backward compatibility)
             logger.warning("No source_file in import config. Fetching from SaaS API (mock).")
-            data = await self.saas_client.fetch_data(job.import_config.entity, filters={})
+            data = await self.saas_client.fetch_data(
+                job.import_config.entity, client_id=job.client_id, filters={}
+            )
 
-            # Import data using SaaS client
-            result = await self.saas_client.import_data(job.import_config, data)
+            # Import data using SaaS client (pass client_id for security)
+            result = await self.saas_client.import_data(
+                job.import_config, client_id=job.client_id, data=data
+            )
 
             # Store result metadata
             result_metadata = {
