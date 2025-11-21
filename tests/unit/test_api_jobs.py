@@ -271,7 +271,9 @@ async def test_run_job_success(mock_job_service, authenticated_client_id, sample
     assert result.id == job_run.id
     assert result.status == JobStatus.PENDING
     mock_job_service.get_job.assert_called_once_with(sample_job.id)
-    mock_job_service.run_job.assert_called_once_with(sample_job.id, client_id=authenticated_client_id)
+    mock_job_service.run_job.assert_called_once_with(
+        sample_job.id, client_id=authenticated_client_id
+    )
 
 
 @pytest.mark.asyncio
