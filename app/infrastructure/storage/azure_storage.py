@@ -54,6 +54,18 @@ class AzureBlobStorage:
         self, local_file_path: str, remote_file_path: str, content_type: str | None = None
     ) -> str:
         """Upload a file to Azure Blob Storage."""
+        # Log external service call input
+        import os
+
+        file_size = (
+            os.path.getsize(local_file_path) if os.path.exists(local_file_path) else "unknown"
+        )
+        logger.info(
+            f"Cloud storage upload request: service=Azure, container={self.container_name}, "
+            f"remote_path={remote_file_path}, local_path={local_file_path}, "
+            f"file_size={file_size} bytes, content_type={content_type}"
+        )
+
         try:
             blob_client = self.blob_service_client.get_blob_client(
                 container=self.container_name, blob=remote_file_path
@@ -72,18 +84,61 @@ class AzureBlobStorage:
                     ),
                 )
 
+            # Log external service call output
             logger.info(
-                f"Uploaded {local_file_path} to Azure blob {self.container_name}/{remote_file_path}"
+                f"Cloud storage upload completed: service=Azure, container={self.container_name}, "
+                f"remote_path={remote_file_path}, file_size={file_size} bytes"
             )
             return remote_file_path
         except AzureError as e:
             logger.error(f"Failed to upload file to Azure: {e}")
             raise
 
+    async def download_file(self, remote_file_path: str, local_file_path: str) -> str:
+        """Download a file from Azure Blob Storage to local path."""
+        # Log external service call input
+        logger.info(
+            f"Cloud storage download request: service=Azure, container={self.container_name}, "
+            f"remote_path={remote_file_path}, local_path={local_file_path}"
+        )
+
+        try:
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, blob=remote_file_path
+            )
+
+            loop = asyncio.get_event_loop()
+            with open(local_file_path, "wb") as download_file:
+                await loop.run_in_executor(
+                    None, lambda: blob_client.download_blob().readinto(download_file)
+                )
+
+            # Log external service call output
+            import os
+
+            file_size = (
+                os.path.getsize(local_file_path) if os.path.exists(local_file_path) else "unknown"
+            )
+            logger.info(
+                f"Cloud storage download completed: service=Azure, container={self.container_name}, "
+                f"remote_path={remote_file_path}, local_path={local_file_path}, "
+                f"file_size={file_size} bytes"
+            )
+            return local_file_path
+        except AzureError as e:
+            logger.error(f"Failed to download file from Azure: {e}")
+            raise
+
     async def generate_presigned_url(
         self, remote_file_path: str, expiration_seconds: int = 3600
     ) -> str:
         """Generate a SAS (Shared Access Signature) URL for downloading."""
+        # Log external service call input
+        logger.info(
+            f"Cloud storage presigned URL request: service=Azure, container={self.container_name}, "
+            f"remote_path={remote_file_path}, expiration_seconds={expiration_seconds}"
+        )
+
         try:
             from datetime import UTC, datetime, timedelta
 
@@ -106,30 +161,15 @@ class AzureBlobStorage:
             )
 
             url = f"{blob_client.url}?{sas_token}"
+
+            # Log external service call output (don't log full URL as it contains sensitive tokens)
+            logger.info(
+                f"Cloud storage presigned URL generated: service=Azure, container={self.container_name}, "
+                f"remote_path={remote_file_path}, url_length={len(url)}"
+            )
             return url
         except AzureError as e:
             logger.error(f"Failed to generate SAS URL: {e}")
-            raise
-
-    async def download_file(self, remote_file_path: str, local_file_path: str) -> str:
-        """Download a file from Azure Blob Storage to local path."""
-        try:
-            blob_client = self.blob_service_client.get_blob_client(
-                container=self.container_name, blob=remote_file_path
-            )
-
-            loop = asyncio.get_event_loop()
-            with open(local_file_path, "wb") as download_file:
-                await loop.run_in_executor(
-                    None, lambda: download_file.write(blob_client.download_blob().readall())
-                )
-
-            logger.info(
-                f"Downloaded Azure blob {self.container_name}/{remote_file_path} to {local_file_path}"
-            )
-            return local_file_path
-        except AzureError as e:
-            logger.error(f"Failed to download file from Azure: {e}")
             raise
 
     async def delete_file(self, remote_file_path: str) -> None:

@@ -15,7 +15,10 @@ from app.api.dto import (
 )
 from app.auth.backend import get_current_client_id
 from app.core.dependency_injection import get_job_service
+from app.core.logging import get_logger
 from app.services.job_service import JobService
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -95,9 +98,23 @@ async def create_job(
     try:
         from app.domain.entities import JobDefinition
 
+        # Log request input (excluding PII)
+        logger.info(
+            f"Create job request: client_id={authenticated_client_id}, "
+            f"name={job_data.name}, job_type={job_data.job_type.value}, "
+            f"has_export_config={'yes' if job_data.export_config else 'no'}, "
+            f"has_import_config={'yes' if job_data.import_config else 'no'}, "
+            f"cron_schedule={'present' if job_data.cron_schedule else 'none'}, "
+            f"enabled={job_data.enabled}"
+        )
+
         # Use client_id from JWT token (ignore any client_id in request body for security)
         # If request body has client_id, verify it matches (defense in depth)
         if job_data.client_id and job_data.client_id != authenticated_client_id:
+            logger.warning(
+                f"Client ID mismatch: request_client_id={job_data.client_id}, "
+                f"authenticated_client_id={authenticated_client_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Client ID in request does not match authenticated client ID.",
@@ -113,6 +130,13 @@ async def create_job(
             enabled=job_data.enabled,
         )
         created_job = await job_service.create_job(job)
+
+        # Log response output
+        logger.info(
+            f"Job created: job_id={created_job.id}, client_id={authenticated_client_id}, "
+            f"job_type={created_job.job_type.value}, name={created_job.name}"
+        )
+
         return JobDefinitionResponse.model_validate(created_job.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -132,13 +156,27 @@ async def get_job(
 ):
     """Get a job definition by ID."""
     try:
+        # Log request input
+        logger.info(f"Get job request: job_id={job_id}, client_id={authenticated_client_id}")
+
         job = await job_service.get_job(job_id)
         # Verify job belongs to authenticated client
         if job.client_id != authenticated_client_id:
+            logger.warning(
+                f"Access denied: job_id={job_id}, requested_client_id={authenticated_client_id}, "
+                f"job_client_id={job.client_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             )
+
+        # Log response output
+        logger.info(
+            f"Job retrieved: job_id={job_id}, job_type={job.job_type.value}, "
+            f"name={job.name}, enabled={job.enabled}"
+        )
+
         return JobDefinitionResponse.model_validate(job.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -167,9 +205,20 @@ async def update_job(
 ):
     """Update a job definition."""
     try:
+        # Log request input
+        update_fields = list(job_data.model_dump(exclude_unset=True).keys())
+        logger.info(
+            f"Update job request: job_id={job_id}, client_id={authenticated_client_id}, "
+            f"fields_to_update={update_fields}"
+        )
+
         existing_job = await job_service.get_job(job_id)
         # Verify job belongs to authenticated client
         if existing_job.client_id != authenticated_client_id:
+            logger.warning(
+                f"Access denied for update: job_id={job_id}, "
+                f"requested_client_id={authenticated_client_id}, job_client_id={existing_job.client_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
@@ -181,6 +230,13 @@ async def update_job(
             setattr(existing_job, key, value)
 
         updated_job = await job_service.update_job(existing_job)
+
+        # Log response output
+        logger.info(
+            f"Job updated: job_id={job_id}, updated_fields={update_fields}, "
+            f"enabled={updated_job.enabled}"
+        )
+
         return JobDefinitionResponse.model_validate(updated_job.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -201,14 +257,28 @@ async def run_job(
 ):
     """Manually trigger a job run."""
     try:
+        # Log request input
+        logger.info(f"Run job request: job_id={job_id}, client_id={authenticated_client_id}")
+
         job = await job_service.get_job(job_id)
         # Verify job belongs to authenticated client
         if job.client_id != authenticated_client_id:
+            logger.warning(
+                f"Access denied for run: job_id={job_id}, "
+                f"requested_client_id={authenticated_client_id}, job_client_id={job.client_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             )
         job_run = await job_service.run_job(job_id)
+
+        # Log response output
+        logger.info(
+            f"Job run triggered: job_id={job_id}, run_id={job_run.id}, "
+            f"status={job_run.status.value}"
+        )
+
         return JobRunResponse.model_validate(job_run.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -277,9 +347,19 @@ async def get_job_runs(
     - Get runs in a date range: GET /jobs/{job_id}/runs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z
     """
     try:
+        # Log request input
+        logger.info(
+            f"Get job runs request: job_id={job_id}, client_id={authenticated_client_id}, "
+            f"start_date={start_date}, end_date={end_date}"
+        )
+
         # Verify job exists and belongs to authenticated client
         job = await job_service.get_job(job_id)
         if job.client_id != authenticated_client_id:
+            logger.warning(
+                f"Access denied: job_id={job_id}, requested_client_id={authenticated_client_id}, "
+                f"job_client_id={job.client_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
@@ -293,6 +373,10 @@ async def get_job_runs(
             # Convert to UTC first, then remove timezone info
             end_date = end_date.astimezone(UTC).replace(tzinfo=None)
         runs = await job_service.get_job_runs(job_id, start_date=start_date, end_date=end_date)
+
+        # Log response output
+        logger.info(f"Job runs retrieved: job_id={job_id}, run_count={len(runs)}")
+
         return [JobRunResponse.model_validate(run.model_dump()) for run in runs]
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -313,14 +397,30 @@ async def get_job_run(
 ):
     """Get a specific job run by ID."""
     try:
+        # Log request input
+        logger.info(
+            f"Get job run request: job_id={job_id}, run_id={run_id}, client_id={authenticated_client_id}"
+        )
+
         # Verify job exists and belongs to authenticated client
         job = await job_service.get_job(job_id)
         if job.client_id != authenticated_client_id:
+            logger.warning(
+                f"Access denied: job_id={job_id}, run_id={run_id}, "
+                f"requested_client_id={authenticated_client_id}, job_client_id={job.client_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Job does not belong to authenticated client.",
             )
         job_run = await job_service.get_job_run(run_id)
+
+        # Log response output
+        logger.info(
+            f"Job run retrieved: run_id={run_id}, status={job_run.status.value}, "
+            f"started_at={job_run.started_at}, completed_at={job_run.completed_at}"
+        )
+
         return JobRunResponse.model_validate(job_run.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -371,6 +471,12 @@ async def get_client_jobs(
     - Get jobs in a date range: GET /jobs?start_date=2024-01-01T00:00:00Z&end_date=2024-12-31T23:59:59Z
     """
     try:
+        # Log request input
+        logger.info(
+            f"Get client jobs request: client_id={authenticated_client_id}, "
+            f"start_date={start_date}, end_date={end_date}"
+        )
+
         # Convert timezone-aware datetimes to naive UTC if needed
         # FastAPI parses ISO 8601 strings and may return timezone-aware datetimes
         if start_date and start_date.tzinfo is not None:
@@ -382,6 +488,12 @@ async def get_client_jobs(
         jobs = await job_service.get_jobs_by_client(
             authenticated_client_id, start_date=start_date, end_date=end_date
         )
+
+        # Log response output
+        logger.info(
+            f"Client jobs retrieved: client_id={authenticated_client_id}, job_count={len(jobs)}"
+        )
+
         return [JobDefinitionResponse.model_validate(job.model_dump()) for job in jobs]
     except Exception as e:
         import traceback

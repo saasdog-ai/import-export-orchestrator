@@ -11,12 +11,13 @@ from app.api.dto import ErrorResponse
 from app.auth.backend import get_current_client_id
 from app.core.config import get_settings
 from app.core.dependency_injection import get_cloud_storage, get_job_service
+from app.core.logging import get_logger
 from app.domain.entities import ExportEntity
 from app.infrastructure.storage.interface import CloudStorageInterface
 from app.services.import_validator import ImportValidator
 from app.services.job_service import JobService
 
-"""API routes for import operations."""
+logger = get_logger(__name__)
 router = APIRouter(prefix="/imports", tags=["imports"])
 settings = get_settings()
 
@@ -87,6 +88,14 @@ async def upload_import_file(
     If validation fails, errors include row and field information.
     """
     try:
+        # Log request input (excluding file content)
+        file_size = file.size if hasattr(file, "size") else "unknown"
+        logger.info(
+            f"Import file upload request: client_id={authenticated_client_id}, "
+            f"filename={file.filename}, content_type={file.content_type}, "
+            f"file_size={file_size}, entity={entity.value}"
+        )
+
         # Phase 1: Upload to temporary location
         # Generate temp file path
         # Save uploaded file temporarily
@@ -97,9 +106,17 @@ async def upload_import_file(
         with open(temp_file_path, "wb") as f:
             content = await file.read()
             f.write(content)
+        actual_file_size = len(content)
+        logger.info(
+            f"File saved for validation: path={temp_file_path}, size={actual_file_size} bytes"
+        )
+
         # Validate file format
         is_valid, format_error = ImportValidator.validate_file_format(temp_file_path)
         if not is_valid:
+            logger.warning(
+                f"File format validation failed: filename={file.filename}, error={format_error}"
+            )
             os.remove(temp_file_path)
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -115,6 +132,11 @@ async def upload_import_file(
             temp_file_path, entity
         )
         if not is_valid:
+            error_count = len(validation_errors)
+            logger.warning(
+                f"File content validation failed: filename={file.filename}, "
+                f"entity={entity.value}, error_count={error_count}"
+            )
             # Clean up temp file
             os.remove(temp_file_path)
             return JSONResponse(
@@ -123,7 +145,7 @@ async def upload_import_file(
                     "status": "validation_failed",
                     "message": "File validation failed",
                     "validation_errors": validation_errors,
-                    "error_count": len(validation_errors),
+                    "error_count": error_count,
                 },
             )
         # Validation passed - upload to cloud storage
@@ -136,6 +158,10 @@ async def upload_import_file(
                 )
                 # Clean up local temp file
                 os.remove(temp_file_path)
+                logger.info(
+                    f"Import file validated and uploaded: client_id={authenticated_client_id}, "
+                    f"filename={file.filename}, remote_path={remote_path}, entity={entity.value}"
+                )
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
                     content={
@@ -147,6 +173,9 @@ async def upload_import_file(
                     },
                 )
             except Exception as e:
+                logger.error(
+                    f"Failed to upload file to cloud storage: filename={file.filename}, error={str(e)}"
+                )
                 os.remove(temp_file_path)
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -154,6 +183,10 @@ async def upload_import_file(
                 ) from e
         else:
             # No cloud storage - keep file locally
+            logger.info(
+                f"Import file validated (local storage): client_id={authenticated_client_id}, "
+                f"filename={file.filename}, path={temp_file_path}, entity={entity.value}"
+            )
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -230,6 +263,12 @@ async def execute_import(
 
         from app.domain.entities import ImportConfig, JobDefinition, JobType
 
+        # Log request input
+        logger.info(
+            f"Execute import request: client_id={authenticated_client_id}, "
+            f"file_path={request.file_path}, entity={request.entity.value}"
+        )
+
         # Create import job configuration
         import_config = ImportConfig(
             source="cloud_storage",
@@ -249,6 +288,13 @@ async def execute_import(
         # Create and run job
         created_job = await job_service.create_job(job)
         job_run = await job_service.run_job(created_job.id)
+
+        # Log response output
+        logger.info(
+            f"Import job created and started: job_id={created_job.id}, run_id={job_run.id}, "
+            f"status={job_run.status.value}, entity={request.entity.value}"
+        )
+
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content={

@@ -7,7 +7,10 @@ from sqlalchemy import text
 
 from app.api.dto import ErrorResponse, HealthResponse
 from app.core.dependency_injection import get_database
+from app.core.logging import get_logger
 from app.infrastructure.db.database import Database
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["health"])
 
@@ -38,7 +41,11 @@ async def health_check():
     Returns the current health status of the API service.
     This endpoint does not check database connectivity.
     """
-    return HealthResponse(status="healthy", timestamp=datetime.now(UTC))
+    # Log health check request
+    logger.debug("Health check request received")
+    response = HealthResponse(status="healthy", timestamp=datetime.now(UTC))
+    logger.debug(f"Health check response: status={response.status}")
+    return response
 
 
 @router.get(

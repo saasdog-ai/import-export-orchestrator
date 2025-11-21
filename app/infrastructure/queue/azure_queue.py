@@ -75,6 +75,12 @@ class AzureQueueStorage:
 
     async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
         """Send a message to Azure Queue."""
+        # Log external service call input
+        logger.info(
+            f"Message queue send_message request: service=Azure, queue={self.queue_name}, "
+            f"message_keys={list(message_body.keys())}, delay_seconds={delay_seconds}"
+        )
+
         await self._ensure_queue_client()
         try:
             message_text = json.dumps(message_body)
@@ -88,7 +94,12 @@ class AzureQueueStorage:
                 ),
             )
             message_id = response.id
-            logger.debug(f"Sent message to Azure queue: {message_id}")
+
+            # Log external service call output
+            logger.info(
+                f"Message queue send_message completed: service=Azure, queue={self.queue_name}, "
+                f"message_id={message_id}"
+            )
             return message_id
         except AzureError as e:
             logger.error(f"Failed to send message to Azure queue: {e}")
@@ -98,6 +109,12 @@ class AzureQueueStorage:
         self, max_messages: int = 1, wait_time_seconds: int = 20
     ) -> list[dict[str, Any]]:
         """Receive messages from Azure Queue."""
+        # Log external service call input
+        logger.debug(
+            f"Message queue receive_messages request: service=Azure, queue={self.queue_name}, "
+            f"max_messages={max_messages}, wait_time_seconds={wait_time_seconds}"
+        )
+
         await self._ensure_queue_client()
         try:
             # Azure Queue Storage doesn't support long polling like SQS
@@ -127,6 +144,11 @@ class AzureQueueStorage:
                     logger.error(f"Failed to parse message content: {msg.content}")
                     continue
 
+            # Log external service call output
+            logger.info(
+                f"Message queue receive_messages completed: service=Azure, queue={self.queue_name}, "
+                f"message_count={len(result)}"
+            )
             return result
         except AzureError as e:
             logger.error(f"Failed to receive messages from Azure queue: {e}")
@@ -134,6 +156,12 @@ class AzureQueueStorage:
 
     async def delete_message(self, receipt_handle: str) -> None:
         """Delete a message from Azure Queue."""
+        # Log external service call input
+        logger.debug(
+            f"Message queue delete_message request: service=Azure, queue={self.queue_name}, "
+            f"receipt_handle_length={len(receipt_handle)}"
+        )
+
         await self._ensure_queue_client()
         try:
             # Parse receipt_handle which contains "message_id:pop_receipt"
@@ -151,7 +179,11 @@ class AzureQueueStorage:
             await loop.run_in_executor(
                 None, lambda: self.queue_client.delete_message(message_id, pop_receipt)
             )
-            logger.debug(f"Deleted message from Azure queue: {message_id[:20]}...")
+
+            # Log external service call output
+            logger.debug(
+                f"Message queue delete_message completed: service=Azure, queue={self.queue_name}"
+            )
         except AzureError as e:
             logger.error(f"Failed to delete message from Azure queue: {e}")
             raise

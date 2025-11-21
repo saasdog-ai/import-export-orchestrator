@@ -81,7 +81,9 @@ import-export-orchestrator/
 
 4. **Access the API**:
    - API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+   - API Docs (Swagger UI): http://localhost:8000/docs
+   - API Docs (ReDoc): http://localhost:8000/redoc
+   - OpenAPI JSON Spec: http://localhost:8000/openapi.json
    - Health Check: http://localhost:8000/health
 
 5. **Stop services**:

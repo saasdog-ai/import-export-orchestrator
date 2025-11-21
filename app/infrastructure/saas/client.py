@@ -178,13 +178,21 @@ class MockSaaSApiClient(SaaSApiClientInterface):
         self, entity: ExportEntity, filters: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
         """Fetch mock data for an entity."""
-        logger.info(f"Fetching {entity.value} data (mock)")
+        # Log external service call input
+        filter_summary = "present" if filters else "none"
+        logger.info(f"SaaS API fetch_data request: entity={entity.value}, filters={filter_summary}")
+
         data: list[dict[str, Any]] = self._sample_data.get(entity, [])
 
         # Apply filters if provided (simplified mock filtering)
         if filters:
             # In real implementation, would apply actual filtering
             pass
+
+        # Log external service call output
+        logger.info(
+            f"SaaS API fetch_data response: entity={entity.value}, record_count={len(data)}"
+        )
 
         return data
 
@@ -198,7 +206,11 @@ class MockSaaSApiClient(SaaSApiClientInterface):
 
         Returns count of imported/updated records and any errors with row information.
         """
-        logger.info(f"Importing {len(data)} records for {config.entity.value} (mock)")
+        # Log external service call input
+        logger.info(
+            f"SaaS API import_data request: entity={config.entity.value}, "
+            f"record_count={len(data)}, source={config.source}"
+        )
 
         entity = config.entity
         imported_count = 0
@@ -291,8 +303,11 @@ class MockSaaSApiClient(SaaSApiClientInterface):
         if errors:
             result["errors"] = errors
 
+        # Log external service call output
         logger.info(
-            f"Import completed: {imported_count} created, {updated_count} updated, {failed_count} failed"
+            f"SaaS API import_data response: entity={config.entity.value}, "
+            f"imported={imported_count}, updated={updated_count}, failed={failed_count}, "
+            f"error_count={len(errors)}"
         )
 
         return result

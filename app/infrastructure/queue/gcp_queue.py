@@ -84,6 +84,12 @@ class GCPPubSubQueue:
 
     async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
         """Send a message to Pub/Sub."""
+        # Log external service call input
+        logger.info(
+            f"Message queue send_message request: service=GCP, topic={self.topic_name}, "
+            f"message_keys={list(message_body.keys())}, delay_seconds={delay_seconds}"
+        )
+
         await self._ensure_topic_and_subscription()
         try:
             message_data = json.dumps(message_body).encode("utf-8")
@@ -95,7 +101,12 @@ class GCPPubSubQueue:
                 message_data,
             )
             message_id = future.result()  # Wait for publish to complete
-            logger.debug(f"Sent message to Pub/Sub: {message_id}")
+
+            # Log external service call output
+            logger.info(
+                f"Message queue send_message completed: service=GCP, topic={self.topic_name}, "
+                f"message_id={message_id}"
+            )
             return str(message_id)
         except GoogleCloudError as e:
             logger.error(f"Failed to send message to Pub/Sub: {e}")
@@ -105,6 +116,12 @@ class GCPPubSubQueue:
         self, max_messages: int = 1, wait_time_seconds: int = 20
     ) -> list[dict[str, Any]]:
         """Receive messages from Pub/Sub."""
+        # Log external service call input
+        logger.debug(
+            f"Message queue receive_messages request: service=GCP, subscription={self.subscription_name}, "
+            f"max_messages={max_messages}, wait_time_seconds={wait_time_seconds}"
+        )
+
         await self._ensure_topic_and_subscription()
         try:
             # Pub/Sub uses streaming pull, which is more complex
@@ -134,6 +151,11 @@ class GCPPubSubQueue:
                     logger.error(f"Failed to parse message: {e}")
                     continue
 
+            # Log external service call output
+            logger.info(
+                f"Message queue receive_messages completed: service=GCP, subscription={self.subscription_name}, "
+                f"message_count={len(messages)}"
+            )
             return messages
         except GoogleCloudError as e:
             logger.error(f"Failed to receive messages from Pub/Sub: {e}")
@@ -141,6 +163,12 @@ class GCPPubSubQueue:
 
     async def delete_message(self, receipt_handle: str) -> None:
         """Acknowledge (delete) a message from Pub/Sub."""
+        # Log external service call input
+        logger.debug(
+            f"Message queue delete_message request: service=GCP, subscription={self.subscription_name}, "
+            f"receipt_handle_length={len(receipt_handle)}"
+        )
+
         await self._ensure_topic_and_subscription()
         try:
             # Pub/Sub uses ack instead of delete
@@ -151,7 +179,11 @@ class GCPPubSubQueue:
                     subscription=self.subscription_path, ack_ids=[receipt_handle]
                 ),
             )
-            logger.debug(f"Acknowledged message in Pub/Sub: {receipt_handle[:20]}...")
+
+            # Log external service call output
+            logger.debug(
+                f"Message queue delete_message completed: service=GCP, subscription={self.subscription_name}"
+            )
         except GoogleCloudError as e:
             logger.error(f"Failed to acknowledge message in Pub/Sub: {e}")
             raise

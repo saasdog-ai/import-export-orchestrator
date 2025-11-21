@@ -69,7 +69,13 @@ class SQSQueue:
                 raise
 
     async def send_message(self, message_body: dict[str, Any], delay_seconds: int = 0) -> str:
-        """Send a message to SQS."""
+        """Send a message to SQS queue."""
+        # Log external service call input
+        logger.info(
+            f"Message queue send_message request: service=SQS, queue={self.queue_name}, "
+            f"message_keys={list(message_body.keys())}, delay_seconds={delay_seconds}"
+        )
+
         await self._ensure_queue_url()
         try:
             loop = asyncio.get_event_loop()
@@ -82,7 +88,12 @@ class SQSQueue:
                 ),
             )
             message_id = response["MessageId"]
-            logger.debug(f"Sent message to SQS: {message_id}")
+
+            # Log external service call output
+            logger.info(
+                f"Message queue send_message completed: service=SQS, queue={self.queue_name}, "
+                f"message_id={message_id}"
+            )
             return message_id
         except ClientError as e:
             logger.error(f"Failed to send message to SQS: {e}")
@@ -91,7 +102,13 @@ class SQSQueue:
     async def receive_messages(
         self, max_messages: int = 1, wait_time_seconds: int = 20
     ) -> list[dict[str, Any]]:
-        """Receive messages from SQS."""
+        """Receive messages from SQS queue."""
+        # Log external service call input
+        logger.debug(
+            f"Message queue receive_messages request: service=SQS, queue={self.queue_name}, "
+            f"max_messages={max_messages}, wait_time_seconds={wait_time_seconds}"
+        )
+
         await self._ensure_queue_url()
         try:
             loop = asyncio.get_event_loop()
@@ -120,6 +137,11 @@ class SQSQueue:
                     logger.error(f"Failed to parse message body: {msg.get('Body')}")
                     continue
 
+            # Log external service call output
+            logger.info(
+                f"Message queue receive_messages completed: service=SQS, queue={self.queue_name}, "
+                f"message_count={len(messages)}"
+            )
             return messages
         except ClientError as e:
             logger.error(f"Failed to receive messages from SQS: {e}")
@@ -127,6 +149,12 @@ class SQSQueue:
 
     async def delete_message(self, receipt_handle: str) -> None:
         """Delete a message from SQS."""
+        # Log external service call input
+        logger.debug(
+            f"Message queue delete_message request: service=SQS, queue={self.queue_name}, "
+            f"receipt_handle_length={len(receipt_handle)}"
+        )
+
         await self._ensure_queue_url()
         try:
             loop = asyncio.get_event_loop()
@@ -136,7 +164,11 @@ class SQSQueue:
                     QueueUrl=self.queue_url, ReceiptHandle=receipt_handle
                 ),
             )
-            logger.debug(f"Deleted message from SQS: {receipt_handle[:20]}...")
+
+            # Log external service call output
+            logger.debug(
+                f"Message queue delete_message completed: service=SQS, queue={self.queue_name}"
+            )
         except ClientError as e:
             logger.error(f"Failed to delete message from SQS: {e}")
             raise

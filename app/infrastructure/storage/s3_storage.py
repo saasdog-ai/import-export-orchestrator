@@ -37,6 +37,18 @@ class S3Storage:
         self, local_file_path: str, remote_file_path: str, content_type: str | None = None
     ) -> str:
         """Upload a file to S3."""
+        # Log external service call input
+        import os
+
+        file_size = (
+            os.path.getsize(local_file_path) if os.path.exists(local_file_path) else "unknown"
+        )
+        logger.info(
+            f"Cloud storage upload request: service=S3, bucket={self.bucket_name}, "
+            f"remote_path={remote_file_path}, local_path={local_file_path}, "
+            f"file_size={file_size} bytes, content_type={content_type}"
+        )
+
         try:
             extra_args = {}
             if content_type:
@@ -51,7 +63,11 @@ class S3Storage:
                 ),
             )
 
-            logger.info(f"Uploaded {local_file_path} to s3://{self.bucket_name}/{remote_file_path}")
+            # Log external service call output
+            logger.info(
+                f"Cloud storage upload completed: service=S3, bucket={self.bucket_name}, "
+                f"remote_path={remote_file_path}, file_size={file_size} bytes"
+            )
             return remote_file_path
         except ClientError as e:
             logger.error(f"Failed to upload file to S3: {e}")
@@ -61,6 +77,12 @@ class S3Storage:
         self, remote_file_path: str, expiration_seconds: int = 3600
     ) -> str:
         """Generate a pre-signed URL for downloading from S3."""
+        # Log external service call input
+        logger.info(
+            f"Cloud storage presigned URL request: service=S3, bucket={self.bucket_name}, "
+            f"remote_path={remote_file_path}, expiration_seconds={expiration_seconds}"
+        )
+
         try:
             loop = asyncio.get_event_loop()
             url = await loop.run_in_executor(
@@ -71,6 +93,12 @@ class S3Storage:
                     ExpiresIn=expiration_seconds,
                 ),
             )
+
+            # Log external service call output (don't log full URL as it contains sensitive tokens)
+            logger.info(
+                f"Cloud storage presigned URL generated: service=S3, bucket={self.bucket_name}, "
+                f"remote_path={remote_file_path}, url_length={len(url)}"
+            )
             return url
         except ClientError as e:
             logger.error(f"Failed to generate pre-signed URL: {e}")
@@ -78,6 +106,12 @@ class S3Storage:
 
     async def download_file(self, remote_file_path: str, local_file_path: str) -> str:
         """Download a file from S3 to local path."""
+        # Log external service call input
+        logger.info(
+            f"Cloud storage download request: service=S3, bucket={self.bucket_name}, "
+            f"remote_path={remote_file_path}, local_path={local_file_path}"
+        )
+
         try:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -86,8 +120,17 @@ class S3Storage:
                     self.bucket_name, remote_file_path, local_file_path
                 ),
             )
+
+            # Log external service call output
+            import os
+
+            file_size = (
+                os.path.getsize(local_file_path) if os.path.exists(local_file_path) else "unknown"
+            )
             logger.info(
-                f"Downloaded s3://{self.bucket_name}/{remote_file_path} to {local_file_path}"
+                f"Cloud storage download completed: service=S3, bucket={self.bucket_name}, "
+                f"remote_path={remote_file_path}, local_path={local_file_path}, "
+                f"file_size={file_size} bytes"
             )
             return local_file_path
         except ClientError as e:

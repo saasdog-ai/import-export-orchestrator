@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select, update
 
+from app.core.logging import get_logger
 from app.domain.entities import (
     JobDefinition,
     JobRun,
@@ -16,6 +17,8 @@ from app.infrastructure.db.models import (
     JobDefinitionModel,
     JobRunModel,
 )
+
+logger = get_logger(__name__)
 
 
 def _to_naive_utc(dt: datetime | None) -> datetime | None:
@@ -47,6 +50,12 @@ class JobRepository:
 
     async def create(self, job: JobDefinition) -> JobDefinition:
         """Create a new job definition."""
+        # Log database operation input
+        logger.info(
+            f"DB create job: job_id={job.id}, client_id={job.client_id}, "
+            f"job_type={job.job_type.value}, name={job.name}, enabled={job.enabled}"
+        )
+
         async with self.db.async_session_maker() as session:
             db_job = JobDefinitionModel(
                 id=job.id,
@@ -63,16 +72,38 @@ class JobRepository:
             session.add(db_job)
             await session.commit()
             await session.refresh(db_job)
-            return self._model_to_entity(db_job)
+            result = self._model_to_entity(db_job)
+
+            # Log database operation output
+            logger.info(
+                f"DB job created: job_id={result.id}, client_id={result.client_id}, "
+                f"created_at={result.created_at}"
+            )
+
+            return result
 
     async def get_by_id(self, job_id: UUID) -> JobDefinition | None:
         """Get job definition by ID."""
+        # Log database operation input
+        logger.debug(f"DB get job by id: job_id={job_id}")
+
         async with self.db.async_session_maker() as session:
             result = await session.execute(
                 select(JobDefinitionModel).where(JobDefinitionModel.id == job_id)
             )
             db_job = result.scalar_one_or_none()
-            return self._model_to_entity(db_job) if db_job else None
+            entity = self._model_to_entity(db_job) if db_job else None
+
+            # Log database operation output
+            if entity:
+                logger.debug(
+                    f"DB job found: job_id={job_id}, client_id={entity.client_id}, "
+                    f"job_type={entity.job_type.value}"
+                )
+            else:
+                logger.debug(f"DB job not found: job_id={job_id}")
+
+            return entity
 
     async def get_by_client_id(
         self,
@@ -81,6 +112,12 @@ class JobRepository:
         end_date: datetime | None = None,
     ) -> list[JobDefinition]:
         """Get all job definitions for a client, optionally filtered by date range."""
+        # Log database operation input
+        logger.debug(
+            f"DB get jobs by client: client_id={client_id}, "
+            f"start_date={start_date}, end_date={end_date}"
+        )
+
         async with self.db.async_session_maker() as session:
             query = select(JobDefinitionModel).where(JobDefinitionModel.client_id == client_id)
 
@@ -92,7 +129,12 @@ class JobRepository:
 
             result = await session.execute(query.order_by(JobDefinitionModel.created_at.desc()))
             db_jobs = result.scalars().all()
-            return [self._model_to_entity(db_job) for db_job in db_jobs]
+            jobs = [self._model_to_entity(db_job) for db_job in db_jobs]
+
+            # Log database operation output
+            logger.debug(f"DB jobs retrieved: client_id={client_id}, count={len(jobs)}")
+
+            return jobs
 
     async def get_enabled_scheduled_jobs(self) -> list[JobDefinition]:
         """Get all enabled jobs with cron schedules."""
@@ -108,6 +150,13 @@ class JobRepository:
 
     async def update(self, job: JobDefinition) -> JobDefinition:
         """Update a job definition."""
+        # Log database operation input
+        logger.info(
+            f"DB update job: job_id={job.id}, client_id={job.client_id}, "
+            f"name={job.name}, enabled={job.enabled}, "
+            f"has_cron_schedule={'yes' if job.cron_schedule else 'no'}"
+        )
+
         async with self.db.async_session_maker() as session:
             await session.execute(
                 update(JobDefinitionModel)
@@ -123,7 +172,12 @@ class JobRepository:
                 )
             )
             await session.commit()
-            return await self.get_by_id(job.id)
+            result = await self.get_by_id(job.id)
+
+            # Log database operation output
+            logger.info(f"DB job updated: job_id={result.id}, updated_at={result.updated_at}")
+
+            return result
 
     def _model_to_entity(self, db_job: JobDefinitionModel) -> JobDefinition:
         """Convert database model to domain entity."""
@@ -152,6 +206,12 @@ class JobRunRepository:
 
     async def create(self, job_run: JobRun) -> JobRun:
         """Create a new job run."""
+        # Log database operation input
+        logger.info(
+            f"DB create job run: run_id={job_run.id}, job_id={job_run.job_id}, "
+            f"status={job_run.status.value}"
+        )
+
         async with self.db.async_session_maker() as session:
             db_run = JobRunModel(
                 id=job_run.id,
@@ -167,14 +227,36 @@ class JobRunRepository:
             session.add(db_run)
             await session.commit()
             await session.refresh(db_run)
-            return self._model_to_entity(db_run)
+            result = self._model_to_entity(db_run)
+
+            # Log database operation output
+            logger.info(
+                f"DB job run created: run_id={result.id}, job_id={result.job_id}, "
+                f"status={result.status.value}, created_at={result.created_at}"
+            )
+
+            return result
 
     async def get_by_id(self, run_id: UUID) -> JobRun | None:
         """Get job run by ID."""
+        # Log database operation input
+        logger.debug(f"DB get job run by id: run_id={run_id}")
+
         async with self.db.async_session_maker() as session:
             result = await session.execute(select(JobRunModel).where(JobRunModel.id == run_id))
             db_run = result.scalar_one_or_none()
-            return self._model_to_entity(db_run) if db_run else None
+            entity = self._model_to_entity(db_run) if db_run else None
+
+            # Log database operation output
+            if entity:
+                logger.debug(
+                    f"DB job run found: run_id={run_id}, job_id={entity.job_id}, "
+                    f"status={entity.status.value}"
+                )
+            else:
+                logger.debug(f"DB job run not found: run_id={run_id}")
+
+            return entity
 
     async def get_by_job_id(
         self,
@@ -183,6 +265,12 @@ class JobRunRepository:
         end_date: datetime | None = None,
     ) -> list[JobRun]:
         """Get all runs for a job, optionally filtered by date range."""
+        # Log database operation input
+        logger.debug(
+            f"DB get job runs by job_id: job_id={job_id}, "
+            f"start_date={start_date}, end_date={end_date}"
+        )
+
         async with self.db.async_session_maker() as session:
             query = select(JobRunModel).where(JobRunModel.job_id == job_id)
 
@@ -194,7 +282,12 @@ class JobRunRepository:
 
             result = await session.execute(query.order_by(JobRunModel.created_at.desc()))
             db_runs = result.scalars().all()
-            return [self._model_to_entity(db_run) for db_run in db_runs]
+            runs = [self._model_to_entity(db_run) for db_run in db_runs]
+
+            # Log database operation output
+            logger.debug(f"DB job runs retrieved: job_id={job_id}, count={len(runs)}")
+
+            return runs
 
     async def update_status(
         self,
@@ -206,6 +299,14 @@ class JobRunRepository:
         result_metadata: dict | None = None,
     ) -> JobRun:
         """Update job run status."""
+        # Log database operation input
+        logger.info(
+            f"DB update job run status: run_id={run_id}, status={status.value}, "
+            f"started_at={started_at}, completed_at={completed_at}, "
+            f"has_error={'yes' if error_message else 'no'}, "
+            f"has_metadata={'yes' if result_metadata else 'no'}"
+        )
+
         async with self.db.async_session_maker() as session:
             update_values = {
                 "status": status.value,
@@ -224,7 +325,15 @@ class JobRunRepository:
                 update(JobRunModel).where(JobRunModel.id == run_id).values(**update_values)
             )
             await session.commit()
-            return await self.get_by_id(run_id)
+            result = await self.get_by_id(run_id)
+
+            # Log database operation output
+            logger.info(
+                f"DB job run status updated: run_id={run_id}, status={result.status.value}, "
+                f"updated_at={result.updated_at}"
+            )
+
+            return result
 
     def _model_to_entity(self, db_run: JobRunModel) -> JobRun:
         """Convert database model to domain entity."""

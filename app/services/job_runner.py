@@ -179,6 +179,13 @@ class JobRunnerService:
         self, job: JobDefinition, job_run: JobRun, worker_id: str
     ) -> None:
         """Execute an export job."""
+        # Log job execution start
+        logger.info(
+            f"Job execution started: run_id={job_run.id}, job_id={job.id}, "
+            f"job_type=export, entity={job.export_config.entity.value if job.export_config else 'unknown'}, "
+            f"worker={worker_id}"
+        )
+
         if not job.export_config:
             raise ValueError("Export job missing export_config")
 
@@ -189,7 +196,10 @@ class JobRunnerService:
         count = result.get("count", len(records))
         fields = job.export_config.fields
 
-        logger.info(f"Export job {job.id} query completed: {count} records")
+        logger.info(
+            f"Export query completed: run_id={job_run.id}, record_count={count}, "
+            f"fields={len(fields)}"
+        )
 
         # Generate local file
         export_format = self.settings.export_file_format
@@ -218,7 +228,10 @@ class JobRunnerService:
                     local_file_path, remote_file_path, content_type=content_type
                 )
 
-                logger.info(f"Uploaded export file to cloud storage: {remote_file_path}")
+                logger.info(
+                    f"Export file uploaded to cloud storage: run_id={job_run.id}, "
+                    f"remote_path={remote_file_path}"
+                )
             except Exception as e:
                 logger.error(f"Failed to upload file to cloud storage: {e}", exc_info=True)
                 # Continue even if upload fails - file is still available locally
@@ -253,12 +266,24 @@ class JobRunnerService:
             result_metadata=result_metadata,
         )
 
-        logger.info(f"Export job {job.id} completed: {count} records exported to {export_format}")
+        # Log job execution completion
+        logger.info(
+            f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
+            f"status=succeeded, record_count={count}, format={export_format}, "
+            f"file_location={'cloud' if remote_file_path else 'local'}"
+        )
 
     async def _execute_import_job(
         self, job: JobDefinition, job_run: JobRun, worker_id: str
     ) -> None:
         """Execute an import job with detailed error reporting."""
+        # Log job execution start
+        logger.info(
+            f"Job execution started: run_id={job_run.id}, job_id={job.id}, "
+            f"job_type=import, entity={job.import_config.entity.value if job.import_config else 'unknown'}, "
+            f"worker={worker_id}"
+        )
+
         if not job.import_config:
             raise ValueError("Import job missing import_config")
 
@@ -269,7 +294,10 @@ class JobRunnerService:
             # Import from file (CSV or JSON)
             from app.infrastructure.storage.file_parser import FileParser
 
-            logger.info(f"Importing from file: {source_file}")
+            logger.info(
+                f"Import job processing file: run_id={job_run.id}, source_file={source_file}, "
+                f"entity={job.import_config.entity.value}"
+            )
 
             # Download file from cloud storage if needed
             local_file_path = source_file
@@ -372,9 +400,12 @@ class JobRunnerService:
                 else None,
             )
 
+            # Log job execution completion
             logger.info(
-                f"Import job {job.id} completed: {result.get('imported_count', 0)} created, "
-                f"{result.get('updated_count', 0)} updated, {result.get('failed_count', 0)} failed"
+                f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
+                f"status={'succeeded' if result.get('failed_count', 0) == 0 else 'failed'}, "
+                f"imported={result.get('imported_count', 0)}, updated={result.get('updated_count', 0)}, "
+                f"failed={result.get('failed_count', 0)}"
             )
         else:
             # Fallback: Fetch data from SaaS API (for backward compatibility)
@@ -400,7 +431,9 @@ class JobRunnerService:
                 result_metadata=result_metadata,
             )
 
+            # Log job execution completion
             logger.info(
-                f"Import job {job.id} completed: {result.get('imported_count', 0)} created, "
-                f"{result.get('updated_count', 0)} updated, {result.get('failed_count', 0)} failed"
+                f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
+                f"status=succeeded, imported={result.get('imported_count', 0)}, "
+                f"updated={result.get('updated_count', 0)}, failed={result.get('failed_count', 0)}"
             )
