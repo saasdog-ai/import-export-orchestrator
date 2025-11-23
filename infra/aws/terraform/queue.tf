@@ -28,7 +28,7 @@ resource "aws_sqs_queue" "job_runner" {
 resource "aws_sqs_queue" "job_runner_dlq" {
   name = "${var.project_name}-job-queue-dlq-${var.environment}"
 
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds = 1209600 # 14 days
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-job-queue-dlq-${var.environment}"

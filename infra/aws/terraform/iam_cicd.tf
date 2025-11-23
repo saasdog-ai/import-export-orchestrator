@@ -15,7 +15,7 @@ resource "aws_iam_openid_connect_provider" "github" {
   ]
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-github-oidc-${var.environment}"
+    Name    = "${var.project_name}-github-oidc-${var.environment}"
     Purpose = "GitHub Actions OIDC Provider"
   })
 }
@@ -48,7 +48,7 @@ resource "aws_iam_role" "cicd" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-cicd-role-${var.environment}"
+    Name    = "${var.project_name}-cicd-role-${var.environment}"
     Purpose = "CI/CD Deployment Role"
   })
 }
@@ -264,7 +264,7 @@ resource "aws_s3_bucket" "terraform_state" {
   bucket = "${var.project_name}-terraform-state-${var.environment}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-terraform-state-${var.environment}"
+    Name    = "${var.project_name}-terraform-state-${var.environment}"
     Purpose = "Terraform State Storage"
   })
 }
@@ -311,7 +311,7 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-terraform-state-lock-${var.environment}"
+    Name    = "${var.project_name}-terraform-state-lock-${var.environment}"
     Purpose = "Terraform State Locking"
   })
 }

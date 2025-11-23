@@ -55,7 +55,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "exports" {
     }
 
     expiration {
-      days = 365  # Delete files after 1 year
+      days = 365 # Delete files after 1 year
     }
   }
 }

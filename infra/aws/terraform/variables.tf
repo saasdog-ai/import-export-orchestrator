@@ -104,7 +104,7 @@ variable "s3_bucket_name" {
 variable "sqs_visibility_timeout" {
   description = "SQS visibility timeout in seconds (should be longer than longest job execution time)"
   type        = number
-  default     = 300  # 5 minutes
+  default     = 300 # 5 minutes
 }
 
 variable "sqs_receive_wait_time" {

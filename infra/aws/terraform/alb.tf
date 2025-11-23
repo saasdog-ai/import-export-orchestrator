@@ -2,7 +2,7 @@
 
 # ALB
 resource "aws_lb" "main" {
-  count              = var.enable_alb ? 1 : 0
+  count = var.enable_alb ? 1 : 0
   # ALB name must be <= 32 characters
   name               = substr("${var.project_name}-alb-${var.environment}", 0, 32)
   internal           = false
@@ -23,12 +23,12 @@ resource "aws_lb" "main" {
 
 # Target Group
 resource "aws_lb_target_group" "main" {
-  count    = var.enable_alb ? 1 : 0
+  count = var.enable_alb ? 1 : 0
   # Target group name must be <= 32 characters
-  name     = substr("${var.project_name}-tg-${var.environment}", 0, 32)
-  port     = 8000
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = substr("${var.project_name}-tg-${var.environment}", 0, 32)
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
   target_type = "ip"
 
   health_check {

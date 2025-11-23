@@ -13,7 +13,7 @@ resource "aws_ecr_repository" "app" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.project_name}-ecr-${var.environment}"
+    Name    = "${var.project_name}-ecr-${var.environment}"
     Purpose = "Container Image Storage"
   })
 }
