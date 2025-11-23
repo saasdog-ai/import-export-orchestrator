@@ -56,6 +56,7 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+        continue-on-error: false
 
       - name: Get ECR repository URI
         id: ecr-repo
@@ -93,20 +94,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Verify ECR access and permissions
+        run: |
+          echo "🔍 Verifying ECR access..."
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} || {
+            echo "❌ Failed to access ECR repository"
+            exit 1
+          }
+          echo "✅ ECR repository accessible"
+          
+          echo "🔍 Verifying ECR push permissions..."
+          aws ecr get-authorization-token --region ${{ env.AWS_REGION }} || {
+            echo "❌ Failed to get ECR authorization token"
+            exit 1
+          }
+          echo "✅ ECR push permissions verified"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         id: build
+        continue-on-error: false
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.ecr-repo.outputs.repository_uri }}:${{ steps.image-tag.outputs.tag }}
             ${{ steps.ecr-repo.outputs.repository_uri }}:latest
-          cache-from: type=registry,ref=${{ steps.ecr-repo.outputs.repository_uri }}:buildcache
-          cache-to: type=registry,ref=${{ steps.ecr-repo.outputs.repository_uri }}:buildcache,mode=max
           platforms: linux/amd64
-          # Start with single platform (amd64) to avoid multi-platform build issues
-          # Can add linux/arm64 later if needed for ARM-based instances
+          # Removed cache temporarily to debug exit code 254
+          # Will re-enable after confirming build works
+          # Removed build-args as they're not needed for basic build
 
       - name: Output image URI
         if: github.event_name != 'pull_request'
