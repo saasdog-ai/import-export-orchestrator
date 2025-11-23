@@ -96,6 +96,61 @@ jobs:
         working-directory: ./infra/aws/terraform
         run: terraform validate
 
+      - name: Import existing resources (if they exist)
+        working-directory: ./infra/aws/terraform
+        env:
+          TF_VAR_github_repository: ${{ github.repository }}
+          TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID || '429763994533' }}
+        continue-on-error: true
+        run: |
+          echo "🔍 Attempting to import existing resources..."
+          
+          # Get account ID from AWS if not provided
+          if [ -z "$AWS_ACCOUNT_ID" ]; then
+            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          fi
+          
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          PROJECT_NAME="import-export-orchestrator"
+          
+          # Import ECR repository
+          terraform import aws_ecr_repository.app $PROJECT_NAME 2>/dev/null || echo "⚠️  ECR repository already imported or doesn't exist"
+          
+          # Import IAM roles
+          terraform import aws_iam_role.ecs_task_execution ${PROJECT_NAME}-ecs-task-execution-${ENV} 2>/dev/null || echo "⚠️  ECS task execution role already imported or doesn't exist"
+          terraform import aws_iam_role.ecs_task ${PROJECT_NAME}-ecs-task-${ENV} 2>/dev/null || echo "⚠️  ECS task role already imported or doesn't exist"
+          
+          # Import CloudWatch log group
+          terraform import aws_cloudwatch_log_group.ecs /ecs/${PROJECT_NAME}-${ENV} 2>/dev/null || echo "⚠️  CloudWatch log group already imported or doesn't exist"
+          
+          # Import S3 buckets
+          terraform import aws_s3_bucket.exports ${PROJECT_NAME}-exports-${ENV}-${AWS_ACCOUNT_ID} 2>/dev/null || echo "⚠️  Exports S3 bucket already imported or doesn't exist"
+          terraform import aws_s3_bucket.terraform_state ${PROJECT_NAME}-terraform-state-${ENV}-${AWS_ACCOUNT_ID} 2>/dev/null || echo "⚠️  Terraform state S3 bucket already imported or doesn't exist"
+          
+          # Import DynamoDB table
+          terraform import aws_dynamodb_table.terraform_state_lock ${PROJECT_NAME}-terraform-state-lock-${ENV} 2>/dev/null || echo "⚠️  DynamoDB table already imported or doesn't exist"
+          
+          # Import RDS resources
+          terraform import aws_db_subnet_group.main ${PROJECT_NAME}-db-subnet-group-${ENV} 2>/dev/null || echo "⚠️  DB subnet group already imported or doesn't exist"
+          # Get the actual parameter group name (it may have a different format)
+          PARAM_GROUP_NAME=$(aws rds describe-db-parameter-groups --query "DBParameterGroups[?contains(DBParameterGroupName, '${PROJECT_NAME}') && contains(DBParameterGroupName, '${ENV}')].DBParameterGroupName" --output text 2>/dev/null | head -1)
+          if [ -n "$PARAM_GROUP_NAME" ]; then
+            terraform import aws_db_parameter_group.main $PARAM_GROUP_NAME 2>/dev/null || echo "⚠️  DB parameter group already imported or doesn't exist"
+          else
+            echo "⚠️  DB parameter group not found, will be created"
+          fi
+          
+          # Import OIDC provider (account-wide, may already exist)
+          OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null | head -1)
+          if [ -n "$OIDC_ARN" ]; then
+            terraform import aws_iam_openid_connect_provider.github $OIDC_ARN 2>/dev/null || echo "⚠️  OIDC provider already imported or doesn't exist"
+          else
+            echo "⚠️  OIDC provider not found, will be created"
+          fi
+          
+          echo "✅ Import step completed (some resources may not exist yet, which is fine)"
+
       - name: Terraform Plan
         working-directory: ./infra/aws/terraform
         env:
