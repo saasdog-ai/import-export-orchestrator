@@ -70,6 +70,8 @@ jobs:
           else
             echo "✅ terraform.tfvars already exists"
           fi
+          # Format the file to ensure it passes format check
+          terraform fmt terraform.tfvars
 
       - name: Terraform Init
         working-directory: ./infra/aws/terraform
@@ -80,7 +82,15 @@ jobs:
 
       - name: Terraform Format Check
         working-directory: ./infra/aws/terraform
-        run: terraform fmt -check
+        run: |
+          # Format check only .tf files (exclude .tfvars files)
+          # terraform.tfvars is generated and formatted in previous step
+          terraform fmt -check || {
+            echo "❌ Format check failed for .tf files"
+            echo "Run 'terraform fmt' to fix formatting issues"
+            exit 1
+          }
+          echo "✅ All Terraform files are properly formatted"
 
       - name: Terraform Validate
         working-directory: ./infra/aws/terraform
