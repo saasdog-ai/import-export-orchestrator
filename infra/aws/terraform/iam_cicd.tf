@@ -77,10 +77,16 @@ resource "aws_iam_role_policy" "cicd_terraform_state" {
       {
         Effect = "Allow"
         Action = [
+          "dynamodb:CreateTable",
+          "dynamodb:DeleteTable",
           "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:DeleteItem",
-          "dynamodb:DescribeTable"
+          "dynamodb:DescribeTable",
+          "dynamodb:ListTables",
+          "dynamodb:TagResource",
+          "dynamodb:UntagResource",
+          "dynamodb:ListTagsOfResource"
         ]
         Resource = aws_dynamodb_table.terraform_state_lock.arn
       }
@@ -104,6 +110,7 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ec2:DeleteVpc",
           "ec2:DescribeVpcs",
           "ec2:ModifyVpcAttribute",
+          "ec2:DescribeVpcAttribute",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeAccountAttributes",
           "ec2:DescribeRegions",
@@ -146,11 +153,17 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "rds:CreateDBParameterGroup",
           "rds:DeleteDBParameterGroup",
           "rds:DescribeDBParameterGroups",
+          "rds:AddTagsToResource",
+          "rds:RemoveTagsFromResource",
+          "rds:ListTagsForResource",
           # ECS
           "ecs:CreateCluster",
           "ecs:DeleteCluster",
           "ecs:DescribeClusters",
           "ecs:UpdateCluster",
+          "ecs:TagResource",
+          "ecs:UntagResource",
+          "ecs:ListTagsForResource",
           "ecs:CreateService",
           "ecs:DeleteService",
           "ecs:DescribeServices",
@@ -207,6 +220,9 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "sqs:SetQueueAttributes",
           "sqs:GetQueueUrl",
           "sqs:ListQueues",
+          "sqs:TagQueue",
+          "sqs:UntagQueue",
+          "sqs:ListQueueTags",
           # ELB/ALB
           "elasticloadbalancing:CreateLoadBalancer",
           "elasticloadbalancing:DeleteLoadBalancer",
@@ -223,6 +239,9 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "logs:DeleteLogGroup",
           "logs:DescribeLogGroups",
           "logs:PutRetentionPolicy",
+          "logs:TagResource",
+          "logs:UntagResource",
+          "logs:ListTagsForResource",
           # IAM (for creating roles and policies)
           "iam:CreateRole",
           "iam:DeleteRole",
@@ -241,6 +260,13 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "iam:ListPolicies",
           "iam:TagRole",
           "iam:UntagRole",
+          "iam:CreateOpenIDConnectProvider",
+          "iam:DeleteOpenIDConnectProvider",
+          "iam:GetOpenIDConnectProvider",
+          "iam:ListOpenIDConnectProviders",
+          "iam:TagOpenIDConnectProvider",
+          "iam:UntagOpenIDConnectProvider",
+          "iam:ListOpenIDConnectProviderTags",
           # Secrets Manager (for database passwords)
           "secretsmanager:CreateSecret",
           "secretsmanager:DeleteSecret",
