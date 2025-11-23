@@ -2,6 +2,7 @@
 
 # GitHub OIDC Provider
 # This allows GitHub Actions to assume IAM roles without storing long-lived credentials
+# Note: OIDC provider is account-wide, so we try to create it but it may already exist
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 
@@ -18,6 +19,11 @@ resource "aws_iam_openid_connect_provider" "github" {
     Name    = "${var.project_name}-github-oidc-${var.environment}"
     Purpose = "GitHub Actions OIDC Provider"
   })
+
+  # Ignore changes if provider already exists (account-wide resource)
+  lifecycle {
+    ignore_changes = [url, client_id_list, thumbprint_list]
+  }
 }
 
 # IAM Role for CI/CD (GitHub Actions)
@@ -117,6 +123,7 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ec2:CreateSubnet",
           "ec2:DeleteSubnet",
           "ec2:DescribeSubnets",
+          "ec2:ModifySubnetAttribute",
           "ec2:CreateInternetGateway",
           "ec2:DeleteInternetGateway",
           "ec2:AttachInternetGateway",
@@ -132,6 +139,7 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ec2:AllocateAddress",
           "ec2:ReleaseAddress",
           "ec2:DescribeAddresses",
+          "ec2:DescribeAddressesAttribute",
           "ec2:AssociateAddress",
           "ec2:DisassociateAddress",
           # Security Groups
@@ -234,6 +242,9 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "elasticloadbalancing:DeleteListener",
           "elasticloadbalancing:DescribeListeners",
           "elasticloadbalancing:ModifyLoadBalancerAttributes",
+          "elasticloadbalancing:AddTags",
+          "elasticloadbalancing:RemoveTags",
+          "elasticloadbalancing:DescribeTags",
           # CloudWatch Logs
           "logs:CreateLogGroup",
           "logs:DeleteLogGroup",
