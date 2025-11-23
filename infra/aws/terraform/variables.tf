@@ -119,6 +119,13 @@ variable "sqs_max_receive_count" {
   default     = 3
 }
 
+# GitHub Configuration (for OIDC)
+variable "github_repository" {
+  description = "GitHub repository in format 'owner/repo' (e.g., 'rajivskumar/import-export-orchestrator')"
+  type        = string
+  default     = ""
+}
+
 # Tags
 variable "common_tags" {
   description = "Common tags for all resources"

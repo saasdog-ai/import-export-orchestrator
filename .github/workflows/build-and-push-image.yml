@@ -1,0 +1,100 @@
+name: Build and Push Docker Image to ECR
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to push image for'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: import-export-orchestrator
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECR repository URI
+        id: ecr-repo
+        run: |
+          REPO_URI=$(aws ecr describe-repositories \
+            --repository-names ${{ env.ECR_REPOSITORY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'repositories[0].repositoryUri' \
+            --output text)
+          echo "repository_uri=$REPO_URI" >> $GITHUB_OUTPUT
+          echo "ECR Repository URI: $REPO_URI"
+
+      - name: Set image tag
+        id: image-tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Use tag name (e.g., v1.0.0)
+            IMAGE_TAG=${GITHUB_REF#refs/tags/}
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # Use PR number
+            IMAGE_TAG="pr-${{ github.event.pull_request.number }}"
+          else
+            # Use commit SHA (short)
+            IMAGE_TAG=${GITHUB_SHA::8}
+          fi
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "Image tag: $IMAGE_TAG"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.ecr-repo.outputs.repository_uri }}:${{ steps.image-tag.outputs.tag }}
+            ${{ steps.ecr-repo.outputs.repository_uri }}:latest
+          cache-from: type=registry,ref=${{ steps.ecr-repo.outputs.repository_uri }}:buildcache
+          cache-to: type=registry,ref=${{ steps.ecr-repo.outputs.repository_uri }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Output image URI
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "✅ Image pushed successfully!"
+          echo "Image URI: ${{ steps.ecr-repo.outputs.repository_uri }}:${{ steps.image-tag.outputs.tag }}"
+          echo "Latest tag: ${{ steps.ecr-repo.outputs.repository_uri }}:latest"
+          echo ""
+          echo "To use this image in Terraform, update terraform.tfvars:"
+          echo "container_image = \"${{ steps.ecr-repo.outputs.repository_uri }}:${{ steps.image-tag.outputs.tag }}\""
+

@@ -10,13 +10,14 @@ terraform {
   }
 
   # Backend configuration (use S3 + DynamoDB for state locking)
-  # Uncomment and configure when setting up remote state
+  # This will be configured after the first terraform apply creates the bucket
+  # For initial setup, use local state, then migrate to remote state
   # backend "s3" {
-  #   bucket         = "your-terraform-state-bucket"
-  #   key            = "import-export-orchestrator/terraform.tfstate"
+  #   bucket         = "import-export-orchestrator-terraform-state-{env}-{account-id}"
+  #   key            = "terraform.tfstate"
   #   region         = "us-east-1"
   #   encrypt        = true
-  #   dynamodb_table = "terraform-state-lock"
+  #   dynamodb_table = "import-export-orchestrator-terraform-state-lock-{env}"
   # }
 }
 

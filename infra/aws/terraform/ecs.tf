@@ -65,56 +65,7 @@ resource "aws_iam_role" "ecs_task" {
   tags = var.common_tags
 }
 
-# IAM Policy for S3 access (read/write export files)
-resource "aws_iam_role_policy" "ecs_task_s3" {
-  name = "${var.project_name}-ecs-task-s3-${var.environment}"
-  role = aws_iam_role.ecs_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.exports.arn,
-          "${aws_s3_bucket.exports.arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# IAM Policy for SQS access (send/receive/delete messages)
-resource "aws_iam_role_policy" "ecs_task_sqs" {
-  name = "${var.project_name}-ecs-task-sqs-${var.environment}"
-  role = aws_iam_role.ecs_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = [
-          aws_sqs_queue.job_runner.arn,
-          aws_sqs_queue.job_runner_dlq.arn
-        ]
-      }
-    ]
-  })
-}
+# Note: S3 and SQS policies are now defined in iam_app.tf for better organization
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "main" {
@@ -214,16 +165,23 @@ resource "aws_ecs_service" "main" {
     assign_public_ip = false
   }
 
-  load_balancer {
-    target_group_arn = var.enable_alb ? aws_lb_target_group.main[0].arn : null
-    container_name   = "${var.project_name}-app"
-    container_port   = 8000
+  # Only add load balancer if ALB is enabled
+  dynamic "load_balancer" {
+    for_each = var.enable_alb ? [1] : []
+    content {
+      target_group_arn = aws_lb_target_group.main[0].arn
+      container_name   = "${var.project_name}-app"
+      container_port   = 8000
+    }
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.ecs_task_execution,
-    var.enable_alb ? aws_lb_listener.main[0] : null
+    aws_iam_role_policy_attachment.ecs_task_execution
   ]
+
+  # Conditionally depend on ALB listener if ALB is enabled
+  # Note: We can't use conditional in depends_on, so we'll use a dynamic block approach
+  # The load_balancer block above already handles the conditional
 
   tags = var.common_tags
 }

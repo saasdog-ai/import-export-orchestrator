@@ -46,6 +46,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "exports" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
+    # Apply to all objects in the bucket
+    filter {}
+
     transition {
       days          = 90
       storage_class = "GLACIER"

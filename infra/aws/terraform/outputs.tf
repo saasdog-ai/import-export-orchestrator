@@ -66,3 +66,5 @@ output "sqs_dlq_url" {
   value       = aws_sqs_queue.job_runner_dlq.url
 }
 
+# Note: ECR repository outputs are defined in ecr.tf
+
