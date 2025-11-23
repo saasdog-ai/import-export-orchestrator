@@ -133,13 +133,7 @@ jobs:
           
           # Import RDS resources
           terraform import aws_db_subnet_group.main ${PROJECT_NAME}-db-subnet-group-${ENV} 2>/dev/null || echo "⚠️  DB subnet group already imported or doesn't exist"
-          # Get the actual parameter group name (it may have a different format)
-          PARAM_GROUP_NAME=$(aws rds describe-db-parameter-groups --query "DBParameterGroups[?contains(DBParameterGroupName, '${PROJECT_NAME}') && contains(DBParameterGroupName, '${ENV}')].DBParameterGroupName" --output text 2>/dev/null | head -1)
-          if [ -n "$PARAM_GROUP_NAME" ]; then
-            terraform import aws_db_parameter_group.main $PARAM_GROUP_NAME 2>/dev/null || echo "⚠️  DB parameter group already imported or doesn't exist"
-          else
-            echo "⚠️  DB parameter group not found, will be created"
-          fi
+          terraform import aws_db_parameter_group.main ${PROJECT_NAME}-postgres-${ENV} 2>/dev/null || echo "⚠️  DB parameter group already imported or doesn't exist"
           
           # Import OIDC provider (account-wide, may already exist)
           OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null | head -1)
