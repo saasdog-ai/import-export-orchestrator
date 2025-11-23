@@ -36,11 +36,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate AWS_ROLE_ARN secret
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "❌ Error: AWS_ROLE_ARN secret is not set"
+            echo "Please configure it in: Settings → Secrets and variables → Actions"
+            echo "Or in: Settings → Environments → ${{ github.event.inputs.environment || 'dev' }} → Secrets"
+            exit 1
+          fi
+          echo "✅ AWS_ROLE_ARN secret is configured"
+
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-BuildPush-${{ github.run_id }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -54,8 +65,14 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query 'repositories[0].repositoryUri' \
             --output text)
+          if [ -z "$REPO_URI" ]; then
+            echo "❌ Error: ECR repository not found"
+            echo "Repository name: ${{ env.ECR_REPOSITORY }}"
+            echo "Region: ${{ env.AWS_REGION }}"
+            exit 1
+          fi
           echo "repository_uri=$REPO_URI" >> $GITHUB_OUTPUT
-          echo "ECR Repository URI: $REPO_URI"
+          echo "✅ ECR Repository URI: $REPO_URI"
 
       - name: Set image tag
         id: image-tag
@@ -78,6 +95,7 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
+        id: build
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
@@ -86,7 +104,9 @@ jobs:
             ${{ steps.ecr-repo.outputs.repository_uri }}:latest
           cache-from: type=registry,ref=${{ steps.ecr-repo.outputs.repository_uri }}:buildcache
           cache-to: type=registry,ref=${{ steps.ecr-repo.outputs.repository_uri }}:buildcache,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          # Start with single platform (amd64) to avoid multi-platform build issues
+          # Can add linux/arm64 later if needed for ARM-based instances
 
       - name: Output image URI
         if: github.event_name != 'pull_request'

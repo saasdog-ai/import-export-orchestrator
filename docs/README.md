@@ -18,6 +18,8 @@ This directory contains documentation for the Import/Export Orchestrator service
 ## Configuration
 
 - **[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md)** - Environment variable reference
+- **[GITHUB_SECRETS.md](./GITHUB_SECRETS.md)** - GitHub Actions secrets and variables setup
+- **[AWS_OIDC_AUTHENTICATION.md](./AWS_OIDC_AUTHENTICATION.md)** - How GitHub Actions authenticates to AWS without access keys
 
 ## Quick Links
 

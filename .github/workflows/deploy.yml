@@ -27,11 +27,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate AWS_ROLE_ARN secret
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "❌ Error: AWS_ROLE_ARN secret is not set"
+            echo "Please configure it in: Settings → Secrets and variables → Actions"
+            echo "Or in: Settings → Environments → ${{ github.event.inputs.environment || 'dev' }} → Secrets"
+            exit 1
+          fi
+          echo "✅ AWS_ROLE_ARN secret is configured"
+
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
+          role-session-name: GitHubActions-Deploy-${{ github.run_id }}
           # No access key or secret key needed - uses OIDC
 
       - name: Set up Terraform

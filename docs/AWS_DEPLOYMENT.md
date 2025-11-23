@@ -105,13 +105,33 @@ Copy the ARN (e.g., `arn:aws:iam::123456789012:role/import-export-orchestrator-c
 
 ### Step 6: Configure GitHub Secrets
 
-Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions**
+The workflows use **environment-specific secrets**. You need to create environments and add secrets to each one.
 
-Add the following secrets:
+#### 6.1 Create Environments (Optional but Recommended)
 
-1. **`AWS_ROLE_ARN`**: The CI/CD role ARN from Step 5
-2. **`DATABASE_PASSWORD`**: Your database password
-3. **`AWS_REGION`**: AWS region (e.g., `us-east-1`)
+1. Go to your GitHub repository → **Settings** → **Environments**
+2. Create environments: `dev`, `staging`, `prod` (or just `dev` for now)
+3. Optionally add protection rules (required reviewers, deployment branches)
+
+#### 6.2 Add Secrets to Each Environment
+
+For each environment (`dev`, `staging`, `prod`):
+
+1. Go to **Settings** → **Environments** → Select the environment (e.g., `dev`)
+2. Click **Add secret**
+3. Add the following secrets:
+
+   - **`AWS_ROLE_ARN`**: The CI/CD role ARN from Step 5
+     ```
+     arn:aws:iam::123456789012:role/import-export-orchestrator-cicd-role-dev
+     ```
+   
+   - **`DATABASE_PASSWORD`**: Your database password
+     ```
+     your-secure-password-here
+     ```
+
+**Note**: If you don't create environments, you can add secrets at the repository level (**Settings** → **Secrets and variables** → **Actions**), but environment-specific secrets are recommended for multi-environment deployments.
 
 ### Step 7: Build and Push Docker Image
 
