@@ -83,69 +83,46 @@ import_resource() {
     return 0
   fi
   
-  # Use -target to avoid validating entire configuration during import
-  # Use -input=false to prevent prompts
-  # Use -lock=false to avoid state locking issues during import
+  # Import WITHOUT -target to ensure state is properly written to backend
+  # Validation errors will occur, but we'll catch them and verify import succeeded
   local import_output
   if [ -n "$TIMEOUT_CMD" ]; then
-    import_output=$($TIMEOUT_CMD terraform import -target=$resource -input=false -lock=false $resource "$id" 2>&1)
+    import_output=$($TIMEOUT_CMD terraform import -input=false -lock=false $resource "$id" 2>&1)
   else
     # No timeout available, just run the command
-    import_output=$(terraform import -target=$resource -input=false -lock=false $resource "$id" 2>&1)
+    import_output=$(terraform import -input=false -lock=false $resource "$id" 2>&1)
   fi
   local import_exit=$?
   
-  # Check if import succeeded by looking for success indicators in output
-  # "Import prepared!" and "Refreshing state" indicate successful import
-  # even if Terraform exits with validation errors afterward
-  local import_succeeded=false
-  if echo "$import_output" | grep -qE "(Import prepared!|Refreshing state)"; then
-    import_succeeded=true
-    echo "    ℹ️  Import succeeded (detected from output), verifying state..."
-  fi
-  
-  # If exit code is 0, import definitely succeeded
-  if [ $import_exit -eq 0 ]; then
-    import_succeeded=true
-  fi
-  
-  # If import succeeded (even with validation errors), force state sync
-  if [ "$import_succeeded" = true ]; then
-    # Force state to be synced to remote backend
-    # Run a refresh-only plan to ensure state is written to backend
-    echo "    🔄 Forcing state sync to remote backend..."
-    terraform plan -target=$resource -refresh-only -input=false -lock=false -out=/dev/null >/dev/null 2>&1 || {
-      # If plan fails, try refresh as fallback
-      terraform refresh -target=$resource -lock=false -input=false >/dev/null 2>&1 || true
-    }
-    sleep 2  # Give backend time to sync
-    
-    # Try to verify resource is in state
+  # Check for success indicators - these mean import succeeded regardless of exit code
+  if echo "$import_output" | grep -qE "(Import prepared!|Refreshing state|aws_.*: Importing from ID)"; then
+    # Import succeeded - verify it's in state
+    sleep 1
     if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
       echo "    ✅ $name imported successfully"
       return 0
     fi
-    
-    # If not in state list, try state show (more reliable for single resources)
+    # If not in list, try state show
     if terraform state show "$resource" >/dev/null 2>&1; then
-      echo "    ✅ $name imported successfully (verified via state show)"
+      echo "    ✅ $name imported successfully"
       return 0
     fi
-    
-    # Even if verification fails, if we saw "Import prepared!" or "Refreshing state",
-    # the import definitely succeeded. Force one more state operation to trigger sync
-    echo "    ⚠️  Import succeeded, performing final state sync..."
-    terraform state list >/dev/null 2>&1 || true  # This should trigger state sync
-    echo "    ✅ $name import completed"
-    return 0
   fi
   
-  # If we get here, import likely failed
-  # Check for validation errors that might have occurred after successful import
+  # If exit code is 0, import definitely succeeded
+  if [ $import_exit -eq 0 ]; then
+    if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+      echo "    ✅ $name imported successfully"
+      return 0
+    fi
+  fi
+  
+  # Check for validation errors that occur AFTER successful import
+  # These don't prevent the import from succeeding
   if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
-    # These are validation errors - check if resource is actually in state
-    sleep 2
-    if terraform state show "$resource" >/dev/null 2>&1 || terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+    # Validation error occurred - check if import actually succeeded
+    sleep 1
+    if terraform state list 2>/dev/null | grep -q "^${resource}$" || terraform state show "$resource" >/dev/null 2>&1; then
       echo "    ✅ $name imported (validation errors ignored)"
       return 0
     fi
@@ -181,6 +158,14 @@ if [ -n "$OIDC_ARN" ]; then
 else
   echo "    ⚠️  OIDC provider not found, will be created"
 fi
+
+# Force final state sync by running terraform plan
+echo ""
+echo "🔄 Performing final state sync to remote backend..."
+echo "  Running terraform plan to sync state (validation errors are expected)..."
+terraform plan -input=false -lock=false -out=/dev/null >/dev/null 2>&1 || {
+  echo "  Plan completed (validation errors are expected and can be ignored)"
+}
 
 # Verify what was actually imported
 echo ""
