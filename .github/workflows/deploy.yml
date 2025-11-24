@@ -102,48 +102,49 @@ jobs:
           TF_VAR_github_repository: ${{ github.repository }}
           TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID || '429763994533' }}
+        timeout-minutes: 2
         continue-on-error: true
         run: |
-          echo "🔍 Attempting to import existing resources..."
+          echo "🔍 Attempting to import existing resources (timeout: 2 minutes)..."
           
-          # Get account ID from AWS if not provided
+          # Get account ID from AWS if not provided (with timeout)
           if [ -z "$AWS_ACCOUNT_ID" ]; then
-            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            AWS_ACCOUNT_ID=$(timeout 10 aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "429763994533")
           fi
           
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           PROJECT_NAME="import-export-orchestrator"
           
-          # Import ECR repository
-          terraform import aws_ecr_repository.app $PROJECT_NAME 2>/dev/null || echo "⚠️  ECR repository already imported or doesn't exist"
+          # Function to import with timeout
+          import_resource() {
+            local resource=$1
+            local id=$2
+            local name=$3
+            echo "  → Importing $name..."
+            timeout 15 terraform import $resource "$id" 2>&1 | grep -v "Warning:" || echo "    ⚠️  $name already imported or doesn't exist"
+          }
           
-          # Import IAM roles
-          terraform import aws_iam_role.ecs_task_execution ${PROJECT_NAME}-ecs-task-execution-${ENV} 2>/dev/null || echo "⚠️  ECS task execution role already imported or doesn't exist"
-          terraform import aws_iam_role.ecs_task ${PROJECT_NAME}-ecs-task-${ENV} 2>/dev/null || echo "⚠️  ECS task role already imported or doesn't exist"
+          # Import resources with timeouts (run sequentially to avoid state conflicts)
+          import_resource "aws_ecr_repository.app" "$PROJECT_NAME" "ECR repository"
+          import_resource "aws_iam_role.ecs_task_execution" "${PROJECT_NAME}-ecs-task-execution-${ENV}" "ECS task execution role"
+          import_resource "aws_iam_role.ecs_task" "${PROJECT_NAME}-ecs-task-${ENV}" "ECS task role"
+          import_resource "aws_cloudwatch_log_group.ecs" "/ecs/${PROJECT_NAME}-${ENV}" "CloudWatch log group"
+          import_resource "aws_s3_bucket.exports" "${PROJECT_NAME}-exports-${ENV}-${AWS_ACCOUNT_ID}" "Exports S3 bucket"
+          import_resource "aws_s3_bucket.terraform_state" "${PROJECT_NAME}-terraform-state-${ENV}-${AWS_ACCOUNT_ID}" "Terraform state S3 bucket"
+          import_resource "aws_dynamodb_table.terraform_state_lock" "${PROJECT_NAME}-terraform-state-lock-${ENV}" "DynamoDB table"
+          import_resource "aws_db_subnet_group.main" "${PROJECT_NAME}-db-subnet-group-${ENV}" "DB subnet group"
+          import_resource "aws_db_parameter_group.main" "${PROJECT_NAME}-postgres-${ENV}" "DB parameter group"
           
-          # Import CloudWatch log group
-          terraform import aws_cloudwatch_log_group.ecs /ecs/${PROJECT_NAME}-${ENV} 2>/dev/null || echo "⚠️  CloudWatch log group already imported or doesn't exist"
-          
-          # Import S3 buckets
-          terraform import aws_s3_bucket.exports ${PROJECT_NAME}-exports-${ENV}-${AWS_ACCOUNT_ID} 2>/dev/null || echo "⚠️  Exports S3 bucket already imported or doesn't exist"
-          terraform import aws_s3_bucket.terraform_state ${PROJECT_NAME}-terraform-state-${ENV}-${AWS_ACCOUNT_ID} 2>/dev/null || echo "⚠️  Terraform state S3 bucket already imported or doesn't exist"
-          
-          # Import DynamoDB table
-          terraform import aws_dynamodb_table.terraform_state_lock ${PROJECT_NAME}-terraform-state-lock-${ENV} 2>/dev/null || echo "⚠️  DynamoDB table already imported or doesn't exist"
-          
-          # Import RDS resources
-          terraform import aws_db_subnet_group.main ${PROJECT_NAME}-db-subnet-group-${ENV} 2>/dev/null || echo "⚠️  DB subnet group already imported or doesn't exist"
-          terraform import aws_db_parameter_group.main ${PROJECT_NAME}-postgres-${ENV} 2>/dev/null || echo "⚠️  DB parameter group already imported or doesn't exist"
-          
-          # Import OIDC provider (account-wide, may already exist)
-          OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null | head -1)
+          # Import OIDC provider (with timeout)
+          echo "  → Checking for OIDC provider..."
+          OIDC_ARN=$(timeout 10 aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null | head -1)
           if [ -n "$OIDC_ARN" ]; then
-            terraform import aws_iam_openid_connect_provider.github $OIDC_ARN 2>/dev/null || echo "⚠️  OIDC provider already imported or doesn't exist"
+            import_resource "aws_iam_openid_connect_provider.github" "$OIDC_ARN" "OIDC provider"
           else
-            echo "⚠️  OIDC provider not found, will be created"
+            echo "    ⚠️  OIDC provider not found, will be created"
           fi
           
-          echo "✅ Import step completed (some resources may not exist yet, which is fine)"
+          echo "✅ Import step completed"
 
       - name: Terraform Plan
         working-directory: ./infra/aws/terraform
