@@ -11,8 +11,12 @@ resource "aws_iam_openid_connect_provider" "github" {
   ]
 
   thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1", # GitHub's OIDC thumbprint
-    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"  # Backup thumbprint
+    # These are PUBLIC certificate thumbprints (hashes), NOT secrets
+    # They're used to verify GitHub's OIDC provider identity
+    # Safe to store in code - they're public information published by GitHub
+    # See: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
+    "6938fd4d98bab03faadb97b34396831e3780aea1", # GitHub's OIDC thumbprint (primary)
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"  # GitHub's OIDC thumbprint (backup)
   ]
 
   tags = merge(var.common_tags, {
