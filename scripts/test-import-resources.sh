@@ -54,6 +54,14 @@ fi
 echo "Initializing Terraform..."
 terraform init >/dev/null 2>&1 || terraform init
 
+# Detect timeout command (macOS doesn't have timeout by default)
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout 15"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout 15"
+fi
+
 # Function to import with better error handling
 import_resource() {
   local resource=$1
@@ -70,7 +78,12 @@ import_resource() {
   # Use -target to avoid validating entire configuration during import
   # Use -input=false to prevent prompts
   local import_output
-  import_output=$(timeout 15 terraform import -target=$resource -input=false $resource "$id" 2>&1)
+  if [ -n "$TIMEOUT_CMD" ]; then
+    import_output=$($TIMEOUT_CMD terraform import -target=$resource -input=false $resource "$id" 2>&1)
+  else
+    # No timeout available, just run the command
+    import_output=$(terraform import -target=$resource -input=false $resource "$id" 2>&1)
+  fi
   local import_exit=$?
   
   if [ $import_exit -eq 0 ]; then

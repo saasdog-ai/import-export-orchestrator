@@ -62,6 +62,7 @@ dmypy.json
 .terraform.lock.hcl
 *.tfvars
 !terraform.tfvars.example
+*.tfplan
 
 # Secrets
 secrets/
