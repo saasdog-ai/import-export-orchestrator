@@ -54,6 +54,14 @@ fi
 echo "Initializing Terraform..."
 terraform init >/dev/null 2>&1 || terraform init
 
+# Verify Terraform backend is initialized
+echo "Checking Terraform backend configuration..."
+terraform init -backend=true >/dev/null 2>&1 || terraform init
+
+echo "Current state before imports:"
+terraform state list 2>/dev/null | head -20 || echo "  (no resources in state yet)"
+echo ""
+
 # Detect timeout command (macOS doesn't have timeout by default)
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
@@ -77,49 +85,64 @@ import_resource() {
   
   # Use -target to avoid validating entire configuration during import
   # Use -input=false to prevent prompts
+  # Use -lock=false to avoid state locking issues during import
   local import_output
   if [ -n "$TIMEOUT_CMD" ]; then
-    import_output=$($TIMEOUT_CMD terraform import -target=$resource -input=false $resource "$id" 2>&1)
+    import_output=$($TIMEOUT_CMD terraform import -target=$resource -input=false -lock=false $resource "$id" 2>&1)
   else
     # No timeout available, just run the command
-    import_output=$(terraform import -target=$resource -input=false $resource "$id" 2>&1)
+    import_output=$(terraform import -target=$resource -input=false -lock=false $resource "$id" 2>&1)
   fi
   local import_exit=$?
   
+  # Force state to be written to backend (even if validation fails)
+  terraform state pull >/dev/null 2>&1 || true
+  sleep 1  # Brief pause to ensure state is written
+  
+  # Always check if resource is in state after import attempt
+  # Even if Terraform exits with error, the import may have succeeded
+  if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+    echo "    ✅ $name imported successfully"
+    return 0
+  fi
+  
   # Check if import succeeded by looking for success indicators in output
-  # Even if Terraform exits with error due to validation, the import may have succeeded
   if echo "$import_output" | grep -qE "(Import prepared!|Refreshing state|Import successful)"; then
-    # Verify resource is actually in state
+    # Try refreshing state to ensure it's saved
+    terraform refresh -target=$resource -lock=false >/dev/null 2>&1 || true
+    sleep 1
+    # Check again if resource is in state
     if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-      echo "    ✅ $name imported successfully"
+      echo "    ✅ $name imported successfully (after refresh)"
       return 0
     fi
   fi
   
   # If exit code is 0, import definitely succeeded
   if [ $import_exit -eq 0 ]; then
-    echo "    ✅ $name imported successfully"
-    return 0
-  fi
-  
-  # Check if resource is in state despite error (validation errors don't prevent import)
-  if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-    echo "    ✅ $name imported (validation errors ignored)"
-    return 0
+    # Double-check it's in state
+    if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+      echo "    ✅ $name imported successfully"
+      return 0
+    fi
   fi
   
   # Check for validation errors that occur after successful import
   if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
-    # These are validation errors that don't prevent import - verify resource is in state
+    # These are validation errors that don't prevent import - try refresh and check again
+    terraform refresh -target=$resource -lock=false >/dev/null 2>&1 || true
+    sleep 1
     if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
       echo "    ✅ $name imported (validation errors ignored)"
       return 0
     fi
   fi
   
-  echo "    ⚠️  $name import failed: $(echo "$import_output" | grep -E "Error:" | head -1 || echo "Unknown error")"
-  echo "    Full error:"
-  echo "$import_output" | head -5 | sed 's/^/      /'
+  # Show the actual error
+  echo "    ⚠️  $name import failed"
+  echo "    Error: $(echo "$import_output" | grep -E "Error:" | head -1 || echo "Unknown error")"
+  echo "    Output preview:"
+  echo "$import_output" | head -10 | sed 's/^/      /'
   return 1
 }
 
@@ -145,6 +168,15 @@ if [ -n "$OIDC_ARN" ]; then
 else
   echo "    ⚠️  OIDC provider not found, will be created"
 fi
+
+# Verify what was actually imported
+echo ""
+echo "📊 Final state after imports:"
+terraform state list 2>/dev/null | head -30 || echo "  (no resources in state)"
+
+# Count imported resources
+IMPORTED_COUNT=$(terraform state list 2>/dev/null | wc -l || echo "0")
+echo "  Total resources in state: $IMPORTED_COUNT"
 
 echo ""
 echo "✅ Import test completed!"

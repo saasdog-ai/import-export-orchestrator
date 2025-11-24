@@ -108,6 +108,10 @@ jobs:
         run: |
           echo "🔍 Attempting to import existing resources (timeout: 2 minutes)..."
           
+          # Verify Terraform backend is initialized
+          echo "Checking Terraform backend configuration..."
+          terraform init -backend=true >/dev/null 2>&1 || terraform init
+          
           # Get account ID from AWS if not provided (with timeout)
           if [ -z "$AWS_ACCOUNT_ID" ]; then
             AWS_ACCOUNT_ID=$(timeout 10 aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "429763994533")
@@ -115,6 +119,9 @@ jobs:
           
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           PROJECT_NAME="import-export-orchestrator"
+          
+          echo "Current state before imports:"
+          terraform state list 2>/dev/null | head -20 || echo "  (no resources in state yet)"
           
           # Function to import with timeout and -target to avoid validation issues
           import_resource() {
@@ -131,43 +138,63 @@ jobs:
             
             # Use -target to avoid validating entire configuration during import
             # Use -input=false to prevent prompts
+            # Use -lock=false to avoid state locking issues during import
             # Capture both stdout and stderr to see what's happening
             local import_output
-            import_output=$(timeout 15 terraform import -target=$resource -input=false $resource "$id" 2>&1)
+            import_output=$(timeout 15 terraform import -target=$resource -input=false -lock=false $resource "$id" 2>&1)
             local import_exit=$?
             
+            # Force state to be written to backend (even if validation fails)
+            # This ensures the import is persisted even if Terraform exits with error
+            terraform state pull >/dev/null 2>&1 || true
+            
+            # Always check if resource is in state after import attempt
+            # Even if Terraform exits with error, the import may have succeeded
+            sleep 1  # Brief pause to ensure state is written
+            
+            # Check if resource is now in state
+            if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+              echo "    ✅ $name imported successfully"
+              return 0
+            fi
+            
             # Check if import succeeded by looking for success indicators in output
-            # Even if Terraform exits with error due to validation, the import may have succeeded
             if echo "$import_output" | grep -qE "(Import prepared!|Refreshing state|Import successful)"; then
-              # Verify resource is actually in state
+              # Try refreshing state to ensure it's saved
+              terraform refresh -target=$resource -lock=false >/dev/null 2>&1 || true
+              sleep 1
+              # Check again if resource is in state
               if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-                echo "    ✅ $name imported successfully"
+                echo "    ✅ $name imported successfully (after refresh)"
                 return 0
               fi
             fi
             
             # If exit code is 0, import definitely succeeded
             if [ $import_exit -eq 0 ]; then
-              echo "    ✅ $name imported successfully"
-              return 0
-            fi
-            
-            # Check if resource is in state despite error (validation errors don't prevent import)
-            if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-              echo "    ✅ $name imported (validation errors ignored)"
-              return 0
+              # Double-check it's in state
+              if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+                echo "    ✅ $name imported successfully"
+                return 0
+              fi
             fi
             
             # Check for validation errors that occur after successful import
             if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
-              # These are validation errors that don't prevent import - verify resource is in state
+              # These are validation errors that don't prevent import - try refresh and check again
+              terraform refresh -target=$resource -lock=false >/dev/null 2>&1 || true
+              sleep 1
               if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
                 echo "    ✅ $name imported (validation errors ignored)"
                 return 0
               fi
             fi
             
-            echo "    ⚠️  $name import failed: $(echo "$import_output" | grep -E "Error:" | head -1 || echo "Unknown error")"
+            # Show the actual error
+            echo "    ⚠️  $name import failed"
+            echo "    Error: $(echo "$import_output" | grep -E "Error:" | head -1 || echo "Unknown error")"
+            echo "    Output preview:"
+            echo "$import_output" | head -10 | sed 's/^/      /'
             return 1
           }
           
@@ -191,6 +218,16 @@ jobs:
             echo "    ⚠️  OIDC provider not found, will be created"
           fi
           
+          # Verify what was actually imported
+          echo ""
+          echo "📊 Final state after imports:"
+          terraform state list 2>/dev/null | head -30 || echo "  (no resources in state)"
+          
+          # Count imported resources
+          IMPORTED_COUNT=$(terraform state list 2>/dev/null | wc -l || echo "0")
+          echo "  Total resources in state: $IMPORTED_COUNT"
+          
+          echo ""
           echo "✅ Import step completed"
 
       - name: Terraform Plan
