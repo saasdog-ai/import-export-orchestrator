@@ -108,3 +108,4 @@ exported_*.json
 
 # Example/test scripts (now in scripts/examples/)
 # These are kept in the repo for reference but are not part of the main application
+.secrets
