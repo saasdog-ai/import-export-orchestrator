@@ -69,8 +69,8 @@ import_resource() {
   local name=$3
   echo "  → Importing $name..."
   
-  # Check if resource already exists in state
-  if terraform state show $resource >/dev/null 2>&1; then
+  # Check if resource already exists in state (ignore "No state file" errors)
+  if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
     echo "    ✅ $name already in state, skipping"
     return 0
   fi
@@ -86,29 +86,41 @@ import_resource() {
   fi
   local import_exit=$?
   
+  # Check if import succeeded by looking for success indicators in output
+  # Even if Terraform exits with error due to validation, the import may have succeeded
+  if echo "$import_output" | grep -qE "(Import prepared!|Refreshing state|Import successful)"; then
+    # Verify resource is actually in state
+    if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+      echo "    ✅ $name imported successfully"
+      return 0
+    fi
+  fi
+  
+  # If exit code is 0, import definitely succeeded
   if [ $import_exit -eq 0 ]; then
     echo "    ✅ $name imported successfully"
     return 0
-  else
-    # Check if import actually succeeded (sometimes validation errors occur after successful import)
-    if terraform state show $resource >/dev/null 2>&1; then
-      echo "    ✅ $name imported (validation warnings ignored)"
+  fi
+  
+  # Check if resource is in state despite error (validation errors don't prevent import)
+  if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+    echo "    ✅ $name imported (validation errors ignored)"
+    return 0
+  fi
+  
+  # Check for validation errors that occur after successful import
+  if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
+    # These are validation errors that don't prevent import - verify resource is in state
+    if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+      echo "    ✅ $name imported (validation errors ignored)"
       return 0
-    else
-      # Filter out common non-critical errors
-      if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
-        # These are validation errors that don't prevent import
-        if terraform state show $resource >/dev/null 2>&1; then
-          echo "    ✅ $name imported (validation errors ignored)"
-          return 0
-        fi
-      fi
-      echo "    ⚠️  $name import failed: $(echo "$import_output" | head -1)"
-      echo "    Full error:"
-      echo "$import_output" | head -5 | sed 's/^/      /'
-      return 1
     fi
   fi
+  
+  echo "    ⚠️  $name import failed: $(echo "$import_output" | grep -E "Error:" | head -1 || echo "Unknown error")"
+  echo "    Full error:"
+  echo "$import_output" | head -5 | sed 's/^/      /'
+  return 1
 }
 
 # Import resources
