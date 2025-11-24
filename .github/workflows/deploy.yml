@@ -99,6 +99,7 @@ jobs:
       - name: Import existing resources (if they exist)
         working-directory: ./infra/aws/terraform
         env:
+          TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
           TF_VAR_github_repository: ${{ github.repository }}
           TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID || '429763994533' }}
