@@ -122,17 +122,39 @@ jobs:
             local id=$2
             local name=$3
             echo "  → Importing $name..."
+            
+            # Check if resource already exists in state
+            if terraform state show $resource >/dev/null 2>&1; then
+              echo "    ✅ $name already in state, skipping"
+              return 0
+            fi
+            
             # Use -target to avoid validating entire configuration during import
             # Use -input=false to prevent prompts
-            # Redirect stderr to capture errors but allow import to succeed
-            if timeout 15 terraform import -target=$resource -input=false $resource "$id" >/dev/null 2>&1; then
+            # Capture both stdout and stderr to see what's happening
+            local import_output
+            import_output=$(timeout 15 terraform import -target=$resource -input=false $resource "$id" 2>&1)
+            local import_exit=$?
+            
+            if [ $import_exit -eq 0 ]; then
               echo "    ✅ $name imported successfully"
+              return 0
             else
-              # Check if resource is already in state (import might have succeeded despite validation errors)
+              # Check if import actually succeeded (sometimes validation errors occur after successful import)
               if terraform state show $resource >/dev/null 2>&1; then
-                echo "    ✅ $name already in state"
+                echo "    ✅ $name imported (validation warnings ignored)"
+                return 0
               else
-                echo "    ⚠️  $name import failed or doesn't exist (this is OK)"
+                # Filter out common non-critical errors
+                if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
+                  # These are validation errors that don't prevent import
+                  if terraform state show $resource >/dev/null 2>&1; then
+                    echo "    ✅ $name imported (validation errors ignored)"
+                    return 0
+                  fi
+                fi
+                echo "    ⚠️  $name import failed: $(echo "$import_output" | head -1)"
+                return 1
               fi
             fi
           }
