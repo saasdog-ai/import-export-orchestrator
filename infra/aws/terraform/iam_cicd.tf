@@ -225,6 +225,8 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "s3:PutBucketEncryption",
           "s3:GetEncryption",
           "s3:PutEncryption",
+          "s3:GetEncryptionConfiguration",
+          "s3:PutEncryptionConfiguration",
           "s3:GetBucketPublicAccessBlock",
           "s3:PutBucketPublicAccessBlock",
           "s3:GetPublicAccessBlock",
