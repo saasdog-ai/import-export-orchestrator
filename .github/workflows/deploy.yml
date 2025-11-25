@@ -43,7 +43,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
           role-session-name: GitHubActions-Deploy-${{ github.run_id }}
-          # No access key or secret key needed - uses OIDC
+          # Uses GitHub OIDC, no static AWS keys required
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -70,7 +70,7 @@ jobs:
           else
             echo "✅ terraform.tfvars already exists"
           fi
-          # Format the file to ensure it passes format check
+          # Keep the example file format, but ensure the generated file is formatted
           terraform fmt terraform.tfvars
 
       - name: Terraform Init
@@ -83,6 +83,7 @@ jobs:
           # Configure backend for remote state (S3 + DynamoDB)
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           ACCOUNT_ID="${AWS_ACCOUNT_ID:-429763994533}"
+
           terraform init \
             -backend-config="bucket=import-export-orchestrator-terraform-state-${ENV}-${ACCOUNT_ID}" \
             -backend-config="key=terraform.tfstate" \
@@ -94,7 +95,6 @@ jobs:
         working-directory: ./infra/aws/terraform
         run: |
           # Format check only .tf files (exclude .tfvars files)
-          # terraform.tfvars is generated and formatted in previous step
           terraform fmt -check || {
             echo "❌ Format check failed for .tf files"
             echo "Run 'terraform fmt' to fix formatting issues"
@@ -106,248 +106,31 @@ jobs:
         working-directory: ./infra/aws/terraform
         run: terraform validate
 
-      - name: Import, Plan, and Apply Terraform
+      - name: Terraform Plan
         working-directory: ./infra/aws/terraform
         env:
           TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
           TF_VAR_github_repository: ${{ github.repository }}
           TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID || '429763994533' }}
         run: |
-          # Don't exit on error - we want to continue even if some imports fail
-          set +e
-          
-          # Step 1: Import existing resources (if they exist)
-          echo "🔍 Step 1: Attempting to import existing resources..."
-          
-          # Get account ID from AWS if not provided (with timeout)
-          if [ -z "$AWS_ACCOUNT_ID" ]; then
-            AWS_ACCOUNT_ID=$(timeout 10 aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "429763994533")
-          fi
-          
-          ENV="${{ github.event.inputs.environment || 'dev' }}"
-          PROJECT_NAME="import-export-orchestrator"
-          
-          # NOTE: We skip automatic imports because they don't reliably sync to remote backend
-          # when validation errors occur. Instead, we rely on on-demand imports in the
-          # retry logic when apply fails with "already exists" errors.
-          # 
-          # This is a known Terraform limitation: imports write to local cache first,
-          # and only sync to remote backend when the command completes successfully.
-          # Validation errors can prevent state sync.
-          #
-          # The retry logic will import resources on-demand when needed.
-          echo "📋 Step 1: Checking current state..."
-          echo "Current state:"
-          terraform state list 2>/dev/null | head -20 || echo "  (no resources in state yet - this is normal for first run)"
-          echo ""
-          echo "ℹ️  Automatic imports skipped (will import on-demand if needed)"
-          echo ""
-          
-          # Import function for on-demand use (called during retry)
-          import_resource() {
-            local resource=$1
-            local id=$2
-            local name=$3
-            echo "  → Importing $name..."
-            
-            # Check if resource already exists in state
-            if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-              echo "    ✅ $name already in state, skipping"
-              return 0
-            fi
-            
-            # Import the resource
-            # We'll use a background process to force state sync immediately after import
-            # This ensures state is written even if Terraform exits with validation errors
-            local import_output
-            import_output=$(timeout 15 terraform import -input=false -lock=false $resource "$id" 2>&1)
-            local import_exit=$?
-            
-            # IMMEDIATELY force state sync by running state operations
-            # This must happen before Terraform's validation phase completes
-            # Run these in background to ensure they execute even if import exits with error
-            (terraform state list >/dev/null 2>&1; terraform state show "$resource" >/dev/null 2>&1; terraform state pull >/dev/null 2>&1) &
-            local sync_pid=$!
-            
-            # Check for success indicators
-            local import_succeeded=false
-            if echo "$import_output" | grep -qE "(Import prepared!|Refreshing state|aws_.*: Importing from ID)"; then
-              import_succeeded=true
-            fi
-            
-            if [ $import_exit -eq 0 ]; then
-              import_succeeded=true
-            fi
-            
-            # Wait for state sync to complete
-            wait $sync_pid 2>/dev/null || true
-            sleep 3  # Give backend time to sync
-            
-            # Verify resource is in state
-            if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-              echo "    ✅ $name imported successfully"
-              return 0
-            fi
-            
-            if terraform state show "$resource" >/dev/null 2>&1; then
-              echo "    ✅ $name imported successfully"
-              return 0
-            fi
-            
-            # If we saw success indicators but can't verify, try one more sync
-            if [ "$import_succeeded" = true ]; then
-              terraform state pull >/dev/null 2>&1 || true
-              terraform refresh -target=$resource -lock=false -input=false >/dev/null 2>&1 || true
-              sleep 2
-              
-              if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-                echo "    ✅ $name imported successfully (after sync)"
-                return 0
-              fi
-              
-              # If we saw success indicators, the import likely succeeded
-              # State might not be visible yet but will be available for plan
-              echo "    ⚠️  $name import completed (state sync pending)"
-              return 0
-            fi
-            
-            # Check for validation errors
-            if echo "$import_output" | grep -qE "(Error: Invalid count|Error: reading.*policy|Error: reading.*backups|Error: reading.*parameters)"; then
-              # Validation errors occurred - check if import actually succeeded
-              terraform state pull >/dev/null 2>&1 || true
-              sleep 2
-              
-              if terraform state list 2>/dev/null | grep -q "^${resource}$" || terraform state show "$resource" >/dev/null 2>&1; then
-                echo "    ✅ $name imported (validation errors ignored)"
-                return 0
-              fi
-            fi
-            
-            # Import failed - show full output for debugging
-            echo "    ⚠️  $name import failed"
-            echo "    Exit code: $import_exit"
-            echo "    Error: $(echo "$import_output" | grep -E "Error:" | head -1 || echo "Unknown error")"
-            echo "    Full output (first 20 lines):"
-            echo "$import_output" | head -20 | sed 's/^/      /'
-            return 1
-          }
-          
-          # Re-enable error handling for plan and apply
-          set -e
-          
-          # Step 1: Run terraform plan
-          echo ""
-          echo "🔍 Step 1: Running terraform plan..."
-          terraform plan \
-            -var-file="terraform.tfvars" \
-            -out=tfplan || {
-              echo "❌ Terraform plan failed"
-              echo "Checking for common issues..."
-              terraform validate || echo "Validation failed"
-              exit 1
-            }
-          echo "✅ Terraform plan completed successfully"
-          
-          # Step 2: Apply changes (only on main branch)
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo ""
-            echo "🚀 Step 2: Applying Terraform changes..."
-            
-            # Try apply - if it fails with "already exists", import and retry
-            # Use pipefail to capture terraform's exit code, not tee's
-            set -o pipefail
-            terraform apply -auto-approve tfplan 2>&1 | tee /tmp/apply_output.log || {
-              APPLY_EXIT=$?
-              set +o pipefail
-              
-              # Check if failure was due to "already exists" errors
-              if grep -qE "(already exists|AlreadyExists|ResourceAlreadyExists|EntityAlreadyExists|BucketAlreadyExists|RepositoryAlreadyExistsException|DBParameterGroupAlreadyExists|ResourceInUseException)" /tmp/apply_output.log; then
-                echo ""
-                echo "⚠️  Apply failed due to 'already exists' errors"
-                echo "   This means imports didn't persist. Re-importing and retrying..."
-                
-                # Re-import all resources that might have failed
-                set +e
-                import_resource "aws_ecr_repository.app" "$PROJECT_NAME" "ECR repository" || true
-                import_resource "aws_iam_role.ecs_task_execution" "${PROJECT_NAME}-ecs-task-execution-${ENV}" "ECS task execution role" || true
-                import_resource "aws_iam_role.ecs_task" "${PROJECT_NAME}-ecs-task-${ENV}" "ECS task role" || true
-                import_resource "aws_cloudwatch_log_group.ecs" "/ecs/${PROJECT_NAME}-${ENV}" "CloudWatch log group" || true
-                import_resource "aws_s3_bucket.exports" "${PROJECT_NAME}-exports-${ENV}-${AWS_ACCOUNT_ID}" "Exports S3 bucket" || true
-                import_resource "aws_s3_bucket.terraform_state" "${PROJECT_NAME}-terraform-state-${ENV}-${AWS_ACCOUNT_ID}" "Terraform state S3 bucket" || true
-                import_resource "aws_dynamodb_table.terraform_state_lock" "${PROJECT_NAME}-terraform-state-lock-${ENV}" "DynamoDB table" || true
-                import_resource "aws_db_subnet_group.main" "${PROJECT_NAME}-db-subnet-group-${ENV}" "DB subnet group" || true
-                import_resource "aws_db_parameter_group.main" "${PROJECT_NAME}-postgres-${ENV}" "DB parameter group" || true
-                
-                OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null | head -1)
-                if [ -n "$OIDC_ARN" ]; then
-                  import_resource "aws_iam_openid_connect_provider.github" "$OIDC_ARN" "OIDC provider" || true
-                fi
-                
-                set -e
-                
-                # CRITICAL: Force state sync to remote backend after re-imports
-                # terraform plan always syncs state, even if it fails with validation errors
-                echo "  Forcing state sync to remote backend..."
-                echo "  Running 'terraform plan' to force state sync (validation errors are OK)..."
-                terraform plan -var-file="terraform.tfvars" -out=tfplan >/dev/null 2>&1 || {
-                  echo "  Plan completed (validation errors expected - state should be synced)"
-                }
-                sleep 2
-                
-                # Verify resources are in state
-                echo "  Verifying re-imported resources are in remote state..."
-                VERIFIED_COUNT=0
-                for resource in "aws_ecr_repository.app" "aws_iam_role.ecs_task_execution" "aws_iam_role.ecs_task" "aws_cloudwatch_log_group.ecs" "aws_s3_bucket.exports" "aws_s3_bucket.terraform_state" "aws_dynamodb_table.terraform_state_lock" "aws_db_subnet_group.main" "aws_db_parameter_group.main"; do
-                  if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-                    echo "    ✅ $resource"
-                    VERIFIED_COUNT=$((VERIFIED_COUNT + 1))
-                  else
-                    echo "    ⚠️  $resource (still not in state)"
-                  fi
-                done
-                
-                if [ $VERIFIED_COUNT -eq 0 ]; then
-                  echo ""
-                  echo "  ⚠️  Warning: No resources verified in state after import"
-                  echo "     This might indicate a state sync issue. Will retry apply anyway."
-                fi
-                
-                # Regenerate plan one more time to ensure state is synced
-                echo "  Regenerating plan with updated state..."
-                terraform plan -var-file="terraform.tfvars" -out=tfplan >/dev/null 2>&1 || true
-                
-                # Retry apply
-                echo "  Retrying terraform apply..."
-                terraform apply -auto-approve tfplan || {
-                  echo "❌ Terraform apply failed after retry"
-                  echo "Check the error messages above for details"
-                  exit 1
-                }
-                echo "✅ Terraform apply completed successfully (after retry)"
-              else
-                echo "❌ Terraform apply failed with non-recoverable errors"
-                echo "Last 50 lines of output:"
-                tail -50 /tmp/apply_output.log || cat /tmp/apply_output.log
-                exit 1
-              fi
-            }
-            
-            # If we get here, apply succeeded on first try
-            echo "✅ Terraform apply completed successfully"
-          else
-            echo ""
-            echo "⏭️  Step 3: Skipping apply (not on main branch)"
-          fi
+          echo "📝 Running terraform plan..."
+          terraform plan -out=tfplan
 
-      - name: Output Deployment Info
+      - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
         working-directory: ./infra/aws/terraform
+        env:
+          TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+          TF_VAR_github_repository: ${{ github.repository }}
+          TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
         run: |
-          echo "✅ Deployment completed!"
+          echo "🚀 Applying Terraform changes..."
+          terraform apply -auto-approve tfplan
+
           echo ""
           echo "📋 Deployment Information:"
-          terraform output -json || echo "⚠️  Some outputs may not be available"
+          # These outputs are best-effort, they may not all exist
+          terraform output -json || echo "⚠️ Some outputs may not be available"
           echo ""
           if terraform output -raw alb_dns_name > /dev/null 2>&1; then
             echo "🌐 ALB DNS: $(terraform output -raw alb_dns_name)"
@@ -358,4 +141,3 @@ jobs:
           if terraform output -raw ecr_repository_url > /dev/null 2>&1; then
             echo "🐳 ECR Repository: $(terraform output -raw ecr_repository_url)"
           fi
-

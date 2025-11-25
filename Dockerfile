@@ -17,8 +17,9 @@ COPY alembic/ ./alembic/
 COPY app/ ./app/
 
 # Install Python dependencies
+# Install with 'aws' extra to include boto3 for S3 storage
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e ".[aws]"
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
