@@ -64,6 +64,8 @@ resource "aws_iam_role" "cicd" {
 }
 
 # IAM Policy for CI/CD - Terraform State Management
+# NOTE: Backend resources (S3 bucket, DynamoDB table) are created separately via bootstrap
+# This policy uses ARN patterns to reference them
 resource "aws_iam_role_policy" "cicd_terraform_state" {
   name = "${var.project_name}-cicd-terraform-state-${var.environment}"
   role = aws_iam_role.cicd.id
@@ -80,27 +82,19 @@ resource "aws_iam_role_policy" "cicd_terraform_state" {
           "s3:DeleteObject"
         ]
         Resource = [
-          "${aws_s3_bucket.terraform_state.arn}",
-          "${aws_s3_bucket.terraform_state.arn}/*"
+          "arn:aws:s3:::${var.project_name}-terraform-state-${var.environment}-*",
+          "arn:aws:s3:::${var.project_name}-terraform-state-${var.environment}-*/*"
         ]
       },
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:CreateTable",
-          "dynamodb:DeleteTable",
           "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:DeleteItem",
-          "dynamodb:DescribeTable",
-          "dynamodb:ListTables",
-          "dynamodb:DescribeContinuousBackups",
-          "dynamodb:ListBackups",
-          "dynamodb:TagResource",
-          "dynamodb:UntagResource",
-          "dynamodb:ListTagsOfResource"
+          "dynamodb:DescribeTable"
         ]
-        Resource = aws_dynamodb_table.terraform_state_lock.arn
+        Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${var.project_name}-terraform-state-lock-${var.environment}"
       }
     ]
   })
@@ -311,62 +305,9 @@ resource "aws_iam_role_policy" "cicd_deploy" {
   })
 }
 
-# S3 Bucket for Terraform State
-resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${var.project_name}-terraform-state-${var.environment}-${data.aws_caller_identity.current.account_id}"
-
-  tags = merge(var.common_tags, {
-    Name    = "${var.project_name}-terraform-state-${var.environment}"
-    Purpose = "Terraform State Storage"
-  })
-}
-
-# Enable versioning for Terraform state
-resource "aws_s3_bucket_versioning" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# Enable encryption for Terraform state
-resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# Block public access to Terraform state
-resource "aws_s3_bucket_public_access_block" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# DynamoDB Table for Terraform State Locking
-resource "aws_dynamodb_table" "terraform_state_lock" {
-  name         = "${var.project_name}-terraform-state-lock-${var.environment}"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-
-  tags = merge(var.common_tags, {
-    Name    = "${var.project_name}-terraform-state-lock-${var.environment}"
-    Purpose = "Terraform State Locking"
-  })
-}
+# NOTE: Backend resources (S3 bucket and DynamoDB table) are managed separately
+# See infra/aws/terraform/bootstrap/ for the bootstrap configuration
+# These resources should be created once manually, then removed from this file
 
 # Output the CI/CD role ARN for GitHub Actions configuration
 output "cicd_role_arn" {
@@ -374,13 +315,6 @@ output "cicd_role_arn" {
   value       = aws_iam_role.cicd.arn
 }
 
-output "terraform_state_bucket" {
-  description = "Name of the S3 bucket for Terraform state"
-  value       = aws_s3_bucket.terraform_state.id
-}
-
-output "terraform_state_lock_table" {
-  description = "Name of the DynamoDB table for Terraform state locking"
-  value       = aws_dynamodb_table.terraform_state_lock.name
-}
+# Backend resource outputs removed - these are managed in bootstrap/
+# To get the bucket/table names, check the bootstrap outputs or AWS console
 
