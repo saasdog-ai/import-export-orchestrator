@@ -128,12 +128,23 @@ jobs:
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           PROJECT_NAME="import-export-orchestrator"
           
-          # Backend is already configured in the init step, so state will persist
-          echo "Current state before imports:"
+          # NOTE: We skip automatic imports because they don't reliably sync to remote backend
+          # when validation errors occur. Instead, we rely on on-demand imports in the
+          # retry logic when apply fails with "already exists" errors.
+          # 
+          # This is a known Terraform limitation: imports write to local cache first,
+          # and only sync to remote backend when the command completes successfully.
+          # Validation errors can prevent state sync.
+          #
+          # The retry logic will import resources on-demand when needed.
+          echo "📋 Step 1: Checking current state..."
+          echo "Current state:"
           terraform state list 2>/dev/null | head -20 || echo "  (no resources in state yet - this is normal for first run)"
           echo ""
+          echo "ℹ️  Automatic imports skipped (will import on-demand if needed)"
+          echo ""
           
-          # Simplified import function that handles state persistence correctly
+          # Import function for on-demand use (called during retry)
           import_resource() {
             local resource=$1
             local id=$2
@@ -222,74 +233,12 @@ jobs:
             return 1
           }
           
-          # Import resources with timeouts (run sequentially to avoid state conflicts)
-          import_resource "aws_ecr_repository.app" "$PROJECT_NAME" "ECR repository"
-          import_resource "aws_iam_role.ecs_task_execution" "${PROJECT_NAME}-ecs-task-execution-${ENV}" "ECS task execution role"
-          import_resource "aws_iam_role.ecs_task" "${PROJECT_NAME}-ecs-task-${ENV}" "ECS task role"
-          import_resource "aws_cloudwatch_log_group.ecs" "/ecs/${PROJECT_NAME}-${ENV}" "CloudWatch log group"
-          import_resource "aws_s3_bucket.exports" "${PROJECT_NAME}-exports-${ENV}-${AWS_ACCOUNT_ID}" "Exports S3 bucket"
-          import_resource "aws_s3_bucket.terraform_state" "${PROJECT_NAME}-terraform-state-${ENV}-${AWS_ACCOUNT_ID}" "Terraform state S3 bucket"
-          import_resource "aws_dynamodb_table.terraform_state_lock" "${PROJECT_NAME}-terraform-state-lock-${ENV}" "DynamoDB table"
-          import_resource "aws_db_subnet_group.main" "${PROJECT_NAME}-db-subnet-group-${ENV}" "DB subnet group"
-          import_resource "aws_db_parameter_group.main" "${PROJECT_NAME}-postgres-${ENV}" "DB parameter group"
-          
-          # Import OIDC provider (with timeout)
-          echo "  → Checking for OIDC provider..."
-          OIDC_ARN=$(timeout 10 aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null | head -1)
-          if [ -n "$OIDC_ARN" ]; then
-            import_resource "aws_iam_openid_connect_provider.github" "$OIDC_ARN" "OIDC provider"
-          else
-            echo "    ⚠️  OIDC provider not found, will be created"
-          fi
-          
-          # Verify what was actually imported
-          echo ""
-          echo "📊 Final state after imports:"
-          terraform state list 2>/dev/null | head -30 || echo "  (no resources in state)"
-          
-          # Count imported resources
-          IMPORTED_COUNT=$(terraform state list 2>/dev/null | wc -l || echo "0")
-          echo "  Total resources in state: $IMPORTED_COUNT"
-          
-          # List the specific resources we tried to import
-          echo ""
-          echo "📋 Checking imported resources:"
-          for resource in "aws_ecr_repository.app" "aws_iam_role.ecs_task_execution" "aws_iam_role.ecs_task" "aws_cloudwatch_log_group.ecs" "aws_s3_bucket.exports" "aws_s3_bucket.terraform_state" "aws_dynamodb_table.terraform_state_lock" "aws_db_subnet_group.main" "aws_db_parameter_group.main"; do
-            if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
-              echo "  ✅ $resource"
-            else
-              echo "  ❌ $resource (NOT in state)"
-            fi
-          done
-          
-          echo ""
-          echo "✅ Import step completed"
-          
-          # Force state sync to remote backend after all imports
-          # This ensures all imported resources are persisted even if validation errors occurred
-          echo ""
-          echo "🔄 Forcing state sync to remote backend..."
-          terraform state pull >/dev/null 2>&1 || true  # Pull to ensure we have latest
-          
-          # Run refresh on all imported resources to force state sync
-          # This will fail with validation errors, but state should sync first
-          for resource in "aws_ecr_repository.app" "aws_iam_role.ecs_task_execution" "aws_iam_role.ecs_task" "aws_cloudwatch_log_group.ecs" "aws_s3_bucket.exports" "aws_s3_bucket.terraform_state" "aws_dynamodb_table.terraform_state_lock" "aws_db_subnet_group.main" "aws_db_parameter_group.main"; do
-            terraform refresh -target=$resource -lock=false -input=false >/dev/null 2>&1 || true
-          done
-          
-          # Final state pull to sync
-          terraform state pull >/dev/null 2>&1 || true
-          sleep 2
-          
-          echo "📊 Final state verification after sync:"
-          terraform state list 2>/dev/null | head -30 || echo "  (no resources in state)"
-          
           # Re-enable error handling for plan and apply
           set -e
           
-          # Step 2: Run terraform plan
+          # Step 1: Run terraform plan
           echo ""
-          echo "🔍 Step 2: Running terraform plan..."
+          echo "🔍 Step 1: Running terraform plan..."
           terraform plan \
             -var-file="terraform.tfvars" \
             -out=tfplan || {
@@ -300,10 +249,10 @@ jobs:
             }
           echo "✅ Terraform plan completed successfully"
           
-          # Step 3: Apply changes (only on main branch)
+          # Step 2: Apply changes (only on main branch)
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo ""
-            echo "🚀 Step 3: Applying Terraform changes..."
+            echo "🚀 Step 2: Applying Terraform changes..."
             
             # Try apply - if it fails with "already exists", import and retry
             # Use pipefail to capture terraform's exit code, not tee's
@@ -337,11 +286,34 @@ jobs:
                 
                 set -e
                 
-                # Force state sync
-                terraform state pull >/dev/null 2>&1 || true
+                # CRITICAL: Force state sync to remote backend after re-imports
+                # terraform plan always syncs state, even if it fails with validation errors
+                echo "  Forcing state sync to remote backend..."
+                echo "  Running 'terraform plan' to force state sync (validation errors are OK)..."
+                terraform plan -var-file="terraform.tfvars" -out=tfplan >/dev/null 2>&1 || {
+                  echo "  Plan completed (validation errors expected - state should be synced)"
+                }
                 sleep 2
                 
-                # Regenerate plan with updated state
+                # Verify resources are in state
+                echo "  Verifying re-imported resources are in remote state..."
+                VERIFIED_COUNT=0
+                for resource in "aws_ecr_repository.app" "aws_iam_role.ecs_task_execution" "aws_iam_role.ecs_task" "aws_cloudwatch_log_group.ecs" "aws_s3_bucket.exports" "aws_s3_bucket.terraform_state" "aws_dynamodb_table.terraform_state_lock" "aws_db_subnet_group.main" "aws_db_parameter_group.main"; do
+                  if terraform state list 2>/dev/null | grep -q "^${resource}$"; then
+                    echo "    ✅ $resource"
+                    VERIFIED_COUNT=$((VERIFIED_COUNT + 1))
+                  else
+                    echo "    ⚠️  $resource (still not in state)"
+                  fi
+                done
+                
+                if [ $VERIFIED_COUNT -eq 0 ]; then
+                  echo ""
+                  echo "  ⚠️  Warning: No resources verified in state after import"
+                  echo "     This might indicate a state sync issue. Will retry apply anyway."
+                fi
+                
+                # Regenerate plan one more time to ensure state is synced
                 echo "  Regenerating plan with updated state..."
                 terraform plan -var-file="terraform.tfvars" -out=tfplan >/dev/null 2>&1 || true
                 
