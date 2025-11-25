@@ -39,9 +39,9 @@ aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS 
 echo -e "${GREEN}✅ Logged into ECR${NC}"
 echo ""
 
-# Step 2: Build Docker image
-echo -e "${YELLOW}📋 Step 2: Building Docker image...${NC}"
-docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+# Step 2: Build Docker image for linux/amd64 (required for ECS Fargate)
+echo -e "${YELLOW}📋 Step 2: Building Docker image for linux/amd64...${NC}"
+docker build --platform linux/amd64 -t ${ECR_REPO}:${IMAGE_TAG} .
 echo -e "${GREEN}✅ Image built${NC}"
 echo ""
 

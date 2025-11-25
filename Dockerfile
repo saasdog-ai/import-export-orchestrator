@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Build for linux/amd64 platform (required for ECS Fargate)
+FROM --platform=linux/amd64 python:3.11-slim
 
 WORKDIR /app
 
