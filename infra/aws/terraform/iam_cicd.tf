@@ -111,6 +111,16 @@ resource "aws_iam_role_policy" "cicd_deploy" {
       {
         Effect = "Allow"
         Action = [
+          "iam:PassRole"
+        ]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-ecs-task-execution-${var.environment}",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-ecs-task-${var.environment}"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
           # VPC and Networking
           "ec2:CreateVpc",
           "ec2:DeleteVpc",
@@ -370,7 +380,6 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "iam:TagOpenIDConnectProvider",
           "iam:UntagOpenIDConnectProvider",
           "iam:ListOpenIDConnectProviderTags",
-          "iam:PassRole",
           # Secrets Manager (for database passwords)
           "secretsmanager:CreateSecret",
           "secretsmanager:DeleteSecret",
