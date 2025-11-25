@@ -246,6 +246,8 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "s3:PutBucketTagging",
           "s3:GetBucketObjectLockConfiguration",
           "s3:PutBucketObjectLockConfiguration",
+          "s3:GetBucketAccelerateConfiguration",
+          "s3:PutBucketAccelerateConfiguration",
           "s3:PutObject",
           "s3:GetObject",
           "s3:DeleteObject",
