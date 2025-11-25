@@ -12,16 +12,10 @@ This directory contains documentation for the Import/Export Orchestrator service
 ## Deployment Documentation
 
 - **[AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md)** - Step-by-step AWS deployment guide
-- **[AWS_NAMING_BEST_PRACTICES.md](./AWS_NAMING_BEST_PRACTICES.md)** - AWS resource naming conventions
-- **[TERRAFORM_BEST_PRACTICES.md](./TERRAFORM_BEST_PRACTICES.md)** - Terraform usage best practices
-- **[TERRAFORM_FIXES_SUMMARY.md](./TERRAFORM_FIXES_SUMMARY.md)** - Fixes for GitHub Actions deployment issues
-- **[TERRAFORM_IMPORT_GUIDE.md](./TERRAFORM_IMPORT_GUIDE.md)** - Guide for importing existing AWS resources
 
 ## Configuration
 
 - **[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md)** - Environment variable reference
-- **[GITHUB_SECRETS.md](./GITHUB_SECRETS.md)** - GitHub Actions secrets and variables setup
-- **[AWS_OIDC_AUTHENTICATION.md](./AWS_OIDC_AUTHENTICATION.md)** - How GitHub Actions authenticates to AWS without access keys
 
 ## Quick Links
 
