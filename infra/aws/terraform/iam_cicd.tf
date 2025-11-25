@@ -370,6 +370,7 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "iam:TagOpenIDConnectProvider",
           "iam:UntagOpenIDConnectProvider",
           "iam:ListOpenIDConnectProviderTags",
+          "iam:PassRole",
           # Secrets Manager (for database passwords)
           "secretsmanager:CreateSecret",
           "secretsmanager:DeleteSecret",
