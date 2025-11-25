@@ -23,7 +23,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: job_runner_app
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/job_runner
