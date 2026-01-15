@@ -144,9 +144,9 @@ async def query_engine(test_db: Database, saas_client: MockSaaSApiClient) -> Exp
 
 
 @pytest.fixture
-async def saas_client() -> MockSaaSApiClient:
+async def saas_client(test_db: Database) -> MockSaaSApiClient:
     """Create a mock SaaS client."""
-    return MockSaaSApiClient()
+    return MockSaaSApiClient(test_db)
 
 
 @pytest.fixture
@@ -226,7 +226,7 @@ async def test_client_app(test_db: Database):
     from app.services.scheduler_service import SchedulerService
 
     # Create services
-    saas_client = MockSaaSApiClient()
+    saas_client = MockSaaSApiClient(test_db)
     query_engine = ExportQueryEngine(test_db, saas_client)
     job_repository = JobRepository(test_db)
     job_run_repository = JobRunRepository(test_db)
