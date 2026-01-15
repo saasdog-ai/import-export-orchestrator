@@ -1,6 +1,6 @@
 """Unit tests for query engine with mocked dependencies."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
@@ -14,7 +14,56 @@ from app.domain.entities import (
     LogicalOperator,
 )
 from app.infrastructure.query.engine import ExportQueryEngine
-from app.infrastructure.saas.client import MockSaaSApiClient
+from app.infrastructure.saas.client import SaaSApiClientInterface
+
+# Sample test data that matches expected schema
+SAMPLE_BILLS = [
+    {
+        "id": "bill-001",
+        "amount": 500.00,
+        "date": "2024-01-15T10:00:00Z",
+        "status": "pending",
+        "description": "Office supplies and equipment",
+        "vendor": {"id": "v1", "name": "Acme Corporation", "email": "acme@test.com"},
+        "project": {"id": "p1", "code": "PROJ-001", "name": "Project Alpha"},
+    },
+    {
+        "id": "bill-002",
+        "amount": 1500.50,
+        "date": "2024-01-16T10:00:00Z",
+        "status": "paid",
+        "description": "Software licenses",
+        "vendor": {"id": "v2", "name": "Tech Solutions", "email": "tech@test.com"},
+        "project": {"id": "p2", "code": "PROJ-002", "name": "Project Beta"},
+    },
+    {
+        "id": "bill-003",
+        "amount": 2500.00,
+        "date": "2024-01-17T10:00:00Z",
+        "status": "pending",
+        "description": "Consulting services",
+        "vendor": {"id": "v1", "name": "Acme Corporation", "email": "acme@test.com"},
+        "project": {"id": "p1", "code": "PROJ-001", "name": "Project Alpha"},
+    },
+    {
+        "id": "bill-004",
+        "amount": 750.25,
+        "date": "2024-01-14T10:00:00Z",
+        "status": "overdue",
+        "description": "Office maintenance",
+        "vendor": {"id": "v3", "name": "Services Inc", "email": "services@test.com"},
+        "project": {"id": "p3", "code": "PROJ-003", "name": "Project Gamma"},
+    },
+    {
+        "id": "bill-005",
+        "amount": 3000.00,
+        "date": "2024-01-18T10:00:00Z",
+        "status": "paid",
+        "description": "Hardware purchase",
+        "vendor": {"id": "v2", "name": "Tech Solutions", "email": "tech@test.com"},
+        "project": {"id": "p2", "code": "PROJ-002", "name": "Project Beta"},
+    },
+]
 
 
 @pytest.fixture
@@ -25,8 +74,9 @@ def mock_db():
 
 @pytest.fixture
 def mock_saas_client():
-    """Create a mocked SaaS client."""
-    client = MockSaaSApiClient()
+    """Create a mocked SaaS client with predictable test data."""
+    client = MagicMock(spec=SaaSApiClientInterface)
+    client.fetch_data = AsyncMock(return_value=SAMPLE_BILLS.copy())
     return client
 
 

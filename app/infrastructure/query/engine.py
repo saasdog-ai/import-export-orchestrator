@@ -359,11 +359,6 @@ class ExportQueryEngine:
                         result.extend(group_sorted)
                     return result
 
-            # If all fields are descending, reverse the entire list
-            all_desc = all(s.get("direction", "asc").lower() == "desc" for s in sort)
-            if all_desc:
-                sorted_data.reverse()
-
             return sorted_data
         except Exception as e:
             logger.warning(f"Failed to sort data: {e}")
