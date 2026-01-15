@@ -60,7 +60,7 @@ async def init_dependencies() -> None:
     _job_run_repository = JobRunRepository(_db)
 
     # SaaS Client (needed by query engine)
-    _saas_client = MockSaaSApiClient()
+    _saas_client = MockSaaSApiClient(_db)
 
     # Query Engine
     _query_engine = ExportQueryEngine(_db, _saas_client)
