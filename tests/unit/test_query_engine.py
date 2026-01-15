@@ -8,6 +8,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ExportFilter,
     ExportFilterGroup,
     ExportFilterOperator,
@@ -91,7 +92,7 @@ async def test_execute_export_query_basic(query_engine: ExportQueryEngine):
     """Test basic export query execution with deep validation."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[ExportField(field="id"), ExportField(field="amount"), ExportField(field="date")],
         limit=10,
         offset=0,
     )
@@ -147,7 +148,7 @@ async def test_execute_export_query_with_filters(query_engine: ExportQueryEngine
     )
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         filters=filter_group,
         limit=10,
     )
@@ -168,7 +169,7 @@ async def test_execute_export_query_with_sort(query_engine: ExportQueryEngine):
     """Test export query with sorting - deep validation."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[ExportField(field="id"), ExportField(field="amount"), ExportField(field="date")],
         sort=[{"field": "date", "direction": "desc"}],
         limit=10,
     )
@@ -191,7 +192,7 @@ async def test_execute_export_query_pagination(query_engine: ExportQueryEngine):
     """Test export query with pagination - deep validation."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         sort=[{"field": "amount", "direction": "asc"}],  # Sort for predictable pagination
         limit=2,
         offset=0,
@@ -245,7 +246,11 @@ async def test_apply_filters_complex(query_engine: ExportQueryEngine):
 
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "vendor.name"],
+        fields=[
+            ExportField(field="id"),
+            ExportField(field="amount"),
+            ExportField(field="vendor.name"),
+        ],
         filters=filter_group,
         limit=10,
     )
@@ -271,7 +276,7 @@ async def test_apply_sorting_multiple_fields(query_engine: ExportQueryEngine):
     """Test sorting with multiple fields - deep validation."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[ExportField(field="id"), ExportField(field="amount"), ExportField(field="date")],
         sort=[
             {"field": "date", "direction": "desc"},
             {"field": "amount", "direction": "asc"},
@@ -315,7 +320,12 @@ async def test_select_fields_nested(query_engine: ExportQueryEngine):
     """Test field selection with nested fields - deep validation."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "vendor.name", "project.code"],
+        fields=[
+            ExportField(field="id"),
+            ExportField(field="amount"),
+            ExportField(field="vendor.name"),
+            ExportField(field="project.code"),
+        ],
         limit=10,
     )
 

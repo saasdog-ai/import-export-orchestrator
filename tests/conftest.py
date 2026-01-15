@@ -10,6 +10,7 @@ from sqlalchemy.pool import NullPool
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ImportConfig,
     JobDefinition,
     JobType,
@@ -94,7 +95,11 @@ def test_job(test_client_id) -> JobDefinition:
     """Create a test job definition."""
     export_config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[
+            ExportField(field="id"),
+            ExportField(field="amount"),
+            ExportField(field="date"),
+        ],
         limit=100,
     )
     return JobDefinition(

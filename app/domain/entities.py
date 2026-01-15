@@ -109,17 +109,48 @@ class ExportEntity(str, Enum):
     PROJECT = "project"
 
 
+class ExportField(BaseModel):
+    """Export field definition with optional alias and formatting."""
+
+    field: str = Field(..., description="Source field path (e.g., 'vendor.name' or 'amount')")
+    as_: str | None = Field(
+        default=None,
+        alias="as",
+        description="Output alias for this field (e.g., 'Vendor Name')",
+    )
+    format: str | None = Field(
+        default=None,
+        description="Optional format string for transformations (e.g., 'date:YYYY-MM-DD')",
+    )
+
+    @property
+    def output_name(self) -> str:
+        """Get the output column/key name (alias if set, otherwise source field)."""
+        return self.as_ if self.as_ is not None else self.field
+
+    class Config:
+        populate_by_name = True
+
+
 class ExportConfig(BaseModel):
     """Export job configuration."""
 
     entity: ExportEntity
-    fields: list[str] = Field(..., description="List of fields to return")
+    fields: list[ExportField] = Field(..., description="List of field definitions to export")
     filters: ExportFilterGroup | None = None
     sort: list[dict[str, str]] | None = Field(
         default=None, description="List of sort directives: [{'field': 'name', 'direction': 'asc'}]"
     )
     limit: int | None = Field(default=None, ge=1, le=10000)
     offset: int = Field(default=0, ge=0)
+
+    def get_source_fields(self) -> list[str]:
+        """Get list of source field names for querying."""
+        return [f.field for f in self.fields]
+
+    def get_field_mappings(self) -> dict[str, str]:
+        """Get mapping from source field to output name."""
+        return {f.field: f.output_name for f in self.fields}
 
 
 class ImportConfig(BaseModel):

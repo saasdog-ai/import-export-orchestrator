@@ -8,6 +8,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     JobDefinition,
     JobRun,
     JobStatus,
@@ -74,7 +75,7 @@ async def test_create_job(job_service, mock_job_repository, test_client_id):
     """Test creating a job via service."""
     export_config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[ExportField(field="id"), ExportField(field="amount"), ExportField(field="date")],
         limit=100,
     )
     job = JobDefinition(
@@ -107,7 +108,7 @@ async def test_get_job(job_service, mock_job_repository):
         client_id=uuid4(),
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     # Mock repository response
@@ -131,14 +132,14 @@ async def test_get_jobs_by_client(job_service, mock_job_repository, test_client_
             client_id=test_client_id,
             name="Job 1",
             job_type=JobType.EXPORT,
-            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         ),
         JobDefinition(
             id=uuid4(),
             client_id=test_client_id,
             name="Job 2",
             job_type=JobType.EXPORT,
-            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         ),
     ]
 
@@ -167,7 +168,7 @@ async def test_run_job(
         client_id=uuid4(),
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -212,7 +213,7 @@ async def test_run_job_no_queue(
         client_id=uuid4(),
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -243,7 +244,7 @@ async def test_get_job_runs(job_service, mock_job_repository, mock_job_run_repos
         client_id=uuid4(),
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     runs = [

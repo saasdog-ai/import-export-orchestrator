@@ -8,6 +8,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ExportFilter,
     ExportFilterGroup,
     ExportFilterOperator,
@@ -111,7 +112,7 @@ async def test_filter_operators_comprehensive(query_engine):
 
         config = ExportConfig(
             entity=ExportEntity.BILL,
-            fields=["id", "amount"],
+            fields=[ExportField(field="id"), ExportField(field="amount")],
             filters=filter_group,
             limit=100,
         )
@@ -141,7 +142,7 @@ async def test_filter_in_operator(query_engine):
 
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         filters=filter_group,
         limit=100,
     )
@@ -171,7 +172,7 @@ async def test_filter_between_operator(query_engine):
 
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         filters=filter_group,
         limit=100,
     )
@@ -201,7 +202,7 @@ async def test_filter_contains_operator(query_engine):
 
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "description"],
+        fields=[ExportField(field="id"), ExportField(field="description")],
         filters=filter_group,
         limit=100,
     )
@@ -237,7 +238,7 @@ async def test_filter_or_operator(query_engine):
 
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "status"],
+        fields=[ExportField(field="id"), ExportField(field="amount"), ExportField(field="status")],
         filters=filter_group,
         limit=100,
     )
@@ -259,7 +260,7 @@ async def test_sort_ascending(query_engine):
     """Test ascending sort with deep validation."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         sort=[{"field": "amount", "direction": "asc"}],
         limit=100,
     )
@@ -282,7 +283,7 @@ async def test_pagination_consistency(query_engine):
     # Get all records first
     config_all = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         sort=[{"field": "amount", "direction": "asc"}],  # Sort for consistency
         limit=1000,
         offset=0,
@@ -299,7 +300,7 @@ async def test_pagination_consistency(query_engine):
     for offset in range(0, total_count, page_size):
         config_page = ExportConfig(
             entity=ExportEntity.BILL,
-            fields=["id", "amount"],
+            fields=[ExportField(field="id"), ExportField(field="amount")],
             sort=[{"field": "amount", "direction": "asc"}],
             limit=page_size,
             offset=offset,
@@ -331,7 +332,7 @@ async def test_field_selection_excludes_unrequested(query_engine):
     """Test that only requested fields are returned."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],  # Only request id and amount
+        fields=[ExportField(field="id"), ExportField(field="amount")],  # Only request id and amount
         limit=10,
     )
 
@@ -366,7 +367,11 @@ async def test_nested_field_filtering(query_engine):
 
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "vendor.name"],
+        fields=[
+            ExportField(field="id"),
+            ExportField(field="amount"),
+            ExportField(field="vendor.name"),
+        ],
         filters=filter_group,
         limit=100,
     )

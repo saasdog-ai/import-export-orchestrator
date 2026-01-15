@@ -44,8 +44,12 @@ class ExportQueryEngine:
         Returns:
             Dictionary with entity, count, records, limit, and offset
         """
-        # Validate all fields
-        for field in config.fields:
+        # Get source field names for validation and querying
+        source_fields = config.get_source_fields()
+        field_mappings = config.get_field_mappings()
+
+        # Validate all source fields
+        for field in source_fields:
             if not validate_field_path(config.entity, field):
                 raise ValueError(
                     f"Field '{field}' is not allowed for entity '{config.entity.value}'"
@@ -76,8 +80,10 @@ class ExportQueryEngine:
             config.offset : config.offset + (config.limit or len(sorted_data))
         ]
 
-        # Select only requested fields and handle nested fields
-        selected_records = self._select_fields(paginated_data, config.fields, config.entity)
+        # Select only requested fields, applying aliases from field_mappings
+        selected_records = self._select_fields(
+            paginated_data, source_fields, config.entity, field_mappings
+        )
 
         return {
             "entity": config.entity.value,
@@ -365,20 +371,26 @@ class ExportQueryEngine:
             return data
 
     def _select_fields(
-        self, data: list[dict[str, Any]], fields: list[str], entity: ExportEntity
+        self,
+        data: list[dict[str, Any]],
+        fields: list[str],
+        entity: ExportEntity,
+        field_mappings: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Select and format only the requested fields."""
+        """Select and format only the requested fields, applying aliases if provided."""
         result = []
         for record in data:
             selected_record = {}
             for field in fields:
                 value = self._get_nested_value(record, field)
+                # Use the mapped output name if provided, otherwise use original field name
+                output_key = field_mappings.get(field, field) if field_mappings else field
                 # For nested fields like "vendor.name", flatten to the field name
                 # For simple fields, use as-is
                 if "." in field:
-                    # Use the full path as the key (e.g., "vendor.name")
-                    selected_record[field] = value
+                    # Use the mapped key or the full path (e.g., "vendor.name")
+                    selected_record[output_key] = value
                 else:
-                    selected_record[field] = record.get(field)
+                    selected_record[output_key] = record.get(field)
             result.append(selected_record)
         return result

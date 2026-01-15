@@ -15,6 +15,7 @@ from app.api.exports import (
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     JobDefinition,
     JobRun,
     JobStatus,
@@ -54,7 +55,11 @@ def export_request():
     """Create a sample export request."""
     return {
         "entity": ExportEntity.BILL,
-        "fields": ["id", "amount", "date"],
+        "fields": [
+            {"field": "id"},
+            {"field": "amount"},
+            {"field": "date"},
+        ],
         "filters": None,
         "sort": None,
         "limit": 100,
@@ -76,7 +81,11 @@ async def test_create_export_success(mock_job_service, authenticated_client_id, 
         job_type=JobType.EXPORT,
         export_config=ExportConfig(
             entity=ExportEntity.BILL,
-            fields=["id", "amount", "date"],
+            fields=[
+                ExportField(field="id"),
+                ExportField(field="amount"),
+                ExportField(field="date"),
+            ],
         ),
     )
 
@@ -106,7 +115,11 @@ async def test_create_export_success(mock_job_service, authenticated_client_id, 
     assert create_job_call.client_id == authenticated_client_id  # Correct client ID
     assert create_job_call.job_type == JobType.EXPORT  # Correct job type
     assert create_job_call.export_config.entity == ExportEntity.BILL  # Correct entity
-    assert create_job_call.export_config.fields == ["id", "amount", "date"]  # Correct fields
+    assert create_job_call.export_config.get_source_fields() == [
+        "id",
+        "amount",
+        "date",
+    ]  # Correct fields
     assert create_job_call.export_config.limit == 100  # Correct limit
     assert create_job_call.export_config.offset == 0  # Correct offset
     assert create_job_call.enabled is True  # Job is enabled
@@ -131,7 +144,7 @@ async def test_create_export_validation_error(mock_job_service, authenticated_cl
 
     export_request = ExportRequest(
         entity=ExportEntity.BILL,
-        fields=["invalid_field"],
+        fields=[ExportField(field="invalid_field")],
         limit=100,
     )
 
@@ -164,7 +177,7 @@ async def test_preview_export_success(mock_query_engine, authenticated_client_id
 
     preview_request = ExportPreviewRequest(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
         limit=20,
     )
 
@@ -180,7 +193,7 @@ async def test_preview_export_success(mock_query_engine, authenticated_client_id
     query_call = call_args[0][0]  # First positional arg (config)
     client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
     assert query_call.entity == ExportEntity.BILL  # Correct entity
-    assert query_call.fields == ["id", "amount"]  # Correct fields
+    assert query_call.get_source_fields() == ["id", "amount"]  # Correct fields
     assert query_call.limit == 20  # Correct limit
     assert client_id_arg == authenticated_client_id  # Correct client_id
 
@@ -208,7 +221,7 @@ async def test_preview_export_validation_error(mock_query_engine, authenticated_
 
     preview_request = ExportPreviewRequest(
         entity=ExportEntity.BILL,
-        fields=["invalid_field"],
+        fields=[ExportField(field="invalid_field")],
         limit=20,
     )
 
@@ -235,7 +248,7 @@ async def test_get_export_result_success(mock_job_service, authenticated_client_
         client_id=authenticated_client_id,
         name="Export job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -282,7 +295,7 @@ async def test_get_export_result_unauthorized(mock_job_service, authenticated_cl
         client_id=other_client_id,  # Different client
         name="Export job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -362,7 +375,7 @@ async def test_get_export_download_url_success(
         client_id=authenticated_client_id,
         name="Export job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -422,7 +435,7 @@ async def test_get_export_download_url_no_file(mock_job_service, authenticated_c
         client_id=authenticated_client_id,
         name="Export job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -460,7 +473,7 @@ async def test_get_export_download_url_not_completed(mock_job_service, authentic
         client_id=authenticated_client_id,
         name="Export job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(

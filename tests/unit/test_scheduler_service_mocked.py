@@ -8,6 +8,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     JobDefinition,
     JobRun,
     JobStatus,
@@ -78,7 +79,7 @@ async def test_schedule_job_success(scheduler_service, mock_scheduler, mock_mess
         client_id=uuid4(),
         name="Scheduled Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         cron_schedule="0 0 * * *",
         enabled=True,
     )
@@ -103,7 +104,7 @@ async def test_schedule_job_no_cron(scheduler_service, mock_scheduler):
         client_id=uuid4(),
         name="No Cron Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         cron_schedule=None,  # No cron
         enabled=True,
     )
@@ -124,7 +125,7 @@ async def test_schedule_job_disabled(scheduler_service, mock_scheduler):
         client_id=uuid4(),
         name="Disabled Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         cron_schedule="0 0 * * *",
         enabled=False,  # Disabled
     )
@@ -150,7 +151,7 @@ async def test_schedule_job_with_message_queue(
         client_id=uuid4(),
         name="Scheduled Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         cron_schedule="0 0 * * *",
         enabled=True,
     )
@@ -202,7 +203,7 @@ async def test_schedule_job_without_message_queue(
         client_id=uuid4(),
         name="Scheduled Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         cron_schedule="0 0 * * *",
         enabled=True,
     )
@@ -251,7 +252,7 @@ async def test_reload_all_scheduled_jobs(scheduler_service, mock_job_repository,
             client_id=uuid4(),
             name="Job 1",
             job_type=JobType.EXPORT,
-            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
             cron_schedule="0 0 * * *",
             enabled=True,
         ),
@@ -260,7 +261,7 @@ async def test_reload_all_scheduled_jobs(scheduler_service, mock_job_repository,
             client_id=uuid4(),
             name="Job 2",
             job_type=JobType.EXPORT,
-            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
             cron_schedule="0 1 * * *",
             enabled=True,
         ),

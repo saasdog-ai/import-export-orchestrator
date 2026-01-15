@@ -196,11 +196,12 @@ class JobRunnerService:
 
         records = result.get("records", [])
         count = result.get("count", len(records))
-        fields = job.export_config.fields
+        # Get output field names for CSV/JSON headers (uses aliases if configured)
+        output_fields = [f.output_name for f in job.export_config.fields]
 
         logger.info(
             f"Export query completed: run_id={job_run.id}, record_count={count}, "
-            f"fields={len(fields)}"
+            f"fields={len(output_fields)}"
         )
 
         # Generate local file
@@ -211,7 +212,7 @@ class JobRunnerService:
         os.makedirs(export_dir, exist_ok=True)
 
         if export_format == "csv":
-            local_file_path = FileGenerator.generate_csv_file(records, fields, export_dir)
+            local_file_path = FileGenerator.generate_csv_file(records, output_fields, export_dir)
         elif export_format == "json":
             local_file_path = FileGenerator.generate_json_file(records, export_dir)
         else:
@@ -252,7 +253,7 @@ class JobRunnerService:
         result_metadata = {
             "count": count,
             "format": export_format,
-            "fields": fields,
+            "fields": output_fields,
             "worker": worker_id,
         }
         if remote_file_path:

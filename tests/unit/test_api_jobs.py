@@ -18,6 +18,7 @@ from app.api.jobs import (
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ImportConfig,
     JobDefinition,
     JobRun,
@@ -50,7 +51,7 @@ def sample_job(authenticated_client_id):
         job_type=JobType.EXPORT,
         export_config=ExportConfig(
             entity=ExportEntity.BILL,
-            fields=["id", "amount"],
+            fields=[ExportField(field="id"), ExportField(field="amount")],
         ),
         enabled=True,
     )
@@ -69,7 +70,9 @@ async def test_create_job_success(mock_job_service, authenticated_client_id, sam
         client_id=authenticated_client_id,  # Required field
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id", "amount"]),
+        export_config=ExportConfig(
+            entity=ExportEntity.BILL, fields=[ExportField(field="id"), ExportField(field="amount")]
+        ),
         enabled=True,
     )
 
@@ -97,7 +100,7 @@ async def test_create_job_client_id_mismatch(mock_job_service, authenticated_cli
         client_id=other_client_id,  # Different from authenticated
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     # Execute - HTTPException is caught and re-raised as 500
@@ -142,7 +145,7 @@ async def test_get_job_unauthorized(mock_job_service, authenticated_client_id):
         client_id=other_client_id,  # Different client
         name="Other Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     mock_job_service.get_job = AsyncMock(return_value=job)
@@ -225,7 +228,7 @@ async def test_update_job_unauthorized(mock_job_service, authenticated_client_id
         client_id=other_client_id,
         name="Other Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     mock_job_service.get_job = AsyncMock(return_value=job)
@@ -288,7 +291,7 @@ async def test_run_job_unauthorized(mock_job_service, authenticated_client_id):
         client_id=other_client_id,
         name="Other Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     mock_job_service.get_job = AsyncMock(return_value=job)
@@ -413,7 +416,7 @@ async def test_get_client_jobs_success(mock_job_service, authenticated_client_id
             client_id=authenticated_client_id,
             name="Job 1",
             job_type=JobType.EXPORT,
-            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         ),
         JobDefinition(
             id=uuid4(),
@@ -454,7 +457,7 @@ async def test_get_client_jobs_with_date_filter(mock_job_service, authenticated_
             client_id=authenticated_client_id,
             name="Job 1",
             job_type=JobType.EXPORT,
-            export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+            export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
         ),
     ]
 

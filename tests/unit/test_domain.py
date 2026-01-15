@@ -7,6 +7,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ExportFilter,
     ExportFilterGroup,
     ExportFilterOperator,
@@ -21,12 +22,16 @@ def test_export_config():
     """Test ExportConfig entity."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[
+            ExportField(field="id"),
+            ExportField(field="amount"),
+            ExportField(field="date"),
+        ],
         limit=100,
         offset=0,
     )
     assert config.entity == ExportEntity.BILL
-    assert config.fields == ["id", "amount", "date"]
+    assert config.get_source_fields() == ["id", "amount", "date"]
     assert config.limit == 100
     assert config.offset == 0
 
@@ -77,7 +82,7 @@ def test_job_definition_export():
     """Test JobDefinition with export config."""
     config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount"],
+        fields=[ExportField(field="id"), ExportField(field="amount")],
     )
     job = JobDefinition(
         id=uuid4(),

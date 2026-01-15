@@ -11,6 +11,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     JobDefinition,
     JobStatus,
     JobType,
@@ -26,7 +27,7 @@ async def test_create_job(job_service: JobService, test_client_id):
     """Test creating a job via service."""
     export_config = ExportConfig(
         entity=ExportEntity.BILL,
-        fields=["id", "amount", "date"],
+        fields=[ExportField(field="id"), ExportField(field="amount"), ExportField(field="date")],
         limit=100,
     )
     job = JobDefinition(

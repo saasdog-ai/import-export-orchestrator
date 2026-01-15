@@ -8,6 +8,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ImportConfig,
     JobDefinition,
     JobRun,
@@ -89,7 +90,7 @@ async def test_queue_job_run(job_runner):
         client_id=uuid4(),
         name="Test Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -120,7 +121,7 @@ async def test_execute_export_job_success(
         job_type=JobType.EXPORT,
         export_config=ExportConfig(
             entity=ExportEntity.BILL,
-            fields=["id", "amount"],
+            fields=[ExportField(field="id"), ExportField(field="amount")],
         ),
     )
 
@@ -173,7 +174,7 @@ async def test_execute_export_job_success(
         config_arg = call_args[0][0]  # First positional arg (config)
         client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
         assert config_arg.entity == ExportEntity.BILL
-        assert config_arg.fields == ["id", "amount"]
+        assert config_arg.get_source_fields() == ["id", "amount"]
         assert client_id_arg == job.client_id  # Correct client_id
 
         mock_gen_csv.assert_called_once()
@@ -226,7 +227,7 @@ async def test_execute_export_job_no_cloud_storage(
         client_id=uuid4(),
         name="Export Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -267,7 +268,7 @@ async def test_execute_export_job_no_cloud_storage(
         config_arg = call_args[0][0]  # First positional arg (config)
         client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
         assert config_arg.entity == ExportEntity.BILL
-        assert config_arg.fields == ["id"]
+        assert config_arg.get_source_fields() == ["id"]
         assert client_id_arg == job.client_id  # Correct client_id
 
         mock_gen_csv.assert_called_once()
@@ -370,7 +371,7 @@ async def test_execute_job_run_export(job_runner, mock_job_run_repository):
         client_id=uuid4(),
         name="Export Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(
@@ -424,7 +425,7 @@ async def test_execute_job_run_failure(job_runner, mock_job_run_repository):
         client_id=uuid4(),
         name="Export Job",
         job_type=JobType.EXPORT,
-        export_config=ExportConfig(entity=ExportEntity.BILL, fields=["id"]),
+        export_config=ExportConfig(entity=ExportEntity.BILL, fields=[ExportField(field="id")]),
     )
 
     job_run = JobRun(

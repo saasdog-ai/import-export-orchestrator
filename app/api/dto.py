@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     ExportFilterGroup,
     ImportConfig,
     JobStatus,
@@ -76,7 +77,7 @@ class ExportRequest(BaseModel):
     """DTO for export job request."""
 
     entity: ExportEntity
-    fields: list[str] = Field(..., description="List of fields to return")
+    fields: list[ExportField] = Field(..., description="List of field definitions to export")
     filters: ExportFilterGroup | None = None
     sort: list[dict[str, str]] | None = None
     limit: int | None = Field(default=None, ge=1, le=10000)
@@ -87,7 +88,7 @@ class ExportPreviewRequest(BaseModel):
     """DTO for export preview request."""
 
     entity: ExportEntity
-    fields: list[str] = Field(..., description="List of fields to return")
+    fields: list[ExportField] = Field(..., description="List of field definitions to export")
     filters: ExportFilterGroup | None = None
     sort: list[dict[str, str]] | None = None
     limit: int = Field(default=20, ge=1, le=100)

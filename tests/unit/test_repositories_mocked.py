@@ -9,6 +9,7 @@ import pytest
 from app.domain.entities import (
     ExportConfig,
     ExportEntity,
+    ExportField,
     JobDefinition,
     JobRun,
     JobStatus,
@@ -49,7 +50,7 @@ async def test_create_job(mock_db, mock_session):
         job_type=JobType.EXPORT,
         export_config=ExportConfig(
             entity=ExportEntity.BILL,
-            fields=["id", "amount"],
+            fields=[ExportField(field="id"), ExportField(field="amount")],
         ),
     )
 
@@ -63,7 +64,7 @@ async def test_create_job(mock_db, mock_session):
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    db_model.export_config = {"entity": "bill", "fields": ["id", "amount"]}
+    db_model.export_config = {"entity": "bill", "fields": [{"field": "id"}, {"field": "amount"}]}
 
     # Mock transaction context manager (used by create method)
     mock_db.transaction.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -106,7 +107,7 @@ async def test_get_job_by_id(mock_db, mock_session):
     # Set export_config as JSON
     db_model.export_config = {
         "entity": "bill",
-        "fields": ["id", "amount"],
+        "fields": [{"field": "id"}, {"field": "amount"}],
     }
 
     # Mock session context manager
@@ -155,7 +156,7 @@ async def test_get_jobs_by_client(mock_db, mock_session):
     ]
     # Set export_config for both models
     for model in db_models:
-        model.export_config = {"entity": "bill", "fields": ["id"]}
+        model.export_config = {"entity": "bill", "fields": [{"field": "id"}]}
 
     # Mock session context manager
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
