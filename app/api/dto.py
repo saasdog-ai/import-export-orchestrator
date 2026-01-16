@@ -74,24 +74,86 @@ class JobRunResponse(BaseModel):
 
 
 class ExportRequest(BaseModel):
-    """DTO for export job request."""
+    """Request to create and trigger an export job.
 
-    entity: ExportEntity
-    fields: list[ExportField] = Field(..., description="List of field definitions to export")
-    filters: ExportFilterGroup | None = None
-    sort: list[dict[str, str]] | None = None
-    limit: int | None = Field(default=None, ge=1, le=10000)
-    offset: int = Field(default=0, ge=0)
+    The export will fetch data matching the specified filters and return it in CSV or JSON format.
+    Field aliases allow renaming columns in the output file.
+    """
+
+    entity: ExportEntity = Field(..., description="Entity type to export")
+    fields: list[ExportField] = Field(
+        ...,
+        description="Fields to include in the export. Use 'as' property to rename columns.",
+        min_length=1,
+    )
+    filters: ExportFilterGroup | None = Field(
+        default=None, description="Optional filters to limit exported records"
+    )
+    sort: list[dict[str, str]] | None = Field(
+        default=None,
+        description="Sort order. Each item needs 'field' and 'direction' (asc/desc)",
+    )
+    limit: int | None = Field(default=None, ge=1, le=10000, description="Max records to export")
+    offset: int = Field(default=0, ge=0, description="Records to skip (pagination)")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "entity": "bill",
+                    "fields": [
+                        {"field": "id"},
+                        {"field": "amount", "as": "Total Amount"},
+                        {"field": "vendor.name", "as": "Vendor"},
+                    ],
+                    "filters": {
+                        "operator": "and",
+                        "filters": [{"field": "status", "operator": "eq", "value": "paid"}],
+                    },
+                    "sort": [{"field": "date", "direction": "desc"}],
+                    "limit": 100,
+                }
+            ]
+        }
+    }
 
 
 class ExportPreviewRequest(BaseModel):
-    """DTO for export preview request."""
+    """Request to preview export data before creating a job.
 
-    entity: ExportEntity
-    fields: list[ExportField] = Field(..., description="List of field definitions to export")
-    filters: ExportFilterGroup | None = None
-    sort: list[dict[str, str]] | None = None
-    limit: int = Field(default=20, ge=1, le=100)
+    Returns a sample of the data that would be exported, useful for verifying
+    filters and field configurations before running a full export.
+    """
+
+    entity: ExportEntity = Field(..., description="Entity type to preview")
+    fields: list[ExportField] = Field(
+        ...,
+        description="Fields to include. Use 'as' property to rename columns.",
+        min_length=1,
+    )
+    filters: ExportFilterGroup | None = Field(
+        default=None, description="Optional filters to limit records"
+    )
+    sort: list[dict[str, str]] | None = Field(
+        default=None, description="Sort order for preview results"
+    )
+    limit: int = Field(default=20, ge=1, le=100, description="Max records to return in preview")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "entity": "bill",
+                    "fields": [
+                        {"field": "id"},
+                        {"field": "amount", "as": "Total"},
+                        {"field": "date"},
+                    ],
+                    "limit": 10,
+                }
+            ]
+        }
+    }
 
 
 class ExportPreviewResponse(BaseModel):

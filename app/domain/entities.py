@@ -110,17 +110,27 @@ class ExportEntity(str, Enum):
 
 
 class ExportField(BaseModel):
-    """Export field definition with optional alias and formatting."""
+    """Export field definition with optional alias and formatting.
 
-    field: str = Field(..., description="Source field path (e.g., 'vendor.name' or 'amount')")
+    Use this to specify which fields to export and optionally rename them in the output.
+    The order of fields in the array determines the column order in CSV exports.
+    """
+
+    field: str = Field(
+        ...,
+        description="Source field path. Use dot notation for nested fields.",
+        examples=["id", "amount", "vendor.name", "project.code"],
+    )
     as_: str | None = Field(
         default=None,
         alias="as",
-        description="Output alias for this field (e.g., 'Vendor Name')",
+        description="Output column name/alias. If not specified, the source field name is used.",
+        examples=["Bill ID", "Total Amount", "Vendor Name"],
     )
     format: str | None = Field(
         default=None,
-        description="Optional format string for transformations (e.g., 'date:YYYY-MM-DD')",
+        description="Format string for transformations (reserved for future use).",
+        examples=["date:YYYY-MM-DD", "currency:USD"],
     )
 
     @property
@@ -128,21 +138,77 @@ class ExportField(BaseModel):
         """Get the output column/key name (alias if set, otherwise source field)."""
         return self.as_ if self.as_ is not None else self.field
 
-    class Config:
-        populate_by_name = True
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "examples": [
+                {"field": "id"},
+                {"field": "amount", "as": "Total Amount"},
+                {"field": "vendor.name", "as": "Vendor Name"},
+            ]
+        },
+    }
 
 
 class ExportConfig(BaseModel):
-    """Export job configuration."""
+    """Export job configuration.
 
-    entity: ExportEntity
-    fields: list[ExportField] = Field(..., description="List of field definitions to export")
-    filters: ExportFilterGroup | None = None
-    sort: list[dict[str, str]] | None = Field(
-        default=None, description="List of sort directives: [{'field': 'name', 'direction': 'asc'}]"
+    Defines what data to export, including entity type, fields, filters, and sorting.
+    """
+
+    entity: ExportEntity = Field(
+        ...,
+        description="The type of entity to export.",
     )
-    limit: int | None = Field(default=None, ge=1, le=10000)
-    offset: int = Field(default=0, ge=0)
+    fields: list[ExportField] = Field(
+        ...,
+        description="List of field definitions specifying which fields to export and their output names.",
+        min_length=1,
+    )
+    filters: ExportFilterGroup | None = Field(
+        default=None,
+        description="Optional filter criteria to limit exported records.",
+    )
+    sort: list[dict[str, str]] | None = Field(
+        default=None,
+        description="Sort order for exported records. Each item should have 'field' and 'direction' (asc/desc).",
+        examples=[
+            [{"field": "date", "direction": "desc"}, {"field": "amount", "direction": "asc"}]
+        ],
+    )
+    limit: int | None = Field(
+        default=None,
+        ge=1,
+        le=10000,
+        description="Maximum number of records to export.",
+    )
+    offset: int = Field(
+        default=0,
+        ge=0,
+        description="Number of records to skip (for pagination).",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "entity": "bill",
+                    "fields": [
+                        {"field": "id"},
+                        {"field": "amount", "as": "Total Amount"},
+                        {"field": "date", "as": "Bill Date"},
+                        {"field": "vendor.name", "as": "Vendor Name"},
+                    ],
+                    "filters": {
+                        "operator": "and",
+                        "filters": [{"field": "amount", "operator": "gt", "value": 1000}],
+                    },
+                    "sort": [{"field": "date", "direction": "desc"}],
+                    "limit": 100,
+                }
+            ]
+        }
+    }
 
     def get_source_fields(self) -> list[str]:
         """Get list of source field names for querying."""
