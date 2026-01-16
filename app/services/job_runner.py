@@ -198,11 +198,19 @@ class JobRunnerService:
         count = result.get("count", len(records))
         # Get output field names for CSV/JSON headers (uses aliases if configured)
         output_fields = [f.output_name for f in job.export_config.fields]
+        source_fields = job.export_config.get_source_fields()
+        # Count how many fields have custom aliases
+        aliased_fields = sum(1 for f in job.export_config.fields if f.as_ is not None)
 
         logger.info(
             f"Export query completed: run_id={job_run.id}, record_count={count}, "
-            f"fields={len(output_fields)}"
+            f"fields={len(output_fields)}, aliased_fields={aliased_fields}"
         )
+        if aliased_fields > 0:
+            logger.debug(
+                f"Field mappings for run_id={job_run.id}: "
+                f"source_fields={source_fields}, output_fields={output_fields}"
+            )
 
         # Generate local file
         export_format = self.settings.export_file_format

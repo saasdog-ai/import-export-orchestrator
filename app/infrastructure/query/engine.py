@@ -48,6 +48,17 @@ class ExportQueryEngine:
         source_fields = config.get_source_fields()
         field_mappings = config.get_field_mappings()
 
+        # Log field configuration
+        aliased_fields = [f for f in config.fields if f.as_ is not None]
+        logger.debug(
+            f"Export query: entity={config.entity.value}, "
+            f"fields={len(source_fields)}, aliased={len(aliased_fields)}, "
+            f"client_id={client_id}"
+        )
+        if aliased_fields:
+            alias_info = {f.field: f.as_ for f in aliased_fields}
+            logger.debug(f"Field aliases: {alias_info}")
+
         # Validate all source fields
         for field in source_fields:
             if not validate_field_path(config.entity, field):

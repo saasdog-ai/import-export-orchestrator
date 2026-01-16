@@ -93,13 +93,18 @@ async def create_export(
         from app.domain.entities import JobDefinition
 
         # Log request input (excluding PII)
+        aliased_count = sum(1 for f in export_request.fields if f.as_ is not None)
         logger.info(
             f"Export request received: client_id={authenticated_client_id}, "
             f"entity={export_request.entity.value}, fields={len(export_request.fields)}, "
+            f"aliased_fields={aliased_count}, "
             f"filters={'present' if export_request.filters else 'none'}, "
             f"sort={'present' if export_request.sort else 'none'}, "
             f"limit={export_request.limit}, offset={export_request.offset}"
         )
+        if aliased_count > 0:
+            aliases = {f.field: f.as_ for f in export_request.fields if f.as_ is not None}
+            logger.debug(f"Export field aliases: {aliases}")
 
         # Create export config
         export_config = ExportConfig(
@@ -166,11 +171,16 @@ async def preview_export(
     """
     try:
         # Log request input
+        aliased_count = sum(1 for f in preview_request.fields if f.as_ is not None)
         logger.info(
             f"Export preview request: client_id={authenticated_client_id}, "
             f"entity={preview_request.entity.value}, fields={len(preview_request.fields)}, "
+            f"aliased_fields={aliased_count}, "
             f"filters={'present' if preview_request.filters else 'none'}, limit={preview_request.limit}"
         )
+        if aliased_count > 0:
+            aliases = {f.field: f.as_ for f in preview_request.fields if f.as_ is not None}
+            logger.debug(f"Preview field aliases: {aliases}")
 
         # Create export config with limited results for preview
         export_config = ExportConfig(
