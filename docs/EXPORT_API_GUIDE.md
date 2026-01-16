@@ -26,7 +26,14 @@ Create an export job that will fetch and export data.
 ```json
 {
   "entity": "bill",
-  "fields": ["id", "amount", "date", "description", "status", "vendor.name"],
+  "fields": [
+    {"field": "id"},
+    {"field": "amount", "as": "Total Amount"},
+    {"field": "date", "as": "Bill Date"},
+    {"field": "description"},
+    {"field": "status", "as": "Payment Status"},
+    {"field": "vendor.name", "as": "Vendor Name"}
+  ],
   "filters": {
     "operator": "and",
     "filters": [
@@ -47,7 +54,14 @@ curl -X POST http://localhost:8000/exports \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "entity": "bill",
-    "fields": ["id", "amount", "date", "description", "status", "vendor.name"],
+    "fields": [
+      {"field": "id"},
+      {"field": "amount", "as": "Total Amount"},
+      {"field": "date", "as": "Bill Date"},
+      {"field": "description"},
+      {"field": "status", "as": "Payment Status"},
+      {"field": "vendor.name", "as": "Vendor Name"}
+    ],
     "filters": {
       "operator": "and",
       "filters": [
@@ -182,7 +196,13 @@ RESPONSE=$(curl -s -X POST "${BASE_URL}/exports" \
   -H "Authorization: Bearer ${JWT_TOKEN}" \
   -d '{
     "entity": "'"${ENTITY}"'",
-    "fields": ["id", "amount", "date", "description", "status"],
+    "fields": [
+      {"field": "id"},
+      {"field": "amount", "as": "Total Amount"},
+      {"field": "date", "as": "Bill Date"},
+      {"field": "description"},
+      {"field": "status", "as": "Payment Status"}
+    ],
     "filters": {
       "operator": "and",
       "filters": [
@@ -249,7 +269,11 @@ curl -X POST http://localhost:8000/exports/preview \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "entity": "bill",
-    "fields": ["id", "amount", "date"],
+    "fields": [
+      {"field": "id"},
+      {"field": "amount", "as": "Total Amount"},
+      {"field": "date", "as": "Bill Date"}
+    ],
     "filters": {
       "operator": "and",
       "filters": [
@@ -268,13 +292,15 @@ curl -X POST http://localhost:8000/exports/preview \
   "entity": "bill",
   "count": 5,
   "records": [
-    {"id": "...", "amount": 2500.0, "date": "2024-01-20"},
-    {"id": "...", "amount": 1000.5, "date": "2024-01-15"}
+    {"id": "...", "Total Amount": 2500.0, "Bill Date": "2024-01-20"},
+    {"id": "...", "Total Amount": 1000.5, "Bill Date": "2024-01-15"}
   ],
   "limit": 20,
   "offset": 0
 }
 ```
+
+Note: The response uses the aliased field names (e.g., "Total Amount" instead of "amount").
 
 ## Available Entities
 
@@ -461,17 +487,109 @@ The JWT token should contain a `client_id` claim (or `sub` claim used as client_
 - Check that token contains `client_id` or `sub` claim
 - In development, ensure auth is disabled or use default client_id
 
+## Field Definitions
+
+Fields are specified as an array of field definition objects. Each field definition supports:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `field` | string | Yes | Source field path (e.g., `"amount"`, `"vendor.name"`) |
+| `as` | string | No | Output alias for the field (e.g., `"Total Amount"`) |
+| `format` | string | No | Reserved for future transformations (e.g., date formatting) |
+
+### Field Definition Examples
+
+**Simple fields (no alias)**:
+```json
+{
+  "fields": [
+    {"field": "id"},
+    {"field": "amount"},
+    {"field": "date"}
+  ]
+}
+```
+
+Output CSV headers: `id,amount,date`
+
+**Fields with aliases**:
+```json
+{
+  "fields": [
+    {"field": "id", "as": "Bill ID"},
+    {"field": "amount", "as": "Total Amount"},
+    {"field": "date", "as": "Bill Date"},
+    {"field": "vendor.name", "as": "Vendor Name"}
+  ]
+}
+```
+
+Output CSV headers: `Bill ID,Total Amount,Bill Date,Vendor Name`
+
+**Mixed (some with aliases, some without)**:
+```json
+{
+  "fields": [
+    {"field": "id"},
+    {"field": "amount", "as": "Total"},
+    {"field": "status"}
+  ]
+}
+```
+
+Output CSV headers: `id,Total,status`
+
+### Field Order
+
+The order of fields in the array determines the column order in the exported file:
+
+```json
+{
+  "fields": [
+    {"field": "vendor.name", "as": "Vendor"},
+    {"field": "amount", "as": "Amount"},
+    {"field": "id"}
+  ]
+}
+```
+
+Output CSV: `Vendor,Amount,id` (in that order)
+
+### Available Fields by Entity
+
+**bill**:
+- Simple: `id`, `amount`, `date`, `description`, `status`, `created_at`
+- Nested: `vendor.id`, `vendor.name`, `vendor.email`, `project.id`, `project.code`, `project.name`
+
+**invoice**:
+- Simple: `id`, `amount`, `date`, `due_date`, `description`, `status`, `created_at`
+- Nested: `vendor.id`, `vendor.name`, `vendor.email`, `project.id`, `project.code`, `project.name`
+
+**vendor**:
+- Simple: `id`, `name`, `email`, `phone`, `address`, `created_at`
+- Nested: `project.id`, `project.code`, `project.name`
+
+**project**:
+- Simple: `id`, `code`, `name`, `description`, `status`, `created_at`
+
 ## Quick Reference
 
 ```bash
 # Health check
 curl http://localhost:8000/health
 
-# Create export
+# Create export with field aliases
 curl -X POST http://localhost:8000/exports \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer TOKEN" \
-  -d '{"entity": "bill", "fields": ["id", "amount"], "limit": 10}'
+  -d '{
+    "entity": "bill",
+    "fields": [
+      {"field": "id"},
+      {"field": "amount", "as": "Total Amount"}
+    ],
+    "limit": 10
+  }'
 
 # Check status
 curl http://localhost:8000/exports/{RUN_ID}/result \
