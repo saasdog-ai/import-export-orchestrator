@@ -32,7 +32,7 @@ async def test_create_job(test_client_app: AsyncClient):
         "job_type": "export",
         "export_config": {
             "entity": "bill",
-            "fields": ["id", "amount", "date"],
+            "fields": [{"field": "id"}, {"field": "amount"}, {"field": "date"}],
             "limit": 100,
         },
         "enabled": True,
@@ -47,7 +47,7 @@ async def test_preview_export(test_client_app: AsyncClient):
     """Test export preview endpoint."""
     preview_data = {
         "entity": "bill",
-        "fields": ["id", "amount", "date"],
+        "fields": [{"field": "id"}, {"field": "amount"}, {"field": "date"}],
         "filters": None,
         "limit": 20,
     }
@@ -73,7 +73,7 @@ async def test_get_job_runs_with_date_filter(test_client_app: AsyncClient):
         "job_type": "export",
         "export_config": {
             "entity": "bill",
-            "fields": ["id", "amount", "date"],
+            "fields": [{"field": "id"}, {"field": "amount"}, {"field": "date"}],
             "limit": 100,
         },
         "enabled": True,
@@ -130,6 +130,7 @@ async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
     from datetime import UTC, datetime, timedelta
 
     # Get all jobs (no filter) - verify endpoint works
+    # Response is now paginated: {items: [...], total: N, page: 1, page_size: 20, total_pages: M}
     response = await test_client_app.get("/jobs")
     assert response.status_code == 200
 
@@ -138,7 +139,8 @@ async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
     future_date_str = future_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(f"/jobs?start_date={future_date_str}")
     assert response.status_code == 200
-    future_jobs = response.json()
+    future_response = response.json()
+    future_jobs = future_response.get("items", [])
     assert len(future_jobs) == 0
 
     # Get jobs with end_date filter (past date)
@@ -146,7 +148,8 @@ async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
     past_date_str = past_date.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     response = await test_client_app.get(f"/jobs?end_date={past_date_str}")
     assert response.status_code == 200
-    past_jobs = response.json()
+    past_response = response.json()
+    past_jobs = past_response.get("items", [])
     # Verify all returned jobs are before past_date
     for job in past_jobs:
         job_date = datetime.fromisoformat(job["created_at"].replace("Z", "+00:00"))
@@ -161,7 +164,8 @@ async def test_get_client_jobs_with_date_filter(test_client_app: AsyncClient):
         f"/jobs?start_date={start_date_str}&end_date={end_date_str}"
     )
     assert response.status_code == 200
-    range_jobs = response.json()
+    range_response = response.json()
+    range_jobs = range_response.get("items", [])
     # Verify all returned jobs are within the date range
     for job in range_jobs:
         job_date = datetime.fromisoformat(job["created_at"].replace("Z", "+00:00"))

@@ -42,8 +42,9 @@ async def test_get_jobs_by_client(
 ):
     """Test getting jobs by client ID."""
     await job_repository.create(test_job)
-    jobs = await job_repository.get_by_client_id(test_client_id)
+    jobs, total_count = await job_repository.get_by_client_id(test_client_id)
     assert len(jobs) >= 1
+    assert total_count >= 1
     assert all(job.client_id == test_client_id for job in jobs)
 
 
@@ -57,14 +58,18 @@ async def test_get_jobs_by_client_with_date_filter(
     # Create a job
     await job_repository.create(test_job)
 
-    # Get all jobs
-    all_jobs = await job_repository.get_by_client_id(test_client_id)
+    # Get all jobs - now returns tuple (jobs, total_count)
+    all_jobs, all_count = await job_repository.get_by_client_id(test_client_id)
     assert len(all_jobs) >= 1
+    assert all_count >= 1
 
     # Filter by start_date (should include the job we just created)
     future_date = datetime.now(UTC) + timedelta(days=1)
-    future_jobs = await job_repository.get_by_client_id(test_client_id, start_date=future_date)
+    future_jobs, future_count = await job_repository.get_by_client_id(
+        test_client_id, start_date=future_date
+    )
     assert len(future_jobs) == 0  # No jobs created in the future
+    assert future_count == 0
 
     # Filter by end_date (should include the job we just created)
     past_date = datetime.now(UTC) - timedelta(days=1)
@@ -75,10 +80,11 @@ async def test_get_jobs_by_client_with_date_filter(
     # Filter by date range (should include the job)
     start_date = datetime.now(UTC) - timedelta(days=1)
     end_date = datetime.now(UTC) + timedelta(days=1)
-    range_jobs = await job_repository.get_by_client_id(
+    range_jobs, range_count = await job_repository.get_by_client_id(
         test_client_id, start_date=start_date, end_date=end_date
     )
     assert len(range_jobs) >= 1
+    assert range_count >= 1
     assert all(start_date <= job.created_at <= end_date for job in range_jobs)
 
 

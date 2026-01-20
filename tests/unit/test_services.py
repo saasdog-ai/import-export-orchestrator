@@ -58,8 +58,9 @@ async def test_get_job(job_service: JobService, test_job: JobDefinition):
 async def test_get_jobs_by_client(job_service: JobService, test_client_id, test_job: JobDefinition):
     """Test getting jobs by client ID."""
     await job_service.create_job(test_job)
-    jobs = await job_service.get_jobs_by_client(test_client_id)
+    jobs, total_count = await job_service.get_jobs_by_client(test_client_id)
     assert len(jobs) >= 1
+    assert total_count >= 1
     assert all(job.client_id == test_client_id for job in jobs)
 
 
