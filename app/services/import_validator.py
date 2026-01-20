@@ -314,3 +314,226 @@ class ImportValidator:
         errors.extend(content_errors)
 
         return len(errors) == 0, errors
+
+    @staticmethod
+    def apply_field_mappings(
+        record: dict[str, Any], field_mappings: dict[str, str]
+    ) -> dict[str, Any]:
+        """
+        Apply field mappings to a record, renaming source columns to target fields.
+
+        Args:
+            record: Original record with source column names
+            field_mappings: Dictionary mapping source column names to target field names
+
+        Returns:
+            New record with target field names
+        """
+        if not field_mappings:
+            return record
+
+        mapped_record: dict[str, Any] = {}
+        for source_col, value in record.items():
+            # If there's a mapping for this column, use the target name
+            target_field = field_mappings.get(source_col, source_col)
+            mapped_record[target_field] = value
+
+        return mapped_record
+
+    @staticmethod
+    async def preview_with_validation(
+        file_path: str,
+        entity: ExportEntity,
+        field_mappings: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Preview import file with validation status for each record.
+
+        This method reads the entire file, applies field mappings, validates each row,
+        and returns all records with their validation status.
+
+        Args:
+            file_path: Path to the import file
+            entity: Entity type to validate against
+            field_mappings: Optional dictionary mapping source column names to target fields
+
+        Returns:
+            Dictionary containing:
+                - file_path: Path to the file
+                - entity: Entity type
+                - total_records: Total number of records
+                - valid_count: Number of valid records
+                - invalid_count: Number of invalid records
+                - records: List of records with validation status
+        """
+        # First, validate file format
+        is_valid, error_msg = ImportValidator.validate_file_format(file_path)
+        if not is_valid:
+            logger.error(f"File format validation failed: {error_msg}")
+            raise ValueError(error_msg)
+
+        path = Path(file_path)
+        extension = path.suffix.lower()
+
+        records: list[dict[str, Any]] = []
+        valid_count = 0
+        invalid_count = 0
+
+        try:
+            if extension == ".csv":
+                records, valid_count, invalid_count = await ImportValidator._preview_csv(
+                    file_path, entity, field_mappings or {}
+                )
+            elif extension == ".json":
+                records, valid_count, invalid_count = await ImportValidator._preview_json(
+                    file_path, entity, field_mappings or {}
+                )
+            else:
+                raise ValueError(f"Unsupported file format: {extension}")
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error previewing file: {e}", exc_info=True)
+            raise ValueError(f"Error reading file: {str(e)}") from e
+
+        return {
+            "file_path": file_path,
+            "entity": entity.value,
+            "total_records": len(records),
+            "valid_count": valid_count,
+            "invalid_count": invalid_count,
+            "records": records,
+        }
+
+    @staticmethod
+    async def _preview_csv(
+        file_path: str,
+        entity: ExportEntity,
+        field_mappings: dict[str, str],
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        """Preview CSV file with validation."""
+        records: list[dict[str, Any]] = []
+        valid_count = 0
+        invalid_count = 0
+
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+
+                if not reader.fieldnames:
+                    raise ValueError("CSV file has no header row")
+
+                # Map the field names using mappings
+                mapped_fieldnames = [field_mappings.get(fn, fn) for fn in reader.fieldnames]
+
+                row_num = 1  # Start at 1 (header is row 0)
+                for row in reader:
+                    # Apply field mappings to the row
+                    mapped_row = ImportValidator.apply_field_mappings(row, field_mappings)
+
+                    # Validate the mapped row
+                    row_errors = ImportValidator._validate_row(
+                        mapped_row, row_num, entity, mapped_fieldnames
+                    )
+
+                    # Convert errors to the expected format
+                    formatted_errors = [
+                        {"field": e.get("field", ""), "message": e.get("message", "")}
+                        for e in row_errors
+                        if e.get("field")  # Only include field-level errors
+                    ]
+
+                    is_valid = len(formatted_errors) == 0
+                    if is_valid:
+                        valid_count += 1
+                    else:
+                        invalid_count += 1
+
+                    records.append(
+                        {
+                            "row": row_num,
+                            "data": mapped_row,
+                            "is_valid": is_valid,
+                            "errors": formatted_errors,
+                        }
+                    )
+
+                    row_num += 1
+
+        except UnicodeDecodeError as e:
+            raise ValueError("File encoding error. File must be UTF-8 encoded") from e
+        except csv.Error as e:
+            raise ValueError(f"CSV parsing error: {str(e)}") from e
+
+        return records, valid_count, invalid_count
+
+    @staticmethod
+    async def _preview_json(
+        file_path: str,
+        entity: ExportEntity,
+        field_mappings: dict[str, str],
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        """Preview JSON file with validation."""
+        records: list[dict[str, Any]] = []
+        valid_count = 0
+        invalid_count = 0
+
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            # If single object, wrap in list
+            if isinstance(data, dict):
+                data = [data]
+            elif not isinstance(data, list):
+                raise ValueError("JSON must be an array or object")
+
+            for idx, record in enumerate(data, start=1):
+                if not isinstance(record, dict):
+                    records.append(
+                        {
+                            "row": idx,
+                            "data": {"_raw": str(record)},
+                            "is_valid": False,
+                            "errors": [{"field": "", "message": "Record must be an object"}],
+                        }
+                    )
+                    invalid_count += 1
+                    continue
+
+                # Apply field mappings to the record
+                mapped_record = ImportValidator.apply_field_mappings(record, field_mappings)
+                mapped_fieldnames = list(mapped_record.keys())
+
+                # Validate the mapped record
+                row_errors = ImportValidator._validate_row(
+                    mapped_record, idx, entity, mapped_fieldnames
+                )
+
+                # Convert errors to the expected format
+                formatted_errors = [
+                    {"field": e.get("field", ""), "message": e.get("message", "")}
+                    for e in row_errors
+                    if e.get("field")  # Only include field-level errors
+                ]
+
+                is_valid = len(formatted_errors) == 0
+                if is_valid:
+                    valid_count += 1
+                else:
+                    invalid_count += 1
+
+                records.append(
+                    {
+                        "row": idx,
+                        "data": mapped_record,
+                        "is_valid": is_valid,
+                        "errors": formatted_errors,
+                    }
+                )
+
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {str(e)}") from e
+
+        return records, valid_count, invalid_count

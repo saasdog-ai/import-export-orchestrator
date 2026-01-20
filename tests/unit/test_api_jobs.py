@@ -427,7 +427,10 @@ async def test_get_client_jobs_success(mock_job_service, authenticated_client_id
         ),
     ]
 
-    mock_job_service.get_jobs_by_client = AsyncMock(return_value=jobs)
+    # Return tuple (jobs, total_count) for pagination
+    mock_job_service.get_jobs_by_client = AsyncMock(return_value=(jobs, len(jobs)))
+    # Mock get_job_runs for fetching last_run (returns empty list)
+    mock_job_service.get_job_runs = AsyncMock(return_value=[])
 
     # Execute
     result = await get_client_jobs(
@@ -435,11 +438,11 @@ async def test_get_client_jobs_success(mock_job_service, authenticated_client_id
         job_service=mock_job_service,
     )
 
-    # Verify - model_validate can accept JobDefinition objects
-    assert len(result) == 2
-    assert all(job.client_id == authenticated_client_id for job in result)
+    # Verify - result is now PaginatedJobsResponse
+    assert result.total == 2
+    assert len(result.items) == 2
+    assert all(job.client_id == authenticated_client_id for job in result.items)
     # Note: FastAPI Query() objects are used, so we check the call was made with the right client_id
-    # The date parameters will be Query(None) objects from FastAPI, not None
     assert mock_job_service.get_jobs_by_client.called
     call_args = mock_job_service.get_jobs_by_client.call_args
     assert call_args[0][0] == authenticated_client_id  # First positional arg is client_id
@@ -466,7 +469,10 @@ async def test_get_client_jobs_with_date_filter(mock_job_service, authenticated_
     start_date = datetime.now(UTC)
     end_date = datetime.now(UTC)
 
-    mock_job_service.get_jobs_by_client = AsyncMock(return_value=jobs)
+    # Return tuple (jobs, total_count) for pagination
+    mock_job_service.get_jobs_by_client = AsyncMock(return_value=(jobs, len(jobs)))
+    # Mock get_job_runs for fetching last_run (returns empty list)
+    mock_job_service.get_job_runs = AsyncMock(return_value=[])
 
     # Execute with date filters
     result = await get_client_jobs(
@@ -476,13 +482,21 @@ async def test_get_client_jobs_with_date_filter(mock_job_service, authenticated_
         job_service=mock_job_service,
     )
 
-    # Verify
-    assert len(result) == 1
+    # Verify - result is now PaginatedJobsResponse
+    assert result.total == 1
+    assert len(result.items) == 1
     # The API converts timezone-aware datetimes to naive UTC before calling the service
     expected_start = (
         start_date.astimezone(UTC).replace(tzinfo=None) if start_date.tzinfo else start_date
     )
     expected_end = end_date.astimezone(UTC).replace(tzinfo=None) if end_date.tzinfo else end_date
+    # Check that the call was made with correct parameters (including pagination defaults)
     mock_job_service.get_jobs_by_client.assert_called_once_with(
-        authenticated_client_id, start_date=expected_start, end_date=expected_end
+        authenticated_client_id,
+        start_date=expected_start,
+        end_date=expected_end,
+        job_type=None,
+        entity=None,
+        page=1,
+        page_size=20,
     )

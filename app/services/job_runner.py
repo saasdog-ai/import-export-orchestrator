@@ -3,6 +3,7 @@
 import asyncio
 import os
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from app.core.config import get_settings
@@ -284,6 +285,29 @@ class JobRunnerService:
             f"file_location={'cloud' if remote_file_path else 'local'}"
         )
 
+    def _apply_field_mappings(
+        self, record: dict[str, Any], field_mappings: dict[str, str]
+    ) -> dict[str, Any]:
+        """Apply field mappings to a record, renaming source columns to target fields.
+
+        Args:
+            record: Original record with source column names
+            field_mappings: Dictionary mapping source column names to target field names
+
+        Returns:
+            New record with target field names
+        """
+        if not field_mappings:
+            return record
+
+        mapped_record: dict[str, Any] = {}
+        for source_col, value in record.items():
+            # If there's a mapping for this column, use the target name
+            target_field = field_mappings.get(source_col, source_col)
+            mapped_record[target_field] = value
+
+        return mapped_record
+
     async def _execute_import_job(
         self, job: JobDefinition, job_run: JobRun, worker_id: str
     ) -> None:
@@ -354,6 +378,16 @@ class JobRunnerService:
                     error_message=error_msg,
                 )
                 return
+
+            # Apply field mappings if configured
+            field_mappings = job.import_config.get_field_mappings()
+            if field_mappings:
+                logger.info(
+                    f"Applying field mappings for import: run_id={job_run.id}, "
+                    f"mappings_count={len(field_mappings)}"
+                )
+                logger.debug(f"Field mappings: {field_mappings}")
+                data = [self._apply_field_mappings(record, field_mappings) for record in data]
 
             # Import data with detailed error reporting (pass client_id for security)
             import_errors = []

@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="CHANGE_THIS_IN_PRODUCTION")
     jwt_algorithm: str = Field(default="HS256")
     jwt_access_token_expire_minutes: int = Field(default=30)
+    auth_enabled: bool = Field(
+        default=False,
+        description="Enable JWT authentication. Must be True in production.",
+    )
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Enable rate limiting for API protection.",
+    )
 
     # Scheduler
     scheduler_enabled: bool = Field(default=True)
@@ -89,8 +97,8 @@ class Settings(BaseSettings):
 
     # CORS
     allowed_origins: list[str] = Field(
-        default=["*"],
-        description="Allowed CORS origins (use specific domains in production)",
+        default=["http://localhost:3000", "http://localhost:5173"],
+        description="Allowed CORS origins. Must be explicitly configured in production.",
     )
 
     # Database pool configuration
@@ -115,6 +123,14 @@ class Settings(BaseSettings):
         """Validate required settings for production environment."""
         errors: list[str] = []
 
+        if not self.auth_enabled:
+            errors.append("Authentication must be enabled in production (set AUTH_ENABLED=true)")
+
+        if self.jwt_secret_key == "CHANGE_THIS_IN_PRODUCTION":
+            errors.append(
+                "JWT secret key must be changed in production (set JWT_SECRET_KEY to a secure value)"
+            )
+
         if not self.message_queue_name:
             errors.append("Message queue must be configured in production (set MESSAGE_QUEUE_NAME)")
 
@@ -122,6 +138,12 @@ class Settings(BaseSettings):
             errors.append(
                 "Cloud storage bucket must be configured when cloud provider is set "
                 "(set CLOUD_STORAGE_BUCKET)"
+            )
+
+        if not self.allowed_origins or "*" in self.allowed_origins:
+            errors.append(
+                "CORS origins must be explicitly configured in production "
+                "(set ALLOWED_ORIGINS to specific domains, not '*')"
             )
 
         if errors:

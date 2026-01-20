@@ -143,17 +143,24 @@ async def test_get_jobs_by_client(job_service, mock_job_repository, test_client_
         ),
     ]
 
-    # Mock repository response
-    mock_job_repository.get_by_client_id = AsyncMock(return_value=jobs)
+    # Mock repository response - returns tuple (jobs, total_count) for pagination
+    mock_job_repository.get_by_client_id = AsyncMock(return_value=(jobs, len(jobs)))
 
     # Execute
-    result = await job_service.get_jobs_by_client(test_client_id)
+    result_jobs, result_count = await job_service.get_jobs_by_client(test_client_id)
 
     # Verify
-    assert len(result) == 2
-    assert all(job.client_id == test_client_id for job in result)
+    assert len(result_jobs) == 2
+    assert result_count == 2
+    assert all(job.client_id == test_client_id for job in result_jobs)
     mock_job_repository.get_by_client_id.assert_called_once_with(
-        test_client_id, start_date=None, end_date=None
+        test_client_id,
+        start_date=None,
+        end_date=None,
+        job_type=None,
+        entity=None,
+        page=1,
+        page_size=50,
     )
 
 

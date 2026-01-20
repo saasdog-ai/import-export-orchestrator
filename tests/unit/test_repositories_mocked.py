@@ -162,17 +162,22 @@ async def test_get_jobs_by_client(mock_db, mock_session):
     mock_db.async_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_db.async_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    # Mock session.execute
-    result_mock = MagicMock()
-    result_mock.scalars.return_value.all.return_value = db_models
-    mock_session.execute.return_value = result_mock
+    # Mock session.execute - first call for count, second call for jobs
+    count_result_mock = MagicMock()
+    count_result_mock.scalar.return_value = 2  # Total count
+
+    jobs_result_mock = MagicMock()
+    jobs_result_mock.scalars.return_value.all.return_value = db_models
+
+    mock_session.execute = AsyncMock(side_effect=[count_result_mock, jobs_result_mock])
 
     # Execute
     repository = JobRepository(mock_db)
-    jobs = await repository.get_by_client_id(client_id)
+    jobs, total_count = await repository.get_by_client_id(client_id)
 
     # Verify
     assert len(jobs) == 2
+    assert total_count == 2
     assert all(job.client_id == client_id for job in jobs)
 
 

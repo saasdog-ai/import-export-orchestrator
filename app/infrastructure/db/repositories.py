@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from app.core.logging import get_logger
 from app.domain.entities import (
@@ -110,15 +110,26 @@ class JobRepository:
         client_id: UUID,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
-    ) -> list[JobDefinition]:
-        """Get all job definitions for a client, optionally filtered by date range."""
+        job_type: str | None = None,
+        entity: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[JobDefinition], int]:
+        """Get job definitions for a client with pagination and filtering.
+
+        Returns:
+            Tuple of (jobs list, total count)
+        """
         # Log database operation input
         logger.debug(
             f"DB get jobs by client: client_id={client_id}, "
-            f"start_date={start_date}, end_date={end_date}"
+            f"start_date={start_date}, end_date={end_date}, "
+            f"job_type={job_type}, entity={entity}, page={page}, page_size={page_size}"
         )
 
         async with self.db.async_session_maker() as session:
+            from sqlalchemy import func
+
             query = select(JobDefinitionModel).where(JobDefinitionModel.client_id == client_id)
 
             # Apply date filters (convert timezone-aware to naive UTC for comparison)
@@ -127,14 +138,40 @@ class JobRepository:
             if end_date:
                 query = query.where(JobDefinitionModel.created_at <= _to_naive_utc(end_date))
 
-            result = await session.execute(query.order_by(JobDefinitionModel.created_at.desc()))
+            # Apply job type filter
+            if job_type:
+                query = query.where(JobDefinitionModel.job_type == job_type)
+
+            # Apply entity filter (search in JSON config)
+            if entity:
+                from sqlalchemy import String, cast
+
+                # Filter by entity in export_config or import_config using PostgreSQL JSON operators
+                query = query.where(
+                    (cast(JobDefinitionModel.export_config["entity"], String) == f'"{entity}"')
+                    | (cast(JobDefinitionModel.import_config["entity"], String) == f'"{entity}"')
+                )
+
+            # Get total count before pagination
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await session.execute(count_query)
+            total_count = total_result.scalar() or 0
+
+            # Apply pagination and sorting
+            offset = (page - 1) * page_size
+            query = query.order_by(JobDefinitionModel.created_at.desc())
+            query = query.offset(offset).limit(page_size)
+
+            result = await session.execute(query)
             db_jobs = result.scalars().all()
             jobs = [self._model_to_entity(db_job) for db_job in db_jobs]
 
             # Log database operation output
-            logger.debug(f"DB jobs retrieved: client_id={client_id}, count={len(jobs)}")
+            logger.debug(
+                f"DB jobs retrieved: client_id={client_id}, count={len(jobs)}, total={total_count}"
+            )
 
-            return jobs
+            return jobs, total_count
 
     async def get_enabled_scheduled_jobs(self) -> list[JobDefinition]:
         """Get all enabled jobs with cron schedules."""
@@ -183,6 +220,22 @@ class JobRepository:
             logger.info(f"DB job updated: job_id={entity.id}, updated_at={entity.updated_at}")
 
             return entity
+
+    async def delete(self, job_id: UUID) -> bool:
+        """Delete a job definition and all its runs."""
+        logger.info(f"DB delete job: job_id={job_id}")
+
+        async with self.db.transaction() as session:
+            # First delete all job runs for this job
+            await session.execute(delete(JobRunModel).where(JobRunModel.job_id == job_id))
+            # Then delete the job itself
+            result = await session.execute(
+                delete(JobDefinitionModel).where(JobDefinitionModel.id == job_id)
+            )
+            deleted = result.rowcount > 0
+
+            logger.info(f"DB job deleted: job_id={job_id}, success={deleted}")
+            return deleted
 
     def _model_to_entity(self, db_job: JobDefinitionModel) -> JobDefinition:
         """Convert database model to domain entity."""

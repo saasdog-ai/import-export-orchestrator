@@ -165,6 +165,22 @@ class ExportConfig(BaseModel):
         description="List of field definitions specifying which fields to export and their output names.",
         min_length=1,
     )
+
+    @field_validator("fields", mode="before")
+    @classmethod
+    def convert_string_fields(cls, v: Any) -> list[dict[str, str]]:
+        """Convert plain string fields to ExportField format for backward compatibility."""
+        if not isinstance(v, list):
+            return v
+        result = []
+        for item in v:
+            if isinstance(item, str):
+                # Convert old format "field_name" to new format {"field": "field_name"}
+                result.append({"field": item})
+            else:
+                result.append(item)
+        return result
+
     filters: ExportFilterGroup | None = Field(
         default=None,
         description="Optional filter criteria to limit exported records.",
@@ -219,12 +235,76 @@ class ExportConfig(BaseModel):
         return {f.field: f.output_name for f in self.fields}
 
 
+class ImportField(BaseModel):
+    """Import field mapping definition.
+
+    Use this to map source column names (from CSV/JSON files) to target database fields.
+    This allows importing files with different column naming conventions.
+    """
+
+    source: str = Field(
+        ...,
+        description="Source column name in the import file.",
+        examples=["Total Amount", "Invoice Date", "Supplier Name"],
+    )
+    target: str = Field(
+        ...,
+        description="Target database field name.",
+        examples=["amount", "date", "vendor_name"],
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"source": "Total Amount", "target": "amount"},
+                {"source": "Invoice Date", "target": "date"},
+                {"source": "Supplier Name", "target": "vendor_name"},
+            ]
+        }
+    }
+
+
 class ImportConfig(BaseModel):
-    """Import job configuration."""
+    """Import job configuration.
+
+    Defines how to import data, including entity type, field mappings, and options.
+    """
 
     source: str = Field(..., description="Source system identifier")
-    entity: ExportEntity
+    entity: ExportEntity = Field(..., description="The type of entity to import")
+    fields: list[ImportField] | None = Field(
+        default=None,
+        description="Optional field mappings from source columns to target fields. "
+        "If not provided, source columns must match target field names exactly.",
+    )
     options: dict[str, Any] = Field(default_factory=dict, description="Import-specific options")
+
+    def get_field_mappings(self) -> dict[str, str]:
+        """Get mapping from source column to target field.
+
+        Returns:
+            Dictionary mapping source column names to target field names.
+            Empty dict if no mappings are configured.
+        """
+        if not self.fields:
+            return {}
+        return {f.source: f.target for f in self.fields}
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "source": "cloud_storage",
+                    "entity": "bill",
+                    "fields": [
+                        {"source": "Total Amount", "target": "amount"},
+                        {"source": "Invoice Date", "target": "date"},
+                    ],
+                    "options": {"source_file": "imports/client-123/temp/bills.csv"},
+                }
+            ]
+        }
+    }
 
 
 class JobDefinition(BaseModel):

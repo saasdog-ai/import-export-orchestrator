@@ -1,0 +1,43 @@
+# Terraform Variables Example
+# Copy this file to terraform.tfvars and customize for your environment
+# NEVER commit terraform.tfvars to version control
+
+aws_region   = "us-east-1"
+environment  = "dev"
+project_name = "import-export-orchestrator"
+# GitHub repository for OIDC (format: owner/repo)
+github_repository          = "rajivskumar/import-export-orchestrator"
+vpc_cidr                   = "10.0.0.0/16"
+database_instance_class    = "db.t3.micro"
+database_allocated_storage = 20
+database_name              = "job_runner"
+database_username          = "postgres"
+# database_password must be provided via environment variable:
+# export TF_VAR_database_password="your-secure-password"
+# Or use AWS Secrets Manager (recommended for production)
+
+ecs_task_cpu      = 512
+ecs_task_memory   = 1024
+ecs_desired_count = 1
+container_image   = "429763994533.dkr.ecr.us-east-1.amazonaws.com/import-export-orchestrator:latest"
+enable_alb        = false # Set to false if your AWS account doesn't support load balancers yet
+
+allowed_cidr_blocks = [
+  "0.0.0.0/0" # Restrict this in production!
+]
+
+# S3 Configuration
+s3_bucket_name = "exports" # Will be prefixed with project name and environment
+
+# SQS Configuration
+sqs_visibility_timeout = 300 # 5 minutes (should be longer than longest job execution time)
+sqs_receive_wait_time  = 20  # Long polling wait time in seconds
+sqs_max_receive_count  = 3   # Max retries before moving to DLQ
+
+common_tags = {
+  Project     = "import-export-orchestrator"
+  ManagedBy   = "terraform"
+  Environment = "dev"
+  Owner       = "devops"
+}
+

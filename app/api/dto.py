@@ -1,6 +1,7 @@
 """Data Transfer Objects (DTOs) for API requests and responses."""
 
 from datetime import datetime
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from app.domain.entities import (
     ExportField,
     ExportFilterGroup,
     ImportConfig,
+    ImportField,
     JobStatus,
     JobType,
 )
@@ -35,13 +37,36 @@ class JobDefinitionCreate(BaseModel):
 
 
 class JobDefinitionUpdate(BaseModel):
-    """DTO for updating a job definition."""
+    """DTO for updating a job definition.
+
+    Only 'safe' fields can be updated directly. Config fields (export_config,
+    import_config) are immutable - use clone endpoint to create a new job
+    with modified config.
+    """
 
     name: str | None = None
-    export_config: ExportConfig | None = None
-    import_config: ImportConfig | None = None
     cron_schedule: str | None = None
     enabled: bool | None = None
+
+
+class JobDefinitionClone(BaseModel):
+    """DTO for cloning a job definition with optional modifications."""
+
+    name: str  # Required - new job needs a name
+    export_config: ExportConfig | None = None  # If provided, overrides source config
+    import_config: ImportConfig | None = None  # If provided, overrides source config
+    cron_schedule: str | None = None
+    enabled: bool = True
+
+
+class JobRunSummary(BaseModel):
+    """Summary of a job run for embedding in job responses."""
+
+    id: UUID
+    status: JobStatus
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
 
 
 class JobDefinitionResponse(BaseModel):
@@ -57,6 +82,7 @@ class JobDefinitionResponse(BaseModel):
     enabled: bool
     created_at: datetime
     updated_at: datetime
+    last_run: JobRunSummary | None = None
 
 
 class JobRunResponse(BaseModel):
@@ -71,6 +97,16 @@ class JobRunResponse(BaseModel):
     result_metadata: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PaginatedJobsResponse(BaseModel):
+    """Paginated response for job definitions."""
+
+    items: list[JobDefinitionResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class ExportRequest(BaseModel):
@@ -188,3 +224,237 @@ class HealthResponse(BaseModel):
 
     status: str
     timestamp: datetime
+
+
+# ============================================================================
+# Import Preview DTOs
+# ============================================================================
+
+
+class ImportPreviewRequest(BaseModel):
+    """Request to preview import data with validation results.
+
+    Returns all records from the uploaded file with validation status for each row.
+    This allows users to see which records will succeed and which will fail before
+    executing the import.
+    """
+
+    file_path: str = Field(
+        ...,
+        description="Path to the uploaded file (from /imports/upload response)",
+    )
+    entity: ExportEntity = Field(..., description="Entity type to import")
+    field_mappings: list[ImportField] | None = Field(
+        default=None,
+        description="Optional field mappings from source columns to target fields. "
+        "If not provided, source columns must match target field names exactly.",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "file_path": "imports/client-123/temp/bills.csv",
+                    "entity": "bill",
+                    "field_mappings": [
+                        {"source": "Total Amount", "target": "amount"},
+                        {"source": "Invoice Date", "target": "date"},
+                    ],
+                }
+            ]
+        }
+    }
+
+
+class ImportPreviewRecordError(BaseModel):
+    """Validation error for a specific field in an import record."""
+
+    field: str = Field(..., description="Field name that has the error")
+    message: str = Field(..., description="Error message describing the validation failure")
+
+
+class ImportPreviewRecord(BaseModel):
+    """A single record in the import preview with validation status."""
+
+    row: int = Field(..., description="Row number in the source file (1-based)")
+    data: dict[str, Any] = Field(..., description="Record data after field mapping applied")
+    is_valid: bool = Field(..., description="Whether this record passes validation")
+    errors: list[ImportPreviewRecordError] = Field(
+        default_factory=list,
+        description="Validation errors for this record (empty if valid)",
+    )
+
+
+class ImportPreviewResponse(BaseModel):
+    """Response containing import preview with validation results."""
+
+    file_path: str = Field(..., description="Path to the file being previewed")
+    entity: ExportEntity = Field(..., description="Entity type being imported")
+    total_records: int = Field(..., description="Total number of records in the file")
+    valid_count: int = Field(..., description="Number of records that pass validation")
+    invalid_count: int = Field(..., description="Number of records that fail validation")
+    records: list[ImportPreviewRecord] = Field(
+        ...,
+        description="All records with validation status",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "file_path": "imports/client-123/temp/bills.csv",
+                    "entity": "bill",
+                    "total_records": 100,
+                    "valid_count": 95,
+                    "invalid_count": 5,
+                    "records": [
+                        {
+                            "row": 1,
+                            "data": {"amount": 1000, "date": "2024-01-15"},
+                            "is_valid": True,
+                            "errors": [],
+                        },
+                        {
+                            "row": 2,
+                            "data": {"amount": "invalid", "date": "2024-01-15"},
+                            "is_valid": False,
+                            "errors": [{"field": "amount", "message": "Must be a valid number"}],
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+
+
+class ImportExecuteRequest(BaseModel):
+    """Request to execute an import from a validated file.
+
+    This should be called after previewing the import to confirm the data looks correct.
+    """
+
+    file_path: str = Field(
+        ...,
+        description="Path to the uploaded file (from /imports/upload response)",
+    )
+    entity: ExportEntity = Field(..., description="Entity type to import")
+    field_mappings: list[ImportField] | None = Field(
+        default=None,
+        description="Optional field mappings from source columns to target fields.",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "file_path": "imports/client-123/temp/bills.csv",
+                    "entity": "bill",
+                    "field_mappings": [
+                        {"source": "Total Amount", "target": "amount"},
+                        {"source": "Invoice Date", "target": "date"},
+                    ],
+                }
+            ]
+        }
+    }
+
+
+# ============================================================================
+# Schema DTOs
+# ============================================================================
+
+
+class SchemaFieldType(str, Enum):
+    """Data types for schema fields."""
+
+    STRING = "string"
+    NUMBER = "number"
+    INTEGER = "integer"
+    BOOLEAN = "boolean"
+    DATE = "date"
+    DATETIME = "datetime"
+    UUID = "uuid"
+
+
+class SchemaField(BaseModel):
+    """Definition of a field in an entity schema."""
+
+    name: str = Field(..., description="Field name (used in API requests)")
+    type: str = Field(..., description="Data type (string, number, date, uuid, etc.)")
+    label: str = Field(..., description="Human-readable label for display")
+    required: bool = Field(default=False, description="Whether this field is required for imports")
+    description: str | None = Field(default=None, description="Optional description of the field")
+
+
+class SchemaRelationshipField(BaseModel):
+    """A field available through a relationship."""
+
+    name: str = Field(..., description="Field name on the related entity")
+    type: str = Field(..., description="Data type")
+    label: str = Field(..., description="Human-readable label")
+
+
+class SchemaRelationship(BaseModel):
+    """Definition of a relationship to another entity."""
+
+    name: str = Field(..., description="Relationship name (used in field paths like 'vendor.name')")
+    label: str = Field(..., description="Human-readable label")
+    entity: str = Field(..., description="Name of the related entity")
+    type: str = Field(
+        default="many_to_one",
+        description="Relationship type (many_to_one, one_to_many)",
+    )
+    fields: list[SchemaRelationshipField] = Field(
+        ...,
+        description="Fields available through this relationship",
+    )
+
+
+class SchemaEntity(BaseModel):
+    """Definition of an entity in the schema."""
+
+    name: str = Field(..., description="Entity name (used in API requests)")
+    label: str = Field(..., description="Human-readable label for display")
+    description: str | None = Field(default=None, description="Optional description")
+    fields: list[SchemaField] = Field(..., description="Direct fields on this entity")
+    relationships: list[SchemaRelationship] = Field(
+        default_factory=list,
+        description="Relationships to other entities",
+    )
+
+
+class SchemaResponse(BaseModel):
+    """Response containing the full entity schema."""
+
+    entities: list[SchemaEntity] = Field(..., description="All available entities")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "entities": [
+                        {
+                            "name": "bill",
+                            "label": "Bills",
+                            "fields": [
+                                {"name": "id", "type": "uuid", "label": "ID"},
+                                {"name": "amount", "type": "number", "label": "Amount"},
+                                {"name": "date", "type": "date", "label": "Date"},
+                            ],
+                            "relationships": [
+                                {
+                                    "name": "vendor",
+                                    "label": "Vendor",
+                                    "entity": "vendor",
+                                    "type": "many_to_one",
+                                    "fields": [
+                                        {"name": "name", "type": "string", "label": "Vendor Name"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ]
+        }
+    }

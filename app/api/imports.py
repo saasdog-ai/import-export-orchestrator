@@ -5,9 +5,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
-from app.api.dto import ErrorResponse
+from app.api.dto import (
+    ErrorResponse,
+    ImportExecuteRequest,
+    ImportPreviewRequest,
+    ImportPreviewResponse,
+)
 from app.auth.backend import get_current_client_id
 from app.core.config import get_settings
 from app.core.dependency_injection import get_cloud_storage, get_job_service
@@ -202,32 +206,153 @@ async def upload_import_file(
     except ValueError as e:
         # Convert ValueError to HTTPException for validation errors
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing file upload: {str(e)}",
-        ) from e
+    # Generic exceptions are handled by global exception handler for secure error messages
 
 
-class ExecuteImportRequest(BaseModel):
-    """Request body for executing an import from a validated file."""
+@router.post(
+    "/preview",
+    response_model=ImportPreviewResponse,
+    summary="Preview import with validation",
+    description="""
+    Preview all records from an uploaded file with validation status for each row.
 
-    file_path: str = Field(..., description="Path to validated file in cloud storage")
-    entity: ExportEntity = Field(..., description="Entity type to import")
+    This endpoint:
+    1. Reads the uploaded file
+    2. Applies field mappings (if provided)
+    3. Validates each record against the entity schema
+    4. Returns all records with their validation status (valid/invalid)
+
+    Use this to review data before executing the import. The response shows:
+    - Total record count
+    - Valid and invalid counts
+    - Each record with its data, validation status, and any errors
+
+    The `file_path` should be obtained from the `/upload` endpoint.
+    """,
+    responses={
+        200: {
+            "description": "Preview generated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "file_path": "imports/client-123/temp/bills.csv",
+                        "entity": "bill",
+                        "total_records": 100,
+                        "valid_count": 95,
+                        "invalid_count": 5,
+                        "records": [
+                            {
+                                "row": 1,
+                                "data": {"amount": 1000, "date": "2024-01-15"},
+                                "is_valid": True,
+                                "errors": [],
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid request or file not found", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+)
+async def preview_import(
+    request: ImportPreviewRequest,
+    authenticated_client_id: UUID = Depends(get_current_client_id),
+    cloud_storage: CloudStorageInterface = Depends(get_cloud_storage),
+) -> ImportPreviewResponse:
+    """
+    Preview import file with validation results.
+
+    Returns all records from the file with validation status for each row.
+    This allows users to review which records will succeed and which will fail
+    before executing the import.
+    """
+    try:
+        # Log request input
+        field_mapping_count = len(request.field_mappings) if request.field_mappings else 0
+        logger.info(
+            f"Import preview request: client_id={authenticated_client_id}, "
+            f"file_path={request.file_path}, entity={request.entity.value}, "
+            f"field_mappings_count={field_mapping_count}"
+        )
+        if request.field_mappings:
+            mappings = {fm.source: fm.target for fm in request.field_mappings}
+            logger.debug(f"Import field mappings: {mappings}")
+
+        # Determine local file path
+        local_file_path = request.file_path
+
+        # If file is in cloud storage, download it first
+        if cloud_storage and not os.path.exists(request.file_path):
+            try:
+                temp_dir = settings.export_local_path or "/tmp"
+                os.makedirs(temp_dir, exist_ok=True)
+                local_file_path = os.path.join(
+                    temp_dir,
+                    f"preview_{authenticated_client_id}_{os.path.basename(request.file_path)}",
+                )
+
+                logger.info(f"Downloading file from cloud storage: {request.file_path}")
+                await cloud_storage.download_file(request.file_path, local_file_path)
+                logger.info(f"Downloaded file to: {local_file_path}")
+            except Exception as e:
+                logger.error(f"Failed to download file from cloud storage: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"File not found or could not be downloaded: {request.file_path}",
+                ) from e
+
+        # Convert field mappings to dict
+        field_mappings_dict: dict[str, str] = {}
+        if request.field_mappings:
+            field_mappings_dict = {fm.source: fm.target for fm in request.field_mappings}
+
+        # Get preview with validation
+        preview_result = await ImportValidator.preview_with_validation(
+            local_file_path,
+            request.entity,
+            field_mappings_dict,
+        )
+
+        # Log response summary
+        logger.info(
+            f"Import preview completed: client_id={authenticated_client_id}, "
+            f"file_path={request.file_path}, entity={request.entity.value}, "
+            f"total_records={preview_result['total_records']}, "
+            f"valid_count={preview_result['valid_count']}, "
+            f"invalid_count={preview_result['invalid_count']}"
+        )
+
+        return ImportPreviewResponse(
+            file_path=request.file_path,
+            entity=request.entity,
+            total_records=preview_result["total_records"],
+            valid_count=preview_result["valid_count"],
+            invalid_count=preview_result["invalid_count"],
+            records=preview_result["records"],
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    # Generic exceptions are handled by global exception handler for secure error messages
 
 
 @router.post(
     "/execute",
     summary="Execute import job",
     description="""
-    Phase 2: Create and execute an import job from a previously validated file.
+    Execute an import job from a previously uploaded and optionally previewed file.
 
     This endpoint:
-    1. Creates an import job definition
+    1. Creates an import job definition with optional field mappings
     2. Triggers the import job execution
     3. Returns the job run ID for tracking
 
-    The `file_path` should be obtained from Phase 1 (`/upload`) endpoint.
+    The `file_path` should be obtained from the `/upload` endpoint.
+    Field mappings can be used to rename source columns to target field names.
     """,
     responses={
         201: {
@@ -249,17 +374,19 @@ class ExecuteImportRequest(BaseModel):
     },
 )
 async def execute_import(
-    request: ExecuteImportRequest,
+    request: ImportExecuteRequest,
     authenticated_client_id: UUID = Depends(get_current_client_id),
     job_service: JobService = Depends(get_job_service),
 ) -> JSONResponse:
     """
     Execute import from a validated file.
-    This is Phase 2 of the import process:
-    1. Create import job with validated file path
-    2. Start import job execution
-    3. Return job run information
-    This should only be called after successful validation via /upload endpoint.
+
+    This endpoint:
+    1. Creates an import job with the file path and optional field mappings
+    2. Starts the import job execution
+    3. Returns the job run ID for tracking progress
+
+    Use the `/preview` endpoint first to verify data before executing.
     """
     try:
         from uuid import uuid4
@@ -267,15 +394,21 @@ async def execute_import(
         from app.domain.entities import ImportConfig, JobDefinition, JobType
 
         # Log request input
+        field_mapping_count = len(request.field_mappings) if request.field_mappings else 0
         logger.info(
             f"Execute import request: client_id={authenticated_client_id}, "
-            f"file_path={request.file_path}, entity={request.entity.value}"
+            f"file_path={request.file_path}, entity={request.entity.value}, "
+            f"field_mappings_count={field_mapping_count}"
         )
+        if request.field_mappings:
+            mappings = {fm.source: fm.target for fm in request.field_mappings}
+            logger.debug(f"Import field mappings: {mappings}")
 
-        # Create import job configuration
+        # Create import job configuration with field mappings
         import_config = ImportConfig(
             source="cloud_storage",
             entity=request.entity,
+            fields=request.field_mappings,  # Pass field mappings to config
             options={
                 "source_file": request.file_path,
             },
@@ -296,7 +429,8 @@ async def execute_import(
         # Log response output
         logger.info(
             f"Import job created and started: job_id={created_job.id}, run_id={job_run.id}, "
-            f"status={job_run.status.value}, entity={request.entity.value}"
+            f"status={job_run.status.value}, entity={request.entity.value}, "
+            f"field_mappings_applied={field_mapping_count > 0}"
         )
 
         return JSONResponse(
@@ -314,10 +448,4 @@ async def execute_import(
     except ValueError as e:
         # Convert ValueError to HTTPException for validation errors
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        # Convert generic exceptions to HTTPException
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error executing import: {str(e)}",
-        ) from e
-    # ApplicationError will be handled by global exception handler
+    # Generic exceptions are handled by global exception handler for secure error messages

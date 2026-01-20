@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import exports, health, imports, jobs
+from app.api import exports, health, imports, jobs, schema
 from app.core.config import get_settings
 from app.core.dependency_injection import (
     get_job_runner,
@@ -17,7 +17,8 @@ from app.core.dependency_injection import (
 )
 from app.core.exceptions import ApplicationError
 from app.core.logging import get_logger, setup_logging
-from app.core.middleware import CorrelationIDMiddleware
+from app.core.middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware
+from app.core.rate_limit import RateLimitMiddleware
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -106,11 +107,21 @@ app = FastAPI(
             "name": "imports",
             "description": "Import operations. Upload files, validate data, and execute import jobs.",
         },
+        {
+            "name": "schema",
+            "description": "Schema discovery. Get metadata about available entities, fields, and relationships.",
+        },
     ],
 )
 
 # Add correlation ID middleware
 app.add_middleware(CorrelationIDMiddleware)
+
+# Add security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware, enabled=settings.rate_limit_enabled)
 
 # Configure CORS
 app.add_middleware(
@@ -128,6 +139,7 @@ app.include_router(health.router)
 app.include_router(jobs.router)
 app.include_router(exports.router)
 app.include_router(imports.router)
+app.include_router(schema.router)
 
 
 def custom_openapi():

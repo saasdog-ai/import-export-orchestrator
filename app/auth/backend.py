@@ -46,16 +46,15 @@ class JWTAuthBackend(AuthBackendInterface):
     """
     JWT authentication backend.
 
-    TODO: Implement actual JWT validation when security is enabled.
-    Currently provides a dummy allow-all implementation.
+    When enabled=True, validates JWT tokens cryptographically.
+    When enabled=False (development mode), allows all requests with a default client ID.
     """
 
-    def __init__(self, secret_key: str, algorithm: str = "HS256"):
+    def __init__(self, secret_key: str, algorithm: str = "HS256", enabled: bool = False):
         """Initialize JWT auth backend."""
         self.secret_key = secret_key
         self.algorithm = algorithm
-        # TODO: Enable real JWT validation
-        self.enabled = False
+        self.enabled = enabled
 
     def extract_token(self, request: Request) -> str | None:
         """
@@ -218,8 +217,15 @@ def get_auth_backend() -> JWTAuthBackend:
 
         settings = get_settings()
         _auth_backend = JWTAuthBackend(
-            secret_key=settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+            secret_key=settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+            enabled=settings.auth_enabled,
         )
+        if not settings.auth_enabled:
+            logger.warning(
+                "Authentication is DISABLED. All requests will use the default client ID. "
+                "Set AUTH_ENABLED=true in production."
+            )
     return _auth_backend
 
 

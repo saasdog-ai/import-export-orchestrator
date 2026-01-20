@@ -57,10 +57,24 @@ class JobService:
         client_id: UUID,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
-    ) -> list[JobDefinition]:
-        """Get all jobs for a client, optionally filtered by date range."""
+        job_type: str | None = None,
+        entity: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[JobDefinition], int]:
+        """Get jobs for a client with pagination and filtering.
+
+        Returns:
+            Tuple of (jobs list, total count)
+        """
         return await self.job_repository.get_by_client_id(
-            client_id, start_date=start_date, end_date=end_date
+            client_id,
+            start_date=start_date,
+            end_date=end_date,
+            job_type=job_type,
+            entity=entity,
+            page=page,
+            page_size=page_size,
         )
 
     async def update_job(self, job: JobDefinition) -> JobDefinition:
@@ -149,3 +163,35 @@ class JobService:
         return await self.job_run_repository.get_by_job_id(
             job_id, start_date=start_date, end_date=end_date
         )
+
+    async def delete_job(self, job_id: UUID, client_id: UUID | None = None) -> bool:
+        """
+        Delete a job definition.
+
+        Args:
+            job_id: ID of the job to delete
+            client_id: Optional client ID for authorization check
+
+        Returns:
+            True if deleted, False if not found
+        """
+        job = await self.job_repository.get_by_id(job_id)
+        if not job:
+            raise NotFoundError("Job", str(job_id))
+
+        # Verify job belongs to the client
+        if client_id and job.client_id != client_id:
+            from app.core.exceptions import ForbiddenError
+
+            raise ForbiddenError(f"Job with ID {job_id} does not belong to client {client_id}")
+
+        # Unschedule if it has a cron schedule
+        if job.cron_schedule:
+            await self.scheduler_service.unschedule_job(job_id)
+
+        # Delete from database
+        deleted = await self.job_repository.delete(job_id)
+        if deleted:
+            logger.info(f"Deleted job '{job.name}' (ID: {job_id})")
+
+        return deleted

@@ -1,5 +1,6 @@
 """Query engine for translating DSL filters to SQLAlchemy expressions."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -21,6 +22,41 @@ from app.infrastructure.query.schema import (
 from app.infrastructure.saas.client import SaaSApiClientInterface
 
 logger = get_logger(__name__)
+
+
+def resolve_relative_date(relative_value: str) -> datetime:
+    """Resolve a relative date string to an actual datetime.
+
+    Supports:
+    - relative:last_7_days
+    - relative:last_30_days
+    - relative:last_90_days
+    - relative:this_month
+    - relative:last_month
+    - relative:this_quarter
+    - relative:this_year
+    """
+    now = datetime.now(UTC)
+
+    if relative_value == "relative:last_7_days":
+        return now - timedelta(days=7)
+    elif relative_value == "relative:last_30_days":
+        return now - timedelta(days=30)
+    elif relative_value == "relative:last_90_days":
+        return now - timedelta(days=90)
+    elif relative_value == "relative:this_month":
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif relative_value == "relative:last_month":
+        first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_month = first_of_this_month - timedelta(days=1)
+        return last_month.replace(day=1)
+    elif relative_value == "relative:this_quarter":
+        quarter_month = ((now.month - 1) // 3) * 3 + 1
+        return now.replace(month=quarter_month, day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif relative_value == "relative:this_year":
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        raise ValueError(f"Unknown relative date: {relative_value}")
 
 
 class ExportQueryEngine:
@@ -219,6 +255,22 @@ class ExportQueryEngine:
         """Evaluate a single filter condition."""
         if field_value is None:
             return False
+
+        # Resolve relative date values
+        if isinstance(filter_value, str) and filter_value.startswith("relative:"):
+            try:
+                filter_value = resolve_relative_date(filter_value)
+            except ValueError as e:
+                logger.warning(f"Failed to resolve relative date: {e}")
+                return False
+
+        # Parse field_value if it's a date string for comparison with datetime
+        if isinstance(filter_value, datetime) and isinstance(field_value, str):
+            try:
+                # Try to parse ISO format datetime string
+                field_value = datetime.fromisoformat(field_value.replace("Z", "+00:00"))
+            except ValueError:
+                pass
 
         try:
             if operator == ExportFilterOperator.EQ:

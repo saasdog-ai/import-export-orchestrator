@@ -285,13 +285,15 @@ async def get_export_result(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    # Generic exceptions are handled by global exception handler for secure error messages
 
 
 @router.get(
     "/{run_id}/download",
-    responses={200: {"description": "Pre-signed download URL"}, 404: {"model": ErrorResponse}},
+    responses={
+        200: {"description": "Pre-signed download URL or redirect to file"},
+        404: {"model": ErrorResponse},
+    },
 )
 async def get_export_download_url(
     run_id: UUID,
@@ -335,43 +337,158 @@ async def get_export_download_url(
 
         result_metadata = job_run.result_metadata or {}
         remote_file_path = result_metadata.get("remote_file_path")
-
-        if not remote_file_path:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Export file not found. File may not have been uploaded to cloud storage.",
-            )
+        local_file_path = result_metadata.get("local_file_path")
 
         cloud_storage = get_cloud_storage()
-        if not cloud_storage:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Cloud storage not configured",
+
+        # If we have a remote file and cloud storage is configured, return presigned URL
+        if remote_file_path and cloud_storage:
+            # Validate expiration_seconds (max 7 days for security)
+            max_expiration = 7 * 24 * 60 * 60  # 7 days
+            expiration_seconds = min(expiration_seconds, max_expiration)
+            expiration_seconds = max(expiration_seconds, 60)  # Minimum 1 minute
+
+            # Generate pre-signed URL
+            download_url = await cloud_storage.generate_presigned_url(
+                remote_file_path, expiration_seconds=expiration_seconds
             )
 
-        # Validate expiration_seconds (max 7 days for security)
-        max_expiration = 7 * 24 * 60 * 60  # 7 days
-        expiration_seconds = min(expiration_seconds, max_expiration)
-        expiration_seconds = max(expiration_seconds, 60)  # Minimum 1 minute
+            logger.info(
+                f"Export download URL generated: run_id={run_id}, file_path={remote_file_path}, "
+                f"expires_in_seconds={expiration_seconds}, url_length={len(download_url)}"
+            )
 
-        # Generate pre-signed URL
-        download_url = await cloud_storage.generate_presigned_url(
-            remote_file_path, expiration_seconds=expiration_seconds
+            return {
+                "run_id": str(run_id),
+                "download_url": download_url,
+                "expires_in_seconds": expiration_seconds,
+                "file_path": remote_file_path,
+            }
+
+        # If we have a local file (development mode), return URL to file endpoint
+        if local_file_path:
+            import os
+
+            if not os.path.exists(local_file_path):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Local export file not found: {local_file_path}",
+                )
+
+            # Return URL to file download endpoint
+            download_url = f"/exports/{run_id}/file"
+            logger.info(
+                f"Export local file URL generated: run_id={run_id}, local_path={local_file_path}"
+            )
+
+            return {
+                "run_id": str(run_id),
+                "download_url": download_url,
+                "expires_in_seconds": None,
+                "file_path": local_file_path,
+            }
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Export file not found. File may not have been generated or uploaded.",
         )
-
-        # Log response output (don't log full URL as it may contain sensitive tokens)
-        logger.info(
-            f"Export download URL generated: run_id={run_id}, file_path={remote_file_path}, "
-            f"expires_in_seconds={expiration_seconds}, url_length={len(download_url)}"
-        )
-
-        return {
-            "run_id": str(run_id),
-            "download_url": download_url,
-            "expires_in_seconds": expiration_seconds,
-            "file_path": remote_file_path,
-        }
     except HTTPException:
         # Re-raise HTTP exceptions (e.g., from access denied checks)
         raise
     # ApplicationError (e.g., NotFoundError) will be handled by global exception handler
+
+
+@router.get(
+    "/{run_id}/file",
+    responses={200: {"description": "Export file download"}, 404: {"model": ErrorResponse}},
+)
+async def download_export_file(
+    run_id: UUID,
+    authenticated_client_id: UUID = Depends(get_current_client_id),
+    job_service: JobService = Depends(get_job_service),
+):
+    """Download the export file directly (for local development without cloud storage)."""
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+
+    from app.core.config import get_settings
+
+    try:
+        logger.info(
+            f"Download export file request: run_id={run_id}, client_id={authenticated_client_id}"
+        )
+
+        job_run = await job_service.get_job_run(run_id)
+
+        # Verify job belongs to authenticated client
+        job = await job_service.get_job(job_run.job_id)
+        if job.client_id != authenticated_client_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Job does not belong to authenticated client.",
+            )
+
+        if not job.export_config:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Job is not an export job",
+            )
+
+        if job_run.status != JobStatus.SUCCEEDED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Job run is not completed. Current status: {job_run.status.value}",
+            )
+
+        result_metadata = job_run.result_metadata or {}
+        local_file_path = result_metadata.get("local_file_path")
+
+        if not local_file_path:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Export file not found.",
+            )
+
+        # Path traversal protection: ensure file is within allowed exports directory
+        settings = get_settings()
+        allowed_dir = Path(settings.export_local_path).resolve()
+        requested_path = Path(local_file_path).resolve()
+
+        # Verify the resolved path is within the allowed directory
+        try:
+            requested_path.relative_to(allowed_dir)
+        except ValueError:
+            logger.warning(
+                f"Path traversal attempt blocked: run_id={run_id}, "
+                f"requested_path={local_file_path}, allowed_dir={allowed_dir}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Invalid file path.",
+            ) from None
+
+        if not requested_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Export file not found.",
+            )
+
+        # Determine content type based on file extension
+        filename = requested_path.name
+        if requested_path.suffix == ".csv":
+            media_type = "text/csv"
+        elif requested_path.suffix == ".json":
+            media_type = "application/json"
+        else:
+            media_type = "application/octet-stream"
+
+        logger.info(f"Serving export file: run_id={run_id}, file={filename}")
+
+        return FileResponse(
+            path=str(requested_path),
+            filename=filename,
+            media_type=media_type,
+        )
+    except HTTPException:
+        raise

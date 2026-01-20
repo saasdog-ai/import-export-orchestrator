@@ -93,9 +93,11 @@ async def health_check_db(db: Database = Depends(get_database)):
             result.scalar()
         return HealthResponse(status="healthy", timestamp=datetime.now(UTC))
     except Exception as e:
+        # Log the actual error for debugging, but don't expose to client
+        logger.error(f"Database health check failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection failed: {str(e)}",
+            detail="Database connection failed. Check server logs for details.",
         ) from e
 
 
@@ -155,7 +157,8 @@ async def detailed_health_check(
         components["database"] = {"status": "ok", "response_time_ms": response_time}
     except Exception as e:
         logger.error(f"Database health check failed: {e}", exc_info=True)
-        components["database"] = {"status": "error", "error": str(e)}
+        # Don't expose internal error details to client
+        components["database"] = {"status": "error"}
         overall_status = "degraded"
 
     # Check message queue
@@ -174,7 +177,8 @@ async def detailed_health_check(
             components["message_queue"] = {"status": "ok", "response_time_ms": response_time}
         except Exception as e:
             logger.error(f"Message queue health check failed: {e}", exc_info=True)
-            components["message_queue"] = {"status": "error", "error": str(e)}
+            # Don't expose internal error details to client
+            components["message_queue"] = {"status": "error"}
             overall_status = "degraded"
     else:
         components["message_queue"] = {"status": "not_configured"}
@@ -189,7 +193,8 @@ async def detailed_health_check(
             components["cloud_storage"] = {"status": "ok", "response_time_ms": response_time}
         except Exception as e:
             logger.error(f"Cloud storage health check failed: {e}", exc_info=True)
-            components["cloud_storage"] = {"status": "error", "error": str(e)}
+            # Don't expose internal error details to client
+            components["cloud_storage"] = {"status": "error"}
             overall_status = "degraded"
     else:
         components["cloud_storage"] = {"status": "not_configured"}

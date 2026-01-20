@@ -7,7 +7,8 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.api.imports import ExecuteImportRequest, execute_import, upload_import_file
+from app.api.dto import ImportExecuteRequest
+from app.api.imports import execute_import, upload_import_file
 from app.domain.entities import ExportEntity, JobDefinition, JobRun, JobStatus, JobType
 from app.infrastructure.storage.interface import CloudStorageInterface
 from app.services.job_service import JobService
@@ -154,7 +155,7 @@ async def test_upload_import_file_no_cloud_storage(mock_upload_file, test_client
 @pytest.mark.asyncio
 async def test_execute_import_success(mock_job_service, test_client_id):
     """Test successful import execution."""
-    request = ExecuteImportRequest(
+    request = ImportExecuteRequest(
         file_path="imports/test/temp/test_bills.csv",
         entity=ExportEntity.BILL,
     )
@@ -176,7 +177,7 @@ async def test_execute_import_success(mock_job_service, test_client_id):
 @pytest.mark.asyncio
 async def test_execute_import_value_error(mock_job_service, test_client_id):
     """Test import execution with ValueError."""
-    request = ExecuteImportRequest(
+    request = ImportExecuteRequest(
         file_path="imports/test/temp/test_bills.csv",
         entity=ExportEntity.BILL,
     )
@@ -194,7 +195,7 @@ async def test_execute_import_value_error(mock_job_service, test_client_id):
 @pytest.mark.asyncio
 async def test_execute_import_generic_error(mock_job_service, test_client_id):
     """Test import execution with generic error."""
-    request = ExecuteImportRequest(
+    request = ImportExecuteRequest(
         file_path="imports/test/temp/test_bills.csv",
         entity=ExportEntity.BILL,
     )
