@@ -194,7 +194,11 @@ async def test_execute_import_value_error(mock_job_service, test_client_id):
 
 @pytest.mark.asyncio
 async def test_execute_import_generic_error(mock_job_service, test_client_id):
-    """Test import execution with generic error."""
+    """Test import execution with generic error.
+
+    Generic exceptions now propagate to the global exception handler
+    for secure error message handling (no internal details exposed).
+    """
     request = ImportExecuteRequest(
         file_path="imports/test/temp/test_bills.csv",
         entity=ExportEntity.BILL,
@@ -202,7 +206,8 @@ async def test_execute_import_generic_error(mock_job_service, test_client_id):
 
     mock_job_service.create_job = AsyncMock(side_effect=Exception("Unexpected error"))
 
-    with pytest.raises(HTTPException):  # HTTPException
+    # Generic exceptions propagate to global handler (not caught locally)
+    with pytest.raises(Exception, match="Unexpected error"):
         await execute_import(
             request=request,
             authenticated_client_id=test_client_id,
