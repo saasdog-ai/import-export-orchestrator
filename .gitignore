@@ -63,6 +63,12 @@ dmypy.json
 *.tfvars
 !terraform.tfvars.example
 *.tfplan
+tfplan
+
+# Backup files
+*.bak
+*.backup
+*.old
 
 # Secrets
 secrets/

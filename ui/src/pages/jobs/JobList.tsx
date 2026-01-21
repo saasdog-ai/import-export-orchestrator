@@ -145,13 +145,13 @@ export function JobList() {
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link to="/exports/new">
+            <Link to="../exports/new">
               <Download className="mr-2 h-4 w-4" />
               New Export
             </Link>
           </Button>
           <Button asChild>
-            <Link to="/imports/new">
+            <Link to="../imports/new">
               <Upload className="mr-2 h-4 w-4" />
               New Import
             </Link>
@@ -243,13 +243,13 @@ export function JobList() {
                 !hasFilters ? (
                   <div className="flex gap-2">
                     <Button asChild>
-                      <Link to="/exports/new">
+                      <Link to="../exports/new">
                         <Plus className="mr-2 h-4 w-4" />
                         Create Export
                       </Link>
                     </Button>
                     <Button asChild variant="outline">
-                      <Link to="/imports/new">
+                      <Link to="../imports/new">
                         <Plus className="mr-2 h-4 w-4" />
                         Start Import
                       </Link>
@@ -286,7 +286,7 @@ export function JobList() {
                     <TableRow key={job.id}>
                       <TableCell>
                         <Link
-                          to={`/jobs/${job.id}`}
+                          to={job.id}
                           className="font-medium hover:underline"
                         >
                           {job.name}
@@ -363,7 +363,7 @@ export function JobList() {
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                           <Button asChild variant="ghost" size="icon">
-                            <Link to={`/jobs/${job.id}`}>
+                            <Link to={job.id}>
                               <ArrowRight className="h-4 w-4" />
                             </Link>
                           </Button>

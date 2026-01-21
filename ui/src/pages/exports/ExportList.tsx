@@ -61,7 +61,7 @@ export function ExportList() {
           </p>
         </div>
         <Button asChild>
-          <Link to="/exports/new">
+          <Link to="new" relative="path">
             <Plus className="mr-2 h-4 w-4" />
             New Export
           </Link>
@@ -115,7 +115,7 @@ export function ExportList() {
                   </Button>
                 ) : (
                   <Button asChild>
-                    <Link to="/exports/new">
+                    <Link to="new" relative="path">
                       <Plus className="mr-2 h-4 w-4" />
                       Create Export
                     </Link>
@@ -173,7 +173,7 @@ export function ExportList() {
                       </TableCell>
                       <TableCell>
                         <Button asChild variant="ghost" size="icon">
-                          <Link to={`/jobs/${job.id}`}>
+                          <Link to={`../jobs/${job.id}`}>
                             <ArrowRight className="h-4 w-4" />
                           </Link>
                         </Button>

@@ -64,6 +64,7 @@ def generate_vendor_data(client_id: UUID, index: int) -> dict:
     return {
         "id": uuid4(),
         "client_id": client_id,
+        "external_id": f"VND-{index + 1:05d}",
         "name": name,
         "email_address": email,
         "phone": phone,
@@ -135,6 +136,7 @@ def generate_project_data(client_id: UUID, index: int) -> dict:
     return {
         "id": uuid4(),
         "client_id": client_id,
+        "external_id": f"PRJ-{index + 1:05d}",
         "code": f"PROJ-{index + 1:03d}",
         "name": project_names[index % len(project_names)],
         "description": descriptions[index % len(descriptions)],
@@ -185,6 +187,7 @@ def generate_bill_data(
     return {
         "id": uuid4(),
         "client_id": client_id,
+        "external_id": f"BILL-{index + 1:05d}",
         "bill_number": f"BILL-{2024}{index + 1:04d}",
         "vendor_id": vendor_ids[index % len(vendor_ids)] if vendor_ids else None,
         "project_id": project_ids[index % len(project_ids)] if project_ids else None,
@@ -244,6 +247,7 @@ def generate_invoice_data(
     return {
         "id": uuid4(),
         "client_id": client_id,
+        "external_id": f"INV-{index + 1:05d}",
         "invoice_number": f"INV-{2024}{index + 1:04d}",
         "contact_id": vendor_ids[index % len(vendor_ids)] if vendor_ids else None,
         "issue_date": issue_date,

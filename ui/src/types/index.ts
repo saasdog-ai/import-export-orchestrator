@@ -1,5 +1,7 @@
 // Entity types
-export type ExportEntity = 'bill' | 'invoice' | 'vendor' | 'project'
+// ExportEntity is now a string to support dynamic entity types from the schema API
+// SaaS integrators can define their own entity types without modifying this codebase
+export type ExportEntity = string
 
 export type JobType = 'import' | 'export'
 

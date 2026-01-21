@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useSearchParams } from "react-router-dom"
+import { useMicroFrontendNavigation } from "@/hooks/useNavigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Card,
@@ -43,7 +44,7 @@ interface FieldMapping {
 }
 
 export function ImportCreate() {
-  const navigate = useNavigate()
+  const { navigateToJob, navigateBack } = useMicroFrontendNavigation()
   const queryClient = useQueryClient()
   const toast = useToast()
   const [searchParams] = useSearchParams()
@@ -173,7 +174,7 @@ export function ImportCreate() {
     mutationFn: executeImport,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
-      navigate(`/jobs/${data.job_id}`)
+      navigateToJob(data.job_id)
     },
     onError: (error: Error) => {
       toast.error("Import failed", error.message || "Failed to execute import")
@@ -251,7 +252,7 @@ export function ImportCreate() {
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={navigateBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>

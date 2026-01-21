@@ -1,0 +1,8 @@
+_action,external_id,invoice_number,amount,date,due_date,description,currency,status
+C,INV-ACTION-001,INV-2025-A001,2500.00,2025-01-26,2025-02-25,New invoice via action,USD,DRAFT
+C,INV-ACTION-002,INV-2025-A002,3750.00,2025-01-27,2025-02-26,Another new invoice,USD,SUBMITTED
+U,INV-NEW-001,INV-2025-0001,1650.00,2025-01-15,2025-02-14,Consulting services - January (revised),USD,SUBMITTED
+U,INV-NEW-004,INV-2025-0004,4200.00,2025-01-18,2025-02-17,Infrastructure setup,USD,PAID
+X,INV-UPSERT-001,INV-2025-U001,1800.00,2025-01-28,2025-02-27,Upsert test invoice,USD,DRAFT
+X,INV-NEW-006,INV-2025-0006,3800.00,2025-01-20,2025-02-19,Custom integration work (updated via upsert),USD,SUBMITTED
+D,INV-NEW-011,,,,,,,

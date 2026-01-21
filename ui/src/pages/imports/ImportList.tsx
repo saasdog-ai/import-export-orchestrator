@@ -61,7 +61,7 @@ export function ImportList() {
           </p>
         </div>
         <Button asChild>
-          <Link to="/imports/new">
+          <Link to="new" relative="path">
             <Plus className="mr-2 h-4 w-4" />
             New Import
           </Link>
@@ -115,7 +115,7 @@ export function ImportList() {
                   </Button>
                 ) : (
                   <Button asChild>
-                    <Link to="/imports/new">
+                    <Link to="new" relative="path">
                       <Plus className="mr-2 h-4 w-4" />
                       Start Import
                     </Link>
@@ -175,7 +175,7 @@ export function ImportList() {
                       </TableCell>
                       <TableCell>
                         <Button asChild variant="ghost" size="icon">
-                          <Link to={`/jobs/${job.id}`}>
+                          <Link to={`../jobs/${job.id}`}>
                             <ArrowRight className="h-4 w-4" />
                           </Link>
                         </Button>

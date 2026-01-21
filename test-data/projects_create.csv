@@ -1,0 +1,11 @@
+external_id,code,name,description,status,start_date,end_date,budget,currency
+PRJ-NEW-001,PROJ-ALPHA,Project Alpha,Main product development initiative,active,2024-01-15,2024-12-31,150000.00,USD
+PRJ-NEW-002,PROJ-BETA,Project Beta,Customer portal redesign,active,2024-02-01,2024-06-30,75000.00,USD
+PRJ-NEW-003,PROJ-GAMMA,Project Gamma,Infrastructure modernization,active,2024-03-01,2024-09-30,200000.00,USD
+PRJ-NEW-004,PROJ-DELTA,Project Delta,Mobile app development,active,2024-04-01,2024-10-31,120000.00,USD
+PRJ-NEW-005,PROJ-EPSILON,Project Epsilon,Data analytics platform,on_hold,2024-05-01,2024-11-30,90000.00,USD
+PRJ-NEW-006,PROJ-ZETA,Project Zeta,Security compliance audit,completed,2024-01-01,2024-03-31,50000.00,USD
+PRJ-NEW-007,PROJ-ETA,Project Eta,API integration layer,active,2024-06-01,2024-12-31,80000.00,USD
+PRJ-NEW-008,PROJ-THETA,Project Theta,Machine learning POC,active,2024-07-01,2025-01-31,100000.00,USD
+PRJ-NEW-009,PROJ-IOTA,Project Iota,DevOps transformation,active,2024-08-01,2025-02-28,60000.00,USD
+PRJ-NEW-010,PROJ-KAPPA,Project Kappa,Customer success initiative,cancelled,2024-03-01,2024-06-30,40000.00,USD

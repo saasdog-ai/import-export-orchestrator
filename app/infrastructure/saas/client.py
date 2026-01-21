@@ -895,16 +895,30 @@ class MockSaaSApiClient(SaaSApiClientInterface):
         if "date" in record and "issue_date" not in record:
             record["issue_date"] = record["date"]
 
+        # Fields that need special type conversion
+        date_fields = {"issue_date", "due_date", "paid_on_date"}
+        decimal_fields = {
+            "total_amount",
+            "sub_total",
+            "total_tax_amount",
+            "balance",
+            "exchange_rate",
+        }
+        skip_fields = {"id", "client_id", "vendor", "contact", "amount", "date", "contact_id"}
+
         for key, value in record.items():
-            if key not in [
-                "id",
-                "client_id",
-                "vendor",
-                "contact",
-                "amount",
-                "date",
-            ] and hasattr(existing, key):
+            if key in skip_fields or not hasattr(existing, key):
+                continue
+            if value is None or value == "":
+                continue
+
+            if key in date_fields:
+                setattr(existing, key, _parse_date(value))
+            elif key in decimal_fields:
+                setattr(existing, key, Decimal(str(value)) if value else None)
+            else:
                 setattr(existing, key, value)
+
         # Handle mapped fields
         if "total_amount" in record:
             existing.total_amount = Decimal(str(record["total_amount"]))  # type: ignore[assignment]

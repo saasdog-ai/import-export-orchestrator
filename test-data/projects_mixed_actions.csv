@@ -1,0 +1,8 @@
+_action,external_id,code,name,description,status,start_date,end_date,budget,currency
+C,PRJ-ACTION-001,PROJ-NEW-A,New Project A,A brand new project,active,2025-01-01,2025-06-30,50000.00,USD
+C,PRJ-ACTION-002,PROJ-NEW-B,New Project B,Another new project,active,2025-02-01,2025-07-31,60000.00,USD
+U,PRJ-NEW-001,PROJ-ALPHA,Project Alpha - Phase 2,Updated: Now in phase 2,active,2024-01-15,2025-06-30,180000.00,USD
+U,PRJ-NEW-005,PROJ-EPSILON,Project Epsilon,Reactivated from hold,active,2024-05-01,2025-03-31,110000.00,USD
+X,PRJ-UPSERT-001,PROJ-UPS-A,Upsert Project A,Will be created if not exists,active,2025-03-01,2025-09-30,70000.00,USD
+X,PRJ-NEW-002,PROJ-BETA,Project Beta - Extended,Upsert: Extended timeline,active,2024-02-01,2025-03-31,95000.00,USD
+D,PRJ-NEW-010,,,,,,,,

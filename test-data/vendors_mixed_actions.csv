@@ -1,0 +1,9 @@
+_action,external_id,name,email,phone,address,status,currency
+C,VND-ACTION-001,New Vendor One,new1@vendor.com,+1-555-1001,100 New St,ACTIVE,USD
+C,VND-ACTION-002,New Vendor Two,new2@vendor.com,+1-555-1002,200 New St,ACTIVE,USD
+U,VND-NEW-001,Acme Supplies Co - Updated,updated@acmesupplies.com,+1-555-0101,123 Main St Suite 200,ACTIVE,USD
+U,VND-NEW-002,Global Tech Partners - Updated,updated@globaltechpartners.io,+1-555-0102,456 Innovation Blvd Floor 2,ACTIVE,EUR
+X,VND-UPSERT-001,Upsert Vendor One,upsert1@vendor.com,+1-555-2001,300 Upsert Ave,ACTIVE,USD
+X,VND-UPSERT-002,Upsert Vendor Two,upsert2@vendor.com,+1-555-2002,400 Upsert Ave,ACTIVE,USD
+X,VND-NEW-003,Premier Consulting LLC - Upserted,upserted@premierconsulting.com,+1-555-0103,789 Business Park Dr Suite 5,ACTIVE,EUR
+D,VND-NEW-008,,,,,

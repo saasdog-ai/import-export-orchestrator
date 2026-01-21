@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useSearchParams } from "react-router-dom"
+import { useMicroFrontendNavigation } from "@/hooks/useNavigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Card,
@@ -90,7 +91,7 @@ interface FilterConfig {
 }
 
 export function ExportCreate() {
-  const navigate = useNavigate()
+  const { navigateToJob, navigateToExports, navigateBack } = useMicroFrontendNavigation()
   const queryClient = useQueryClient()
   const toast = useToast()
   const [searchParams] = useSearchParams()
@@ -214,7 +215,7 @@ export function ExportCreate() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       toast.success("Export started!", `Run ID: ${data.run_id}`)
-      navigate("/exports")
+      navigateToExports()
     },
     onError: (error) => {
       toast.error("Export failed", error.message)
@@ -227,7 +228,7 @@ export function ExportCreate() {
     onSuccess: (job) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       toast.success("Job saved successfully")
-      navigate(`/jobs/${job.id}`)
+      navigateToJob(job.id)
     },
     onError: (error) => {
       toast.error("Failed to save job", error.message)
@@ -363,7 +364,7 @@ export function ExportCreate() {
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={navigateBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>

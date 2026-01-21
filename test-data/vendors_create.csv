@@ -1,0 +1,11 @@
+external_id,name,email,phone,address,status,currency
+VND-NEW-001,Acme Supplies Co,contact@acmesupplies.com,+1-555-0101,123 Main St Suite 100,ACTIVE,USD
+VND-NEW-002,Global Tech Partners,sales@globaltechpartners.io,+1-555-0102,456 Innovation Blvd,ACTIVE,USD
+VND-NEW-003,Premier Consulting LLC,info@premierconsulting.com,+1-555-0103,789 Business Park Dr,ACTIVE,EUR
+VND-NEW-004,FastShip Logistics,support@fastshiplogistics.com,+1-555-0104,321 Warehouse Way,ACTIVE,USD
+VND-NEW-005,Creative Design Studio,hello@creativedesign.co,+1-555-0105,555 Art District Ave,ACTIVE,USD
+VND-NEW-006,DataSync Solutions,enterprise@datasync.io,+1-555-0106,777 Cloud Center Rd,ACTIVE,USD
+VND-NEW-007,Green Energy Corp,info@greenenergy.com,+1-555-0107,888 Solar Lane,ACTIVE,USD
+VND-NEW-008,Quality Assurance Inc,qa@qualityassurance.com,+1-555-0108,999 Testing Blvd,ARCHIVED,USD
+VND-NEW-009,Marketing Masters,campaigns@marketingmasters.com,+1-555-0109,111 Brand Street,ACTIVE,USD
+VND-NEW-010,Legal Eagles LLP,contact@legaleagles.com,+1-555-0110,222 Law Center Plaza,ACTIVE,USD

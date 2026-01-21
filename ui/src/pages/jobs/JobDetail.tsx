@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { useParams, useNavigate, Link } from "react-router-dom"
+import { useParams, Link } from "react-router-dom"
+import { useMicroFrontendNavigation } from "@/hooks/useNavigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Card,
@@ -59,7 +60,7 @@ import type { JobRun, JobDefinitionUpdate } from "@/types"
 
 export function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
-  const navigate = useNavigate()
+  const { navigateTo, navigateToJobs, navigateBack } = useMicroFrontendNavigation()
   const queryClient = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
@@ -96,7 +97,7 @@ export function JobDetail() {
   const deleteMutation = useMutation({
     mutationFn: deleteJob,
     onSuccess: () => {
-      navigate("/jobs")
+      navigateToJobs()
     },
   })
 
@@ -114,7 +115,7 @@ export function JobDetail() {
 
     if (job.job_type === "import") {
       // Navigate to import workflow with this job's entity pre-selected
-      navigate(`/imports/new?run=${jobId}`)
+      navigateTo(`/imports/new?run=${jobId}`)
       return
     }
 
@@ -182,9 +183,9 @@ export function JobDetail() {
     if (!job) return
     // Navigate to the appropriate create page with clone parameter
     if (job.job_type === "export") {
-      navigate(`/exports/new?clone=${job.id}`)
+      navigateTo(`/exports/new?clone=${job.id}`)
     } else {
-      navigate(`/imports/new?clone=${job.id}`)
+      navigateTo(`/imports/new?clone=${job.id}`)
     }
   }
 
@@ -203,7 +204,7 @@ export function JobDetail() {
         description="The job you're looking for doesn't exist."
         action={
           <Button asChild>
-            <Link to="/jobs">Back to Jobs</Link>
+            <Link to="..">Back to Jobs</Link>
           </Button>
         }
       />
@@ -217,7 +218,7 @@ export function JobDetail() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={navigateBack}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>

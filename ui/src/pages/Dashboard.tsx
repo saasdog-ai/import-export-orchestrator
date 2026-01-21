@@ -76,7 +76,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <Button asChild className="w-full">
-              <Link to="/exports/new">
+              <Link to="exports/new">
                 Create Export
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -96,7 +96,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <Button asChild className="w-full">
-              <Link to="/imports/new">
+              <Link to="imports/new">
                 Start Import
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -116,7 +116,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline" className="w-full">
-              <Link to="/jobs">
+              <Link to="jobs">
                 View Jobs
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -193,7 +193,7 @@ export function Dashboard() {
               </CardDescription>
             </div>
             <Button asChild variant="outline" size="sm">
-              <Link to="/jobs">View all</Link>
+              <Link to="jobs">View all</Link>
             </Button>
           </div>
         </CardHeader>
@@ -210,10 +210,10 @@ export function Dashboard() {
               action={
                 <div className="flex gap-2">
                   <Button asChild size="sm">
-                    <Link to="/exports/new">Create Export</Link>
+                    <Link to="exports/new">Create Export</Link>
                   </Button>
                   <Button asChild variant="outline" size="sm">
-                    <Link to="/imports/new">Start Import</Link>
+                    <Link to="imports/new">Start Import</Link>
                   </Button>
                 </div>
               }
@@ -223,7 +223,7 @@ export function Dashboard() {
               {recentJobs.map((job: JobDefinition) => (
                 <Link
                   key={job.id}
-                  to={`/jobs/${job.id}`}
+                  to={`jobs/${job.id}`}
                   className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
                 >
                   <div className="flex items-center gap-4">

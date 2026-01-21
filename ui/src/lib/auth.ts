@@ -12,6 +12,9 @@
 const AUTH_TOKEN_KEY = 'auth_token'
 const CLIENT_ID_KEY = 'client_id'
 
+// Default client ID for development (matches backend DEFAULT_CLIENT_ID)
+const DEFAULT_CLIENT_ID = '00000000-0000-0000-0000-000000000000'
+
 // Check if we're in development mode
 const isDevelopment = import.meta.env.DEV
 
@@ -74,10 +77,20 @@ export function isAuthenticated(): boolean {
 }
 
 /**
- * Get the current client ID from stored user info
+ * Get the current client ID from stored user info.
+ * In development mode, returns a default client ID if none is set.
  */
 export function getClientId(): string | null {
-  return localStorage.getItem(CLIENT_ID_KEY)
+  const clientId = localStorage.getItem(CLIENT_ID_KEY)
+
+  if (!clientId && isDevelopment) {
+    // In development, use default client ID and persist it
+    localStorage.setItem(CLIENT_ID_KEY, DEFAULT_CLIENT_ID)
+    console.info('[Auth] Using default client ID for development:', DEFAULT_CLIENT_ID)
+    return DEFAULT_CLIENT_ID
+  }
+
+  return clientId
 }
 
 /**

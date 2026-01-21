@@ -6,10 +6,23 @@ from app.infrastructure.query.schema import validate_field_path
 
 def test_validate_field_path_bill():
     """Test field path validation for BILL entity."""
-    # Valid fields
+    # Valid fields - core
     assert validate_field_path(ExportEntity.BILL, "id") is True
+    assert validate_field_path(ExportEntity.BILL, "external_id") is True
     assert validate_field_path(ExportEntity.BILL, "amount") is True
     assert validate_field_path(ExportEntity.BILL, "date") is True
+    assert validate_field_path(ExportEntity.BILL, "due_date") is True
+    assert validate_field_path(ExportEntity.BILL, "description") is True
+    assert validate_field_path(ExportEntity.BILL, "currency") is True
+    assert validate_field_path(ExportEntity.BILL, "status") is True
+    assert validate_field_path(ExportEntity.BILL, "vendor_id") is True
+    assert validate_field_path(ExportEntity.BILL, "project_id") is True
+
+    # Valid fields - timestamps
+    assert validate_field_path(ExportEntity.BILL, "created_at") is True
+    assert validate_field_path(ExportEntity.BILL, "updated_at") is True
+
+    # Valid nested fields
     assert validate_field_path(ExportEntity.BILL, "vendor.name") is True
     assert validate_field_path(ExportEntity.BILL, "project.code") is True
 
@@ -20,11 +33,25 @@ def test_validate_field_path_bill():
 
 def test_validate_field_path_invoice():
     """Test field path validation for INVOICE entity."""
-    # Valid fields
+    # Valid fields - core
     assert validate_field_path(ExportEntity.INVOICE, "id") is True
+    assert validate_field_path(ExportEntity.INVOICE, "external_id") is True
     assert validate_field_path(ExportEntity.INVOICE, "amount") is True
+    assert validate_field_path(ExportEntity.INVOICE, "date") is True
     assert validate_field_path(ExportEntity.INVOICE, "due_date") is True
+    assert validate_field_path(ExportEntity.INVOICE, "description") is True
+    assert validate_field_path(ExportEntity.INVOICE, "currency") is True
+    assert validate_field_path(ExportEntity.INVOICE, "status") is True
+    assert validate_field_path(ExportEntity.INVOICE, "vendor_id") is True
+    assert validate_field_path(ExportEntity.INVOICE, "project_id") is True
+
+    # Valid fields - timestamps
+    assert validate_field_path(ExportEntity.INVOICE, "created_at") is True
+    assert validate_field_path(ExportEntity.INVOICE, "updated_at") is True
+
+    # Valid nested fields
     assert validate_field_path(ExportEntity.INVOICE, "vendor.name") is True
+    assert validate_field_path(ExportEntity.INVOICE, "project.code") is True
 
     # Invalid fields
     assert validate_field_path(ExportEntity.INVOICE, "invalid") is False
@@ -32,11 +59,17 @@ def test_validate_field_path_invoice():
 
 def test_validate_field_path_vendor():
     """Test field path validation for VENDOR entity."""
-    # Valid fields
+    # Valid fields - core
     assert validate_field_path(ExportEntity.VENDOR, "id") is True
+    assert validate_field_path(ExportEntity.VENDOR, "external_id") is True
     assert validate_field_path(ExportEntity.VENDOR, "name") is True
     assert validate_field_path(ExportEntity.VENDOR, "email") is True
     assert validate_field_path(ExportEntity.VENDOR, "phone") is True
+    assert validate_field_path(ExportEntity.VENDOR, "address") is True
+
+    # Valid fields - timestamps
+    assert validate_field_path(ExportEntity.VENDOR, "created_at") is True
+    assert validate_field_path(ExportEntity.VENDOR, "updated_at") is True
 
     # Invalid fields
     assert validate_field_path(ExportEntity.VENDOR, "amount") is False  # Not a vendor field
@@ -45,11 +78,17 @@ def test_validate_field_path_vendor():
 
 def test_validate_field_path_project():
     """Test field path validation for PROJECT entity."""
-    # Valid fields
+    # Valid fields - core
     assert validate_field_path(ExportEntity.PROJECT, "id") is True
+    assert validate_field_path(ExportEntity.PROJECT, "external_id") is True
     assert validate_field_path(ExportEntity.PROJECT, "code") is True
     assert validate_field_path(ExportEntity.PROJECT, "name") is True
+    assert validate_field_path(ExportEntity.PROJECT, "description") is True
     assert validate_field_path(ExportEntity.PROJECT, "status") is True
+
+    # Valid fields - timestamps
+    assert validate_field_path(ExportEntity.PROJECT, "created_at") is True
+    assert validate_field_path(ExportEntity.PROJECT, "updated_at") is True
 
     # Invalid fields
     assert validate_field_path(ExportEntity.PROJECT, "amount") is False

@@ -1,6 +1,40 @@
-# Date Filtering for Jobs and Job Runs
+# Date Filtering
 
-Both job and job run endpoints now support date filtering to help manage large result sets.
+This document covers date filtering capabilities for jobs, job runs, and entity exports.
+
+## Entity Export Filtering
+
+All entities support date filtering on `created_at` and `updated_at` fields:
+
+### Available Date Fields by Entity
+
+| Entity | Date Fields |
+|--------|-------------|
+| Bill | `date`, `due_date`, `created_at`, `updated_at` |
+| Invoice | `date`, `due_date`, `created_at`, `updated_at` |
+| Vendor | `created_at`, `updated_at` |
+| Project | `created_at`, `updated_at` |
+
+### Export Filter Examples
+
+```json
+{
+  "entity": "bill",
+  "fields": [{"field": "id"}, {"field": "amount"}, {"field": "date"}],
+  "filters": {
+    "created_at": {
+      "gte": "2024-01-01T00:00:00Z",
+      "lte": "2024-12-31T23:59:59Z"
+    }
+  }
+}
+```
+
+---
+
+## Jobs and Job Runs Date Filtering
+
+Both job and job run endpoints also support date filtering to help manage large result sets.
 
 ## Endpoints with Date Filtering
 

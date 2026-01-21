@@ -1,4 +1,0 @@
-external_id,amount,date,description,status,currency
-BILL-001,1500.00,2024-01-15,Office supplies purchase,pending,USD
-BILL-002,3250.75,2024-01-20,Software license renewal,paid,USD
-BILL-003,875.50,2024-01-25,Marketing materials,pending,USD
