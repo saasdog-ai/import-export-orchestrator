@@ -3,7 +3,18 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
@@ -73,9 +84,14 @@ class SampleVendorModel(Base):
     """Sample vendor database model for import/export operations."""
 
     __tablename__ = "sample_vendors"
+    __table_args__ = (
+        UniqueConstraint("client_id", "external_id", name="uq_vendor_client_external_id"),
+        Index("ix_vendor_external_id", "client_id", "external_id"),
+    )
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     client_id = Column(PGUUID(as_uuid=True), nullable=False, index=True)
+    external_id = Column(String(255), nullable=True)  # User's system identifier for upsert
     name = Column(String(255), nullable=False)
     email_address = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
@@ -103,9 +119,14 @@ class SampleInvoiceModel(Base):
     """Sample invoice database model for import/export operations."""
 
     __tablename__ = "sample_invoices"
+    __table_args__ = (
+        UniqueConstraint("client_id", "external_id", name="uq_invoice_client_external_id"),
+        Index("ix_invoice_external_id", "client_id", "external_id"),
+    )
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     client_id = Column(PGUUID(as_uuid=True), nullable=False, index=True)
+    external_id = Column(String(255), nullable=True)  # User's system identifier for upsert
     invoice_number = Column(String(100), nullable=True)
     contact_id = Column(PGUUID(as_uuid=True), ForeignKey("sample_vendors.id"), nullable=True)
     issue_date = Column(DateTime, nullable=True)
@@ -138,9 +159,14 @@ class SampleBillModel(Base):
     """Sample bill database model for import/export operations."""
 
     __tablename__ = "sample_bills"
+    __table_args__ = (
+        UniqueConstraint("client_id", "external_id", name="uq_bill_client_external_id"),
+        Index("ix_bill_external_id", "client_id", "external_id"),
+    )
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     client_id = Column(PGUUID(as_uuid=True), nullable=False, index=True)
+    external_id = Column(String(255), nullable=True)  # User's system identifier for upsert
     bill_number = Column(String(100), nullable=True)
     vendor_id = Column(PGUUID(as_uuid=True), ForeignKey("sample_vendors.id"), nullable=True)
     project_id = Column(PGUUID(as_uuid=True), ForeignKey("sample_projects.id"), nullable=True)
@@ -169,9 +195,14 @@ class SampleProjectModel(Base):
     """Sample project database model for import/export operations."""
 
     __tablename__ = "sample_projects"
+    __table_args__ = (
+        UniqueConstraint("client_id", "external_id", name="uq_project_client_external_id"),
+        Index("ix_project_external_id", "client_id", "external_id"),
+    )
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     client_id = Column(PGUUID(as_uuid=True), nullable=False, index=True)
+    external_id = Column(String(255), nullable=True)  # User's system identifier for upsert
     code = Column(String(100), nullable=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

@@ -24,21 +24,30 @@ def get_cloud_storage() -> CloudStorageInterface | None:
     if cloud_provider == "aws":
         from app.infrastructure.storage.s3_storage import S3Storage
 
-        return S3Storage(
+        if not settings.cloud_storage_bucket:
+            logger.warning("AWS cloud storage bucket not configured")
+            return None
+        return S3Storage(  # type: ignore[return-value]
             bucket_name=settings.cloud_storage_bucket,
             region=settings.aws_region or "us-east-1",
         )
     elif cloud_provider == "azure":
         from app.infrastructure.storage.azure_storage import AzureBlobStorage
 
-        return AzureBlobStorage(
+        if not settings.cloud_storage_bucket or not settings.azure_storage_account_name:
+            logger.warning("Azure storage bucket or account name not configured")
+            return None
+        return AzureBlobStorage(  # type: ignore[return-value]
             container_name=settings.cloud_storage_bucket,
             account_name=settings.azure_storage_account_name,
         )
     elif cloud_provider == "gcp":
         from app.infrastructure.storage.gcp_storage import GCPCloudStorage
 
-        return GCPCloudStorage(
+        if not settings.cloud_storage_bucket:
+            logger.warning("GCP cloud storage bucket not configured")
+            return None
+        return GCPCloudStorage(  # type: ignore[return-value]
             bucket_name=settings.cloud_storage_bucket,
         )
     else:

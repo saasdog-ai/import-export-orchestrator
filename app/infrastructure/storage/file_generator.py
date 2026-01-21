@@ -109,7 +109,7 @@ class FileGenerator:
             The value at the field path, or None if not found
         """
         parts = field_path.split(".")
-        value = data
+        value: Any = data
         for part in parts:
             if isinstance(value, dict):
                 value = value.get(part)

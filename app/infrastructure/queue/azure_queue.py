@@ -48,7 +48,7 @@ class AzureQueueStorage:
 
         # Queue client will be initialized lazily
         self._queue_name = queue_name
-        self.queue_client = None
+        self.queue_client: Any = None
 
     async def _ensure_queue_client(self) -> None:
         """Ensure queue client is initialized, creating queue if necessary."""
@@ -100,7 +100,7 @@ class AzureQueueStorage:
                 f"Message queue send_message completed: service=Azure, queue={self.queue_name}, "
                 f"message_id={message_id}"
             )
-            return message_id
+            return str(message_id)
         except AzureError as e:
             logger.error(f"Failed to send message to Azure queue: {e}")
             raise

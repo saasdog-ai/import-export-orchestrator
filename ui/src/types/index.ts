@@ -94,6 +94,8 @@ export interface ExportResultResponse {
 }
 
 // Import types
+export type ImportMode = 'create' | 'update' | 'upsert'
+
 export interface ImportField {
   source: string
   target: string
@@ -103,6 +105,8 @@ export interface ImportPreviewRequest {
   file_path: string
   entity: ExportEntity
   field_mappings?: ImportField[]
+  import_mode?: ImportMode
+  match_key?: string
 }
 
 export interface ImportPreviewRecordError {
@@ -115,6 +119,7 @@ export interface ImportPreviewRecord {
   data: Record<string, unknown>
   is_valid: boolean
   errors: ImportPreviewRecordError[]
+  action?: string  // Per-record action if _action column present
 }
 
 export interface ImportPreviewResponse {
@@ -123,6 +128,7 @@ export interface ImportPreviewResponse {
   total_records: number
   valid_count: number
   invalid_count: number
+  has_action_column: boolean  // Whether file has _action column for per-record actions
   records: ImportPreviewRecord[]
 }
 
@@ -130,6 +136,8 @@ export interface ImportExecuteRequest {
   file_path: string
   entity: ExportEntity
   field_mappings?: ImportField[]
+  import_mode?: ImportMode
+  match_key?: string
 }
 
 export interface ImportUploadResponse {
@@ -138,6 +146,8 @@ export interface ImportUploadResponse {
   file_path: string
   entity: string
   filename: string
+  columns?: string[]
+  has_action_column?: boolean
 }
 
 // Job types

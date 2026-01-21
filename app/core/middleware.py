@@ -16,7 +16,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and add security headers to response."""
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         # Prevent clickjacking attacks
         response.headers["X-Frame-Options"] = "DENY"
@@ -59,7 +59,7 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
         request.state.correlation_id = correlation_id
 
         # Process request
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         # Add correlation ID to response headers
         response.headers["X-Correlation-ID"] = correlation_id

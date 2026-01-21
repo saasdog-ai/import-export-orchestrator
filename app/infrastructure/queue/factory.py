@@ -33,21 +33,24 @@ def get_message_queue() -> MessageQueueInterface | None:
     if cloud_provider == "aws":
         from app.infrastructure.queue.sqs_queue import SQSQueue
 
-        return SQSQueue(
+        return SQSQueue(  # type: ignore[return-value]
             queue_name=queue_name,
             region=settings.aws_region or "us-east-1",
         )
     elif cloud_provider == "azure":
         from app.infrastructure.queue.azure_queue import AzureQueueStorage
 
-        return AzureQueueStorage(
+        if not settings.azure_storage_account_name:
+            logger.warning("Azure storage account name not configured")
+            return None
+        return AzureQueueStorage(  # type: ignore[return-value]
             queue_name=queue_name,
             account_name=settings.azure_storage_account_name,
         )
     elif cloud_provider == "gcp":
         from app.infrastructure.queue.gcp_queue import GCPPubSubQueue
 
-        return GCPPubSubQueue(
+        return GCPPubSubQueue(  # type: ignore[return-value]
             topic_name=queue_name,
             subscription_name=f"{queue_name}-subscription",
         )

@@ -53,6 +53,7 @@ import {
   RefreshCw,
   Pencil,
   Copy,
+  AlertCircle,
 } from "lucide-react"
 import type { JobRun, JobDefinitionUpdate } from "@/types"
 
@@ -68,6 +69,9 @@ export function JobDetail() {
   const [editName, setEditName] = useState("")
   const [editCronSchedule, setEditCronSchedule] = useState("")
   const [editEnabled, setEditEnabled] = useState(true)
+
+  // Error details dialog state
+  const [errorDetailsRun, setErrorDetailsRun] = useState<JobRun | null>(null)
 
   const { data: job, isLoading: jobLoading } = useQuery({
     queryKey: ["job", jobId],
@@ -109,10 +113,8 @@ export function JobDetail() {
     if (!jobId || !job) return
 
     if (job.job_type === "import") {
-      toast.info(
-        "Import requires file upload",
-        `To run "${job.name}", go to Imports → New Import and upload your CSV file.`
-      )
+      // Navigate to import workflow with this job's entity pre-selected
+      navigate(`/imports/new?run=${jobId}`)
       return
     }
 
@@ -281,10 +283,16 @@ export function JobDetail() {
                 <span className="capitalize">{config?.entity}</span>
               </div>
               {isExport && job.export_config && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Fields:</span>
-                  <span>{job.export_config.fields?.length || 0} selected</span>
-                </div>
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Fields:</span>
+                    <span>{job.export_config.fields?.length || 0} selected</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Filters:</span>
+                    <span>{job.export_config.filters?.filters?.length || 0} applied</span>
+                  </div>
+                </>
               )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Enabled:</span>
@@ -302,6 +310,25 @@ export function JobDetail() {
                     <Badge key={f.field} variant="outline" className="text-xs">
                       {f.as || f.field}
                     </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isExport && job.export_config?.filters?.filters && job.export_config.filters.filters.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-sm font-medium">Filters:</span>
+                <div className="space-y-1">
+                  {job.export_config.filters.filters.map((filter, index) => (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <Badge variant="secondary" className="text-xs font-normal">
+                        {filter.field}
+                      </Badge>
+                      <span className="text-muted-foreground">{filter.operator}</span>
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                        {String(filter.value)}
+                      </code>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -388,6 +415,7 @@ export function JobDetail() {
                   <TableHead>Started</TableHead>
                   <TableHead>Completed</TableHead>
                   <TableHead>Duration</TableHead>
+                  {!isExport && <TableHead>Result</TableHead>}
                   <TableHead>Error</TableHead>
                   {isExport && <TableHead>Download</TableHead>}
                 </TableRow>
@@ -426,14 +454,65 @@ export function JobDetail() {
                       <TableCell>
                         {duration !== null ? `${duration}s` : "-"}
                       </TableCell>
+                      {!isExport && (
+                        <TableCell>
+                          {run.result_metadata && (run.status === "succeeded" || run.status === "failed") ? (() => {
+                            const meta = run.result_metadata as Record<string, number>
+                            const imported = meta.imported_count || 0
+                            const updated = meta.updated_count || 0
+                            const deleted = meta.deleted_count || 0
+                            const skipped = meta.skipped_count || 0
+                            return (
+                              <div className="flex items-center gap-2 text-xs">
+                                {imported > 0 && (
+                                  <span className="text-green-600">+{imported} created</span>
+                                )}
+                                {updated > 0 && (
+                                  <span className="text-blue-600">{updated} updated</span>
+                                )}
+                                {deleted > 0 && (
+                                  <span className="text-orange-600">{deleted} deleted</span>
+                                )}
+                                {skipped > 0 && (
+                                  <span className="text-muted-foreground">{skipped} skipped</span>
+                                )}
+                                {!imported && !updated && !deleted && !skipped && (
+                                  <span className="text-muted-foreground">No changes</span>
+                                )}
+                              </div>
+                            )
+                          })() : (
+                            "-"
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell>
                         {run.status === "failed" && run.error_message ? (
-                          <span
-                            className="text-xs text-destructive max-w-[250px] block truncate cursor-help"
-                            title={run.error_message}
-                          >
-                            {run.error_message}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs text-destructive max-w-[180px] block truncate cursor-help"
+                              title={run.error_message}
+                            >
+                              {run.error_message}
+                            </span>
+                            {run.result_metadata &&
+                              Array.isArray(
+                                (run.result_metadata as Record<string, unknown>)
+                                  .import_errors
+                              ) &&
+                              ((run.result_metadata as Record<string, unknown>)
+                                .import_errors as unknown[]).length > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => setErrorDetailsRun(run)}
+                                >
+                                  <AlertCircle className="mr-1 h-3 w-3" />
+                                  Details
+                                </Button>
+                              )}
+                          </div>
                         ) : (
                           "-"
                         )}
@@ -526,6 +605,98 @@ export function JobDetail() {
               Failed to update job: {updateMutation.error instanceof Error ? updateMutation.error.message : "Unknown error"}
             </p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Error Details Dialog */}
+      <Dialog
+        open={!!errorDetailsRun}
+        onOpenChange={(open) => !open && setErrorDetailsRun(null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Import Error Details</DialogTitle>
+            <DialogDescription>
+              {errorDetailsRun?.error_message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {errorDetailsRun?.result_metadata && (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-muted-foreground">Imported</p>
+                    <p className="text-xl font-semibold text-green-600">
+                      {(errorDetailsRun.result_metadata as Record<string, unknown>)
+                        .imported_count as number ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-muted-foreground">Updated</p>
+                    <p className="text-xl font-semibold text-blue-600">
+                      {(errorDetailsRun.result_metadata as Record<string, unknown>)
+                        .updated_count as number ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-muted-foreground">Failed</p>
+                    <p className="text-xl font-semibold text-red-600">
+                      {(errorDetailsRun.result_metadata as Record<string, unknown>)
+                        .failed_count as number ?? 0}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Error list */}
+                {Array.isArray(
+                  (errorDetailsRun.result_metadata as Record<string, unknown>)
+                    .import_errors
+                ) && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Failed Records</h4>
+                    <div className="rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[80px]">Row</TableHead>
+                            <TableHead>Error</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(
+                            (
+                              errorDetailsRun.result_metadata as Record<
+                                string,
+                                unknown
+                              >
+                            ).import_errors as Array<{
+                              row?: number
+                              message: string
+                            }>
+                          ).map((error, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-mono text-xs">
+                                {error.row ?? "-"}
+                              </TableCell>
+                              <TableCell className="text-sm text-destructive">
+                                {error.message}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setErrorDetailsRun(null)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -61,7 +61,7 @@ class FileParser:
             data = [data]
 
         logger.info(f"Parsed {len(data)} records from JSON file: {file_path}")
-        return data
+        return list(data)  # Ensure we return a list
 
     @staticmethod
     def parse_file(file_path: str) -> list[dict[str, Any]]:

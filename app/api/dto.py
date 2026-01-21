@@ -14,6 +14,7 @@ from app.domain.entities import (
     ExportFilterGroup,
     ImportConfig,
     ImportField,
+    ImportMode,
     JobStatus,
     JobType,
 )
@@ -249,6 +250,15 @@ class ImportPreviewRequest(BaseModel):
         description="Optional field mappings from source columns to target fields. "
         "If not provided, source columns must match target field names exactly.",
     )
+    import_mode: ImportMode = Field(
+        default=ImportMode.CREATE,
+        description="How to handle existing records: create (insert only), "
+        "update (update only), or upsert (create or update).",
+    )
+    match_key: str = Field(
+        default="external_id",
+        description="Field to match existing records for update/upsert modes.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -256,6 +266,8 @@ class ImportPreviewRequest(BaseModel):
                 {
                     "file_path": "imports/client-123/temp/bills.csv",
                     "entity": "bill",
+                    "import_mode": "upsert",
+                    "match_key": "external_id",
                     "field_mappings": [
                         {"source": "Total Amount", "target": "amount"},
                         {"source": "Invoice Date", "target": "date"},
@@ -283,6 +295,10 @@ class ImportPreviewRecord(BaseModel):
         default_factory=list,
         description="Validation errors for this record (empty if valid)",
     )
+    action: str | None = Field(
+        default=None,
+        description="Per-record action (create/update/upsert/delete) if _action column present",
+    )
 
 
 class ImportPreviewResponse(BaseModel):
@@ -293,6 +309,10 @@ class ImportPreviewResponse(BaseModel):
     total_records: int = Field(..., description="Total number of records in the file")
     valid_count: int = Field(..., description="Number of records that pass validation")
     invalid_count: int = Field(..., description="Number of records that fail validation")
+    has_action_column: bool = Field(
+        default=False,
+        description="Whether the file has an _action column for per-record actions",
+    )
     records: list[ImportPreviewRecord] = Field(
         ...,
         description="All records with validation status",
@@ -307,18 +327,21 @@ class ImportPreviewResponse(BaseModel):
                     "total_records": 100,
                     "valid_count": 95,
                     "invalid_count": 5,
+                    "has_action_column": True,
                     "records": [
                         {
                             "row": 1,
                             "data": {"amount": 1000, "date": "2024-01-15"},
                             "is_valid": True,
                             "errors": [],
+                            "action": "create",
                         },
                         {
                             "row": 2,
-                            "data": {"amount": "invalid", "date": "2024-01-15"},
-                            "is_valid": False,
-                            "errors": [{"field": "amount", "message": "Must be a valid number"}],
+                            "data": {"amount": 3500, "date": "2024-01-20"},
+                            "is_valid": True,
+                            "errors": [],
+                            "action": "upsert",
                         },
                     ],
                 }
@@ -342,6 +365,15 @@ class ImportExecuteRequest(BaseModel):
         default=None,
         description="Optional field mappings from source columns to target fields.",
     )
+    import_mode: ImportMode = Field(
+        default=ImportMode.CREATE,
+        description="How to handle existing records: create (insert only), "
+        "update (update only), or upsert (create or update).",
+    )
+    match_key: str = Field(
+        default="external_id",
+        description="Field to match existing records for update/upsert modes.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -349,6 +381,8 @@ class ImportExecuteRequest(BaseModel):
                 {
                     "file_path": "imports/client-123/temp/bills.csv",
                     "entity": "bill",
+                    "import_mode": "upsert",
+                    "match_key": "external_id",
                     "field_mappings": [
                         {"source": "Total Amount", "target": "amount"},
                         {"source": "Invoice Date", "target": "date"},

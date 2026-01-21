@@ -20,6 +20,33 @@ import { getAuthToken, handleUnauthorized, AuthenticationError } from '@/lib/aut
 const API_BASE = '/api'
 
 /**
+ * Validation error with detailed error information
+ */
+export interface ValidationErrorDetail {
+  row?: number
+  field?: string
+  message: string
+}
+
+export class ValidationError extends Error {
+  public readonly status: string
+  public readonly validationErrors: ValidationErrorDetail[]
+  public readonly errorCount: number
+
+  constructor(
+    message: string,
+    validationErrors: ValidationErrorDetail[] = [],
+    errorCount: number = 0
+  ) {
+    super(message)
+    this.name = 'ValidationError'
+    this.status = 'validation_failed'
+    this.validationErrors = validationErrors
+    this.errorCount = errorCount
+  }
+}
+
+/**
  * Get headers for authenticated API requests.
  * Uses the auth module for secure token retrieval.
  */
@@ -121,7 +148,25 @@ export async function uploadImportFile(
     headers,
     body: formData,
   })
-  return handleResponse<ImportUploadResponse>(response)
+
+  // Handle validation errors specially to preserve detailed error info
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }))
+
+    // Check if this is a validation error with detailed errors
+    if (errorData.status === 'validation_failed' && errorData.validation_errors) {
+      throw new ValidationError(
+        errorData.message || 'File validation failed',
+        errorData.validation_errors,
+        errorData.error_count || errorData.validation_errors.length
+      )
+    }
+
+    // Generic error
+    throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+  }
+
+  return response.json()
 }
 
 export async function previewImport(

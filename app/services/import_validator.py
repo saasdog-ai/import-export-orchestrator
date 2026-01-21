@@ -7,9 +7,12 @@ from typing import Any
 
 from app.core.constants import ALLOWED_FILE_EXTENSIONS, MAX_FILE_SIZE
 from app.core.logging import get_logger
-from app.domain.entities import ExportEntity
+from app.domain.entities import ExportEntity, RecordAction
 
 logger = get_logger(__name__)
+
+# Column name for per-record actions
+ACTION_COLUMN = "_action"
 
 
 class ValidationError(Exception):
@@ -115,6 +118,45 @@ class ImportValidator:
         return len(errors) == 0, errors
 
     @staticmethod
+    def extract_columns(file_path: str) -> tuple[list[str], bool]:
+        """
+        Extract column names from an import file.
+
+        Args:
+            file_path: Path to the import file
+
+        Returns:
+            Tuple of (list of column names, has_action_column)
+        """
+        path = Path(file_path)
+        ext = path.suffix.lower()
+
+        try:
+            if ext == ".csv":
+                with open(file_path, encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    columns = list(reader.fieldnames) if reader.fieldnames else []
+                    has_action = ACTION_COLUMN in columns
+                    # Filter out the _action column from the list since it's handled separately
+                    columns = [c for c in columns if c != ACTION_COLUMN]
+                    return columns, has_action
+            elif ext == ".json":
+                with open(file_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) > 0:
+                        columns = list(data[0].keys())
+                        has_action = ACTION_COLUMN in columns
+                        columns = [c for c in columns if c != ACTION_COLUMN]
+                        return columns, has_action
+                    return [], False
+            else:
+                logger.warning(f"Unsupported file extension for column extraction: {ext}")
+                return [], False
+        except Exception as e:
+            logger.error(f"Error extracting columns from file: {e}")
+            return [], False
+
+    @staticmethod
     def _validate_csv_content(file_path: str, entity: ExportEntity) -> list[dict[str, Any]]:
         """Validate CSV file content."""
         errors: list[dict[str, Any]] = []
@@ -129,20 +171,58 @@ class ImportValidator:
                     errors.append({"row": 0, "message": "CSV file has no header row"})
                     return errors
 
-                # Check required fields exist
-                missing_fields = [f for f in required_fields if f not in reader.fieldnames]
-                if missing_fields:
-                    errors.append(
-                        {
-                            "row": 0,
-                            "message": f"Missing required fields: {', '.join(missing_fields)}",
-                        }
-                    )
+                # Check if file has _action column
+                has_action_column = ACTION_COLUMN in reader.fieldnames
+
+                # Check required fields exist (but not for files with _action column
+                # since DELETE rows don't need all fields)
+                if not has_action_column:
+                    missing_fields = [f for f in required_fields if f not in reader.fieldnames]
+                    if missing_fields:
+                        errors.append(
+                            {
+                                "row": 0,
+                                "message": f"Missing required fields: {', '.join(missing_fields)}",
+                            }
+                        )
 
                 # Validate each data row
                 row_num = 1  # Start at 1 (header is row 0)
                 for row in reader:
                     fieldnames_list = list(reader.fieldnames) if reader.fieldnames else []
+
+                    # Check if this is a DELETE action - skip required field validation
+                    if has_action_column:
+                        action_value = row.get(ACTION_COLUMN, "")
+                        parsed_action = (
+                            RecordAction.from_string(action_value) if action_value else None
+                        )
+
+                        if parsed_action == RecordAction.DELETE:
+                            # DELETE only needs external_id
+                            if not row.get("external_id"):
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "field": "external_id",
+                                        "message": "external_id is required for DELETE action",
+                                    }
+                                )
+                            row_num += 1
+                            continue
+
+                        # Validate action value if present
+                        if action_value and parsed_action is None:
+                            errors.append(
+                                {
+                                    "row": row_num,
+                                    "field": ACTION_COLUMN,
+                                    "message": f"Invalid action '{action_value}'. "
+                                    "Use CREATE/C, UPDATE/U, UPSERT/X, or DELETE/D",
+                                }
+                            )
+
+                    # Normal validation for non-DELETE rows
                     row_errors = ImportValidator._validate_row(
                         row, row_num, entity, fieldnames_list
                     )
@@ -166,7 +246,6 @@ class ImportValidator:
     def _validate_json_content(file_path: str, entity: ExportEntity) -> list[dict[str, Any]]:
         """Validate JSON file content."""
         errors: list[dict[str, Any]] = []
-        ImportValidator.REQUIRED_FIELDS.get(entity, [])
 
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -179,12 +258,46 @@ class ImportValidator:
                 errors.append({"row": 0, "message": "JSON must be an array or object"})
                 return errors
 
+            # Check if first record has _action field
+            has_action_column = data and isinstance(data[0], dict) and ACTION_COLUMN in data[0]
+
             # Validate each record
             for idx, record in enumerate(data, start=1):
                 if not isinstance(record, dict):
                     errors.append({"row": idx, "message": "Record must be an object"})
                     continue
 
+                # Check if this is a DELETE action - skip required field validation
+                if has_action_column:
+                    action_value = record.get(ACTION_COLUMN, "")
+                    parsed_action = (
+                        RecordAction.from_string(str(action_value)) if action_value else None
+                    )
+
+                    if parsed_action == RecordAction.DELETE:
+                        # DELETE only needs external_id
+                        if not record.get("external_id"):
+                            errors.append(
+                                {
+                                    "row": idx,
+                                    "field": "external_id",
+                                    "message": "external_id is required for DELETE action",
+                                }
+                            )
+                        continue
+
+                    # Validate action value if present
+                    if action_value and parsed_action is None:
+                        errors.append(
+                            {
+                                "row": idx,
+                                "field": ACTION_COLUMN,
+                                "message": f"Invalid action '{action_value}'. "
+                                "Use CREATE/C, UPDATE/U, UPSERT/X, or DELETE/D",
+                            }
+                        )
+
+                # Normal validation for non-DELETE rows
                 row_errors = ImportValidator._validate_row(record, idx, entity, list(record.keys()))
                 errors.extend(row_errors)
 
@@ -364,7 +477,8 @@ class ImportValidator:
                 - total_records: Total number of records
                 - valid_count: Number of valid records
                 - invalid_count: Number of invalid records
-                - records: List of records with validation status
+                - has_action_column: Whether the file has an _action column
+                - records: List of records with validation status and action
         """
         # First, validate file format
         is_valid, error_msg = ImportValidator.validate_file_format(file_path)
@@ -378,16 +492,23 @@ class ImportValidator:
         records: list[dict[str, Any]] = []
         valid_count = 0
         invalid_count = 0
+        has_action_column = False
 
         try:
             if extension == ".csv":
-                records, valid_count, invalid_count = await ImportValidator._preview_csv(
-                    file_path, entity, field_mappings or {}
-                )
+                (
+                    records,
+                    valid_count,
+                    invalid_count,
+                    has_action_column,
+                ) = await ImportValidator._preview_csv(file_path, entity, field_mappings or {})
             elif extension == ".json":
-                records, valid_count, invalid_count = await ImportValidator._preview_json(
-                    file_path, entity, field_mappings or {}
-                )
+                (
+                    records,
+                    valid_count,
+                    invalid_count,
+                    has_action_column,
+                ) = await ImportValidator._preview_json(file_path, entity, field_mappings or {})
             else:
                 raise ValueError(f"Unsupported file format: {extension}")
 
@@ -403,6 +524,7 @@ class ImportValidator:
             "total_records": len(records),
             "valid_count": valid_count,
             "invalid_count": invalid_count,
+            "has_action_column": has_action_column,
             "records": records,
         }
 
@@ -411,11 +533,16 @@ class ImportValidator:
         file_path: str,
         entity: ExportEntity,
         field_mappings: dict[str, str],
-    ) -> tuple[list[dict[str, Any]], int, int]:
-        """Preview CSV file with validation."""
+    ) -> tuple[list[dict[str, Any]], int, int, bool]:
+        """Preview CSV file with validation.
+
+        Returns:
+            Tuple of (records, valid_count, invalid_count, has_action_column)
+        """
         records: list[dict[str, Any]] = []
         valid_count = 0
         invalid_count = 0
+        has_action_column = False
 
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -424,18 +551,72 @@ class ImportValidator:
                 if not reader.fieldnames:
                     raise ValueError("CSV file has no header row")
 
-                # Map the field names using mappings
-                mapped_fieldnames = [field_mappings.get(fn, fn) for fn in reader.fieldnames]
+                # Check if _action column exists
+                has_action_column = ACTION_COLUMN in reader.fieldnames
+
+                # Map the field names using mappings (excluding _action)
+                mapped_fieldnames = [
+                    field_mappings.get(fn, fn) for fn in reader.fieldnames if fn != ACTION_COLUMN
+                ]
 
                 row_num = 1  # Start at 1 (header is row 0)
                 for row in reader:
+                    # Extract action if present
+                    action_value = row.pop(ACTION_COLUMN, None) if has_action_column else None
+                    parsed_action: RecordAction | None = None
+                    action_str: str | None = None
+                    is_delete_action = False
+
+                    # Parse action first to determine validation behavior
+                    if has_action_column:
+                        if action_value:
+                            parsed_action = RecordAction.from_string(action_value)
+                            if parsed_action is not None:
+                                is_delete_action = parsed_action == RecordAction.DELETE
+                                action_str = parsed_action.value
+
                     # Apply field mappings to the row
                     mapped_row = ImportValidator.apply_field_mappings(row, field_mappings)
 
-                    # Validate the mapped row
-                    row_errors = ImportValidator._validate_row(
-                        mapped_row, row_num, entity, mapped_fieldnames
-                    )
+                    # Validate the mapped row (skip for DELETE actions - only need identifier)
+                    row_errors: list[dict[str, Any]] = []
+                    if is_delete_action:
+                        # DELETE only needs the match key (external_id)
+                        if not mapped_row.get("external_id"):
+                            row_errors.append(
+                                {
+                                    "row": row_num,
+                                    "field": "external_id",
+                                    "message": "external_id is required for DELETE action",
+                                }
+                            )
+                    else:
+                        # Normal validation for CREATE/UPDATE/UPSERT
+                        row_errors = ImportValidator._validate_row(
+                            mapped_row, row_num, entity, mapped_fieldnames
+                        )
+
+                    # Validate action if present
+                    if has_action_column:
+                        if action_value:
+                            if parsed_action is None:
+                                # Re-parse for error message (action was invalid)
+                                row_errors.append(
+                                    {
+                                        "row": row_num,
+                                        "field": ACTION_COLUMN,
+                                        "message": f"Invalid action '{action_value}'. "
+                                        "Use CREATE/C, UPDATE/U, UPSERT/X, or DELETE/D",
+                                    }
+                                )
+                        else:
+                            row_errors.append(
+                                {
+                                    "row": row_num,
+                                    "field": ACTION_COLUMN,
+                                    "message": "Action is required when _action column is present",
+                                }
+                            )
 
                     # Convert errors to the expected format
                     formatted_errors = [
@@ -450,15 +631,16 @@ class ImportValidator:
                     else:
                         invalid_count += 1
 
-                    records.append(
-                        {
-                            "row": row_num,
-                            "data": mapped_row,
-                            "is_valid": is_valid,
-                            "errors": formatted_errors,
-                        }
-                    )
+                    record_data: dict[str, Any] = {
+                        "row": row_num,
+                        "data": mapped_row,
+                        "is_valid": is_valid,
+                        "errors": formatted_errors,
+                    }
+                    if has_action_column:
+                        record_data["action"] = action_str
 
+                    records.append(record_data)
                     row_num += 1
 
         except UnicodeDecodeError as e:
@@ -466,18 +648,23 @@ class ImportValidator:
         except csv.Error as e:
             raise ValueError(f"CSV parsing error: {str(e)}") from e
 
-        return records, valid_count, invalid_count
+        return records, valid_count, invalid_count, has_action_column
 
     @staticmethod
     async def _preview_json(
         file_path: str,
         entity: ExportEntity,
         field_mappings: dict[str, str],
-    ) -> tuple[list[dict[str, Any]], int, int]:
-        """Preview JSON file with validation."""
+    ) -> tuple[list[dict[str, Any]], int, int, bool]:
+        """Preview JSON file with validation.
+
+        Returns:
+            Tuple of (records, valid_count, invalid_count, has_action_column)
+        """
         records: list[dict[str, Any]] = []
         valid_count = 0
         invalid_count = 0
+        has_action_column = False
 
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -488,6 +675,10 @@ class ImportValidator:
                 data = [data]
             elif not isinstance(data, list):
                 raise ValueError("JSON must be an array or object")
+
+            # Check if first record has _action field
+            if data and isinstance(data[0], dict):
+                has_action_column = ACTION_COLUMN in data[0]
 
             for idx, record in enumerate(data, start=1):
                 if not isinstance(record, dict):
@@ -502,14 +693,63 @@ class ImportValidator:
                     invalid_count += 1
                     continue
 
+                # Extract action if present
+                action_value = record.pop(ACTION_COLUMN, None) if has_action_column else None
+                parsed_action: RecordAction | None = None
+                action_str: str | None = None
+                is_delete_action = False
+
+                # Parse action first to determine validation behavior
+                if has_action_column:
+                    if action_value:
+                        parsed_action = RecordAction.from_string(str(action_value))
+                        if parsed_action is not None:
+                            is_delete_action = parsed_action == RecordAction.DELETE
+                            action_str = parsed_action.value
+
                 # Apply field mappings to the record
                 mapped_record = ImportValidator.apply_field_mappings(record, field_mappings)
                 mapped_fieldnames = list(mapped_record.keys())
 
-                # Validate the mapped record
-                row_errors = ImportValidator._validate_row(
-                    mapped_record, idx, entity, mapped_fieldnames
-                )
+                # Validate the mapped record (skip for DELETE actions - only need identifier)
+                row_errors: list[dict[str, Any]] = []
+                if is_delete_action:
+                    # DELETE only needs the match key (external_id)
+                    if not mapped_record.get("external_id"):
+                        row_errors.append(
+                            {
+                                "row": idx,
+                                "field": "external_id",
+                                "message": "external_id is required for DELETE action",
+                            }
+                        )
+                else:
+                    # Normal validation for CREATE/UPDATE/UPSERT
+                    row_errors = ImportValidator._validate_row(
+                        mapped_record, idx, entity, mapped_fieldnames
+                    )
+
+                # Validate action if present
+                if has_action_column:
+                    if action_value:
+                        if parsed_action is None:
+                            # Re-parse for error message (action was invalid)
+                            row_errors.append(
+                                {
+                                    "row": idx,
+                                    "field": ACTION_COLUMN,
+                                    "message": f"Invalid action '{action_value}'. "
+                                    "Use CREATE/C, UPDATE/U, UPSERT/X, or DELETE/D",
+                                }
+                            )
+                    else:
+                        row_errors.append(
+                            {
+                                "row": idx,
+                                "field": ACTION_COLUMN,
+                                "message": "Action is required when _action field is present",
+                            }
+                        )
 
                 # Convert errors to the expected format
                 formatted_errors = [
@@ -524,16 +764,18 @@ class ImportValidator:
                 else:
                     invalid_count += 1
 
-                records.append(
-                    {
-                        "row": idx,
-                        "data": mapped_record,
-                        "is_valid": is_valid,
-                        "errors": formatted_errors,
-                    }
-                )
+                record_data: dict[str, Any] = {
+                    "row": idx,
+                    "data": mapped_record,
+                    "is_valid": is_valid,
+                    "errors": formatted_errors,
+                }
+                if has_action_column:
+                    record_data["action"] = action_str
+
+                records.append(record_data)
 
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON: {str(e)}") from e
 
-        return records, valid_count, invalid_count
+        return records, valid_count, invalid_count, has_action_column

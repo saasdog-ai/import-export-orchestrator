@@ -28,10 +28,12 @@ ENTITY_SCHEMAS: dict[str, SchemaEntity] = {
         description="Bills represent invoices received from vendors",
         fields=[
             SchemaField(name="id", type="uuid", label="ID", required=False),
+            SchemaField(name="external_id", type="string", label="External ID", required=False),
             SchemaField(name="amount", type="number", label="Amount", required=True),
             SchemaField(name="date", type="date", label="Date", required=True),
             SchemaField(name="status", type="string", label="Status", required=False),
             SchemaField(name="description", type="string", label="Description", required=False),
+            SchemaField(name="currency", type="string", label="Currency", required=False),
             SchemaField(name="vendor_id", type="uuid", label="Vendor ID", required=False),
             SchemaField(name="project_id", type="uuid", label="Project ID", required=False),
         ],
@@ -64,10 +66,12 @@ ENTITY_SCHEMAS: dict[str, SchemaEntity] = {
         description="Invoices represent bills sent to customers",
         fields=[
             SchemaField(name="id", type="uuid", label="ID", required=False),
+            SchemaField(name="external_id", type="string", label="External ID", required=False),
             SchemaField(name="amount", type="number", label="Amount", required=True),
             SchemaField(name="date", type="date", label="Date", required=True),
             SchemaField(name="status", type="string", label="Status", required=False),
             SchemaField(name="description", type="string", label="Description", required=False),
+            SchemaField(name="currency", type="string", label="Currency", required=False),
             SchemaField(name="customer_id", type="uuid", label="Customer ID", required=False),
             SchemaField(name="project_id", type="uuid", label="Project ID", required=False),
         ],
@@ -90,6 +94,7 @@ ENTITY_SCHEMAS: dict[str, SchemaEntity] = {
         description="Vendors are suppliers or service providers",
         fields=[
             SchemaField(name="id", type="uuid", label="ID", required=False),
+            SchemaField(name="external_id", type="string", label="External ID", required=False),
             SchemaField(name="name", type="string", label="Name", required=True),
             SchemaField(name="email", type="string", label="Email", required=False),
             SchemaField(name="phone", type="string", label="Phone", required=False),
@@ -103,6 +108,7 @@ ENTITY_SCHEMAS: dict[str, SchemaEntity] = {
         description="Projects for organizing work and tracking costs",
         fields=[
             SchemaField(name="id", type="uuid", label="ID", required=False),
+            SchemaField(name="external_id", type="string", label="External ID", required=False),
             SchemaField(name="code", type="string", label="Code", required=True),
             SchemaField(name="name", type="string", label="Name", required=True),
             SchemaField(name="description", type="string", label="Description", required=False),

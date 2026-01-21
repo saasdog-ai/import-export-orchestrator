@@ -22,8 +22,9 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
 import { useSchema } from "@/hooks/useSchema"
-import { uploadImportFile, previewImport, executeImport, getJob } from "@/api/client"
-import type { ExportEntity, ImportPreviewRecord, SchemaField } from "@/types"
+import { useToast } from "@/contexts/ToastContext"
+import { uploadImportFile, previewImport, executeImport, getJob, ValidationError, type ValidationErrorDetail } from "@/api/client"
+import type { ExportEntity, ImportPreviewRecord, SchemaField, ImportMode } from "@/types"
 import {
   ArrowLeft,
   ArrowRight,
@@ -44,28 +45,32 @@ interface FieldMapping {
 export function ImportCreate() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [searchParams] = useSearchParams()
   const cloneJobId = searchParams.get("clone")
+  const runJobId = searchParams.get("run")
+  const sourceJobId = cloneJobId || runJobId
   const { data: schema, isLoading: schemaLoading } = useSchema()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch job to clone if cloneJobId is present
-  const { data: cloneSource, isLoading: cloneLoading } = useQuery({
-    queryKey: ["job", cloneJobId],
-    queryFn: () => getJob(cloneJobId!),
-    enabled: !!cloneJobId,
+  // Fetch job to clone/run if sourceJobId is present
+  const { data: sourceJob, isLoading: sourceJobLoading } = useQuery({
+    queryKey: ["job", sourceJobId],
+    queryFn: () => getJob(sourceJobId!),
+    enabled: !!sourceJobId,
   })
 
   const [step, setStep] = useState<Step>("upload")
   const [entity, setEntity] = useState<ExportEntity | "">("")
   const isCloning = !!cloneJobId
+  const isRunning = !!runJobId
 
-  // Initialize entity from clone source
+  // Initialize entity from source job
   useEffect(() => {
-    if (cloneSource?.import_config?.entity) {
-      setEntity(cloneSource.import_config.entity)
+    if (sourceJob?.import_config?.entity) {
+      setEntity(sourceJob.import_config.entity)
     }
-  }, [cloneSource])
+  }, [sourceJob])
   const [file, setFile] = useState<File | null>(null)
   const [filePath, setFilePath] = useState("")
   const [sourceColumns, setSourceColumns] = useState<string[]>([])
@@ -73,6 +78,10 @@ export function ImportCreate() {
   const [previewRecords, setPreviewRecords] = useState<ImportPreviewRecord[]>([])
   const [validCount, setValidCount] = useState(0)
   const [invalidCount, setInvalidCount] = useState(0)
+  const [hasActionColumn, setHasActionColumn] = useState(false)
+  const [importMode, setImportMode] = useState<ImportMode>("create")
+  const [matchKey, setMatchKey] = useState("external_id")
+  const [validationErrors, setValidationErrors] = useState<ValidationErrorDetail[]>([])
 
   const selectedEntity = schema?.entities.find((e) => e.name === entity)
 
@@ -81,8 +90,42 @@ export function ImportCreate() {
       uploadImportFile(file, entity),
     onSuccess: (data) => {
       setFilePath(data.file_path)
-      // For now, we'll get columns from the preview
+      setValidationErrors([]) // Clear any previous validation errors
+
+      // Set columns from upload response for the mapping UI
+      if (data.columns && data.columns.length > 0) {
+        setSourceColumns(data.columns)
+        setHasActionColumn(data.has_action_column || false)
+
+        // Auto-map fields based on column names
+        if (selectedEntity) {
+          const autoMappings: FieldMapping[] = []
+          data.columns.forEach((col: string) => {
+            const normalizedCol = col.toLowerCase().replace(/[_\s]/g, "")
+            const matchingField = selectedEntity.fields.find((f: SchemaField) => {
+              const normalizedTarget = f.name.toLowerCase().replace(/[_\s]/g, "")
+              const normalizedLabel = f.label.toLowerCase().replace(/[_\s]/g, "")
+              return normalizedTarget === normalizedCol || normalizedLabel === normalizedCol
+            })
+            if (matchingField) {
+              autoMappings.push({ source: col, target: matchingField.name })
+            }
+          })
+          setFieldMappings(autoMappings)
+        }
+      }
+
       setStep("mapping")
+    },
+    onError: (error: Error | ValidationError) => {
+      if (error instanceof ValidationError) {
+        // Show detailed validation errors in the UI
+        setValidationErrors(error.validationErrors)
+      } else {
+        // Generic error - show toast
+        setValidationErrors([])
+        toast.error("Upload failed", error.message || "Failed to upload file")
+      }
     },
   })
 
@@ -92,6 +135,7 @@ export function ImportCreate() {
       setPreviewRecords(data.records)
       setValidCount(data.valid_count)
       setInvalidCount(data.invalid_count)
+      setHasActionColumn(data.has_action_column)
 
       // Extract source columns from first record
       if (data.records.length > 0) {
@@ -120,6 +164,9 @@ export function ImportCreate() {
 
       setStep("preview")
     },
+    onError: (error: Error) => {
+      toast.error("Preview failed", error.message || "Failed to preview import")
+    },
   })
 
   const executeMutation = useMutation({
@@ -128,12 +175,16 @@ export function ImportCreate() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       navigate(`/jobs/${data.job_id}`)
     },
+    onError: (error: Error) => {
+      toast.error("Import failed", error.message || "Failed to execute import")
+    },
   })
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
+      setValidationErrors([]) // Clear previous validation errors when new file selected
     }
   }
 
@@ -161,6 +212,8 @@ export function ImportCreate() {
       file_path: filePath,
       entity: entity as ExportEntity,
       field_mappings: fieldMappings.length > 0 ? fieldMappings : undefined,
+      import_mode: importMode,
+      match_key: matchKey,
     })
   }
 
@@ -169,15 +222,30 @@ export function ImportCreate() {
       file_path: filePath,
       entity: entity as ExportEntity,
       field_mappings: fieldMappings.length > 0 ? fieldMappings : undefined,
+      import_mode: importMode,
+      match_key: matchKey,
     })
   }
 
-  if (schemaLoading || cloneLoading) {
+  if (schemaLoading || sourceJobLoading) {
     return (
       <div className="flex justify-center py-12">
         <Spinner size="lg" />
       </div>
     )
+  }
+
+  // Determine page title and description
+  const getTitle = () => {
+    if (isRunning) return "Run Import"
+    if (isCloning) return "Clone Import"
+    return "Import Data"
+  }
+
+  const getDescription = () => {
+    if (isRunning) return `Running "${sourceJob?.name}" - upload a CSV file to import`
+    if (isCloning) return `Cloning from "${sourceJob?.name}" - upload a new file for import`
+    return "Upload and import data from a file"
   }
 
   return (
@@ -187,14 +255,8 @@ export function ImportCreate() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {isCloning ? "Clone Import" : "Import Data"}
-          </h1>
-          <p className="text-muted-foreground">
-            {isCloning
-              ? `Cloning from "${cloneSource?.name}" - upload a new file for import`
-              : "Upload and import data from a file"}
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{getTitle()}</h1>
+          <p className="text-muted-foreground">{getDescription()}</p>
         </div>
       </div>
 
@@ -239,6 +301,7 @@ export function ImportCreate() {
                 id="entity"
                 value={entity}
                 onChange={(e) => setEntity(e.target.value as ExportEntity)}
+                disabled={isRunning && !!sourceJob?.import_config?.entity}
               >
                 <option value="">Select an entity...</option>
                 {schema?.entities.map((e) => (
@@ -247,6 +310,11 @@ export function ImportCreate() {
                   </option>
                 ))}
               </Select>
+              {isRunning && !entity && (
+                <p className="text-sm text-yellow-600">
+                  Warning: The job does not have an entity configured. Please select one.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -282,7 +350,57 @@ export function ImportCreate() {
               </div>
             </div>
 
-            <div className="flex justify-end">
+            {/* Validation Errors Display */}
+            {validationErrors.length > 0 && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <XCircle className="h-5 w-5" />
+                  <h4 className="font-medium">
+                    File validation failed ({validationErrors.length} error{validationErrors.length !== 1 ? 's' : ''})
+                  </h4>
+                </div>
+                <div className="rounded-lg border bg-background overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[80px]">Row</TableHead>
+                        <TableHead className="w-[120px]">Field</TableHead>
+                        <TableHead>Error</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {validationErrors.slice(0, 10).map((error, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-mono text-xs">
+                            {error.row ?? "-"}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {error.field || "-"}
+                          </TableCell>
+                          <TableCell className="text-sm text-destructive">
+                            {error.message}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {validationErrors.length > 10 && (
+                    <div className="px-4 py-2 text-sm text-muted-foreground border-t">
+                      ... and {validationErrors.length - 10} more errors
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Please fix these issues in your file and try uploading again.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                {!entity && "Select an entity type"}
+                {entity && !file && "Select a file to upload"}
+              </div>
               <Button
                 onClick={handleUpload}
                 disabled={!entity || !file || uploadMutation.isPending}
@@ -421,9 +539,15 @@ export function ImportCreate() {
                   <TableRow>
                     <TableHead className="w-[60px]">Row</TableHead>
                     <TableHead className="w-[80px]">Status</TableHead>
-                    {fieldMappings.map((m) => (
-                      <TableHead key={m.source}>{m.target}</TableHead>
-                    ))}
+                    {hasActionColumn && (
+                      <TableHead className="w-[80px]">Action</TableHead>
+                    )}
+                    <TableHead>External ID</TableHead>
+                    {fieldMappings
+                      .filter((m) => m.target !== "external_id")
+                      .map((m) => (
+                        <TableHead key={m.source}>{m.target}</TableHead>
+                      ))}
                     <TableHead>Errors</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -441,11 +565,32 @@ export function ImportCreate() {
                           <XCircle className="h-4 w-4 text-red-600" />
                         )}
                       </TableCell>
-                      {fieldMappings.map((m) => (
-                        <TableCell key={m.source}>
-                          {String(record.data[m.target] ?? "")}
+                      {hasActionColumn && (
+                        <TableCell>
+                          <Badge
+                            variant={
+                              record.action === "delete"
+                                ? "destructive"
+                                : record.action === "update"
+                                ? "secondary"
+                                : "default"
+                            }
+                            className="capitalize"
+                          >
+                            {record.action || "-"}
+                          </Badge>
                         </TableCell>
-                      ))}
+                      )}
+                      <TableCell className="font-mono text-xs">
+                        {String(record.data["external_id"] ?? "-")}
+                      </TableCell>
+                      {fieldMappings
+                        .filter((m) => m.target !== "external_id")
+                        .map((m) => (
+                          <TableCell key={m.source}>
+                            {String(record.data[m.target] ?? "")}
+                          </TableCell>
+                        ))}
                       <TableCell>
                         {record.errors.length > 0 && (
                           <div className="flex flex-col gap-1">
@@ -509,6 +654,81 @@ export function ImportCreate() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Import Mode Selection - only show if file doesn't have _action column */}
+            {hasActionColumn ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <h4 className="font-medium text-blue-800">Per-Record Actions Detected</h4>
+                <p className="text-sm text-blue-700 mt-1">
+                  Your file has an <code className="bg-blue-100 px-1 rounded">_action</code> column.
+                  Each row specifies its own action (CREATE, UPDATE, UPSERT, or DELETE).
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border p-4 space-y-4">
+                <h4 className="font-medium">Import Mode</h4>
+                <p className="text-sm text-muted-foreground">
+                  Choose how to handle records that may already exist in the system.
+                </p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div
+                    className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                      importMode === "create"
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-muted-foreground/50"
+                    }`}
+                    onClick={() => setImportMode("create")}
+                  >
+                    <div className="font-medium">Create Only</div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Insert new records only. Fails if a record with the same external ID already exists.
+                    </p>
+                  </div>
+                  <div
+                    className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                      importMode === "update"
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-muted-foreground/50"
+                    }`}
+                    onClick={() => setImportMode("update")}
+                  >
+                    <div className="font-medium">Update Only</div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Update existing records only. Skips records without a matching external ID.
+                    </p>
+                  </div>
+                  <div
+                    className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                      importMode === "upsert"
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-muted-foreground/50"
+                    }`}
+                    onClick={() => setImportMode("upsert")}
+                  >
+                    <div className="font-medium">Upsert</div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Create new records or update existing ones based on external ID.
+                    </p>
+                  </div>
+                </div>
+                {(importMode === "update" || importMode === "upsert") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="match-key">Match Key Field</Label>
+                    <Select
+                      id="match-key"
+                      value={matchKey}
+                      onChange={(e) => setMatchKey(e.target.value)}
+                    >
+                      <option value="external_id">external_id (recommended)</option>
+                      <option value="id">id (internal UUID)</option>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      The field used to identify existing records for updates.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="rounded-lg border p-4 space-y-3">
               <h4 className="font-medium">Import Summary</h4>
               <div className="grid gap-2 text-sm">
@@ -519,6 +739,12 @@ export function ImportCreate() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">File:</span>
                   <span>{file?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Import Mode:</span>
+                  <span className="capitalize">
+                    {hasActionColumn ? "Per-record (_action column)" : importMode}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Records:</span>

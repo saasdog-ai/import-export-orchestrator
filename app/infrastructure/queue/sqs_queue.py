@@ -94,7 +94,7 @@ class SQSQueue:
                 f"Message queue send_message completed: service=SQS, queue={self.queue_name}, "
                 f"message_id={message_id}"
             )
-            return message_id
+            return str(message_id)
         except ClientError as e:
             logger.error(f"Failed to send message to SQS: {e}")
             raise
@@ -184,7 +184,7 @@ class SQSQueue:
                     QueueUrl=self.queue_url, AttributeNames=["All"]
                 ),
             )
-            return response.get("Attributes", {})
+            return dict(response.get("Attributes", {}))
         except ClientError as e:
             logger.error(f"Failed to get queue attributes: {e}")
             raise

@@ -99,7 +99,7 @@ class S3Storage:
                 f"Cloud storage presigned URL generated: service=S3, bucket={self.bucket_name}, "
                 f"remote_path={remote_file_path}, url_length={len(url)}"
             )
-            return url
+            return str(url)
         except ClientError as e:
             logger.error(f"Failed to generate pre-signed URL: {e}")
             raise

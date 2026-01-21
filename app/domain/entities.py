@@ -25,6 +25,47 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class ImportMode(str, Enum):
+    """Import mode for handling existing records."""
+
+    CREATE = "create"  # Insert only - skip/fail if exists
+    UPDATE = "update"  # Update only - skip if not exists
+    UPSERT = "upsert"  # Create or update based on match key
+
+
+class RecordAction(str, Enum):
+    """Per-record action for import operations.
+
+    Used when CSV has an _action column to specify action per row.
+    Supports both full names and short codes (C, U, X, D).
+    """
+
+    CREATE = "create"
+    UPDATE = "update"
+    UPSERT = "upsert"
+    DELETE = "delete"
+
+    @classmethod
+    def from_string(cls, value: str) -> "RecordAction | None":
+        """Parse action from string, supporting short codes."""
+        if not value:
+            return None
+        normalized = value.strip().upper()
+        mapping = {
+            "CREATE": cls.CREATE,
+            "C": cls.CREATE,
+            "INSERT": cls.CREATE,
+            "I": cls.CREATE,
+            "UPDATE": cls.UPDATE,
+            "U": cls.UPDATE,
+            "UPSERT": cls.UPSERT,
+            "X": cls.UPSERT,
+            "DELETE": cls.DELETE,
+            "D": cls.DELETE,
+        }
+        return mapping.get(normalized)
+
+
 class Client(BaseModel):
     """Client entity."""
 
@@ -171,8 +212,8 @@ class ExportConfig(BaseModel):
     def convert_string_fields(cls, v: Any) -> list[dict[str, str]]:
         """Convert plain string fields to ExportField format for backward compatibility."""
         if not isinstance(v, list):
-            return v
-        result = []
+            return list(v) if v else []
+        result: list[dict[str, str]] = []
         for item in v:
             if isinstance(item, str):
                 # Convert old format "field_name" to new format {"field": "field_name"}
@@ -277,6 +318,16 @@ class ImportConfig(BaseModel):
         description="Optional field mappings from source columns to target fields. "
         "If not provided, source columns must match target field names exactly.",
     )
+    import_mode: ImportMode = Field(
+        default=ImportMode.CREATE,
+        description="How to handle existing records: create (insert only), "
+        "update (update only), or upsert (create or update).",
+    )
+    match_key: str = Field(
+        default="external_id",
+        description="Field to match existing records for update/upsert modes. "
+        "Typically 'external_id' which should be unique per client.",
+    )
     options: dict[str, Any] = Field(default_factory=dict, description="Import-specific options")
 
     def get_field_mappings(self) -> dict[str, str]:
@@ -296,6 +347,8 @@ class ImportConfig(BaseModel):
                 {
                     "source": "cloud_storage",
                     "entity": "bill",
+                    "import_mode": "upsert",
+                    "match_key": "external_id",
                     "fields": [
                         {"source": "Total Amount", "target": "amount"},
                         {"source": "Invoice Date", "target": "date"},

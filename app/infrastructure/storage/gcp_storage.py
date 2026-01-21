@@ -115,7 +115,7 @@ class GCPCloudStorage:
                 None,
                 lambda: blob.generate_signed_url(expiration=expiration_seconds, method="GET"),
             )
-            return url
+            return str(url)
         except GoogleCloudError as e:
             logger.error(f"Failed to generate signed URL: {e}")
             raise

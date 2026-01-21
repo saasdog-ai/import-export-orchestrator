@@ -274,21 +274,21 @@ class ExportQueryEngine:
 
         try:
             if operator == ExportFilterOperator.EQ:
-                return field_value == filter_value
+                return bool(field_value == filter_value)
             elif operator == ExportFilterOperator.NE:
-                return field_value != filter_value
+                return bool(field_value != filter_value)
             elif operator == ExportFilterOperator.LT:
-                return field_value < filter_value
+                return bool(field_value < filter_value)
             elif operator == ExportFilterOperator.LTE:
-                return field_value <= filter_value
+                return bool(field_value <= filter_value)
             elif operator == ExportFilterOperator.GT:
-                return field_value > filter_value
+                return bool(field_value > filter_value)
             elif operator == ExportFilterOperator.GTE:
-                return field_value >= filter_value
+                return bool(field_value >= filter_value)
             elif operator == ExportFilterOperator.IN:
-                return field_value in filter_value
+                return bool(field_value in filter_value)
             elif operator == ExportFilterOperator.BETWEEN:
-                return filter_value[0] <= field_value <= filter_value[1]
+                return bool(filter_value[0] <= field_value <= filter_value[1])
             elif operator == ExportFilterOperator.CONTAINS:
                 return str(filter_value).lower() in str(field_value).lower()
             elif operator == ExportFilterOperator.STARTSWITH:
@@ -305,7 +305,7 @@ class ExportQueryEngine:
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Get nested value from dictionary using dot notation."""
         parts = field_path.split(".")
-        value = data
+        value: Any = data
         for part in parts:
             if isinstance(value, dict):
                 value = value.get(part)

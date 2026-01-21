@@ -1,0 +1,6 @@
+_action,external_id,amount,date,description,status,currency
+CREATE,BILL-001,1500.00,2024-01-15,Office supplies purchase,pending,USD
+CREATE,BILL-002,3250.75,2024-01-20,Software license renewal,paid,USD
+UPSERT,BILL-003,875.50,2024-01-25,Marketing materials,pending,USD
+UPDATE,BILL-001,1600.00,2024-01-15,Office supplies (updated),paid,USD
+DELETE,BILL-002,,,,

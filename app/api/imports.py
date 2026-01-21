@@ -152,6 +152,9 @@ async def upload_import_file(
                     "error_count": error_count,
                 },
             )
+        # Extract column names for the frontend mapping UI
+        columns, has_action_column = ImportValidator.extract_columns(temp_file_path)
+
         # Validation passed - upload to cloud storage
         if cloud_storage:
             # Upload to temp location in cloud storage
@@ -164,7 +167,8 @@ async def upload_import_file(
                 os.remove(temp_file_path)
                 logger.info(
                     f"Import file validated and uploaded: client_id={authenticated_client_id}, "
-                    f"filename={file.filename}, remote_path={remote_path}, entity={entity.value}"
+                    f"filename={file.filename}, remote_path={remote_path}, entity={entity.value}, "
+                    f"columns={len(columns)}, has_action_column={has_action_column}"
                 )
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
@@ -174,6 +178,8 @@ async def upload_import_file(
                         "file_path": remote_path,
                         "entity": entity.value,
                         "filename": file.filename,
+                        "columns": columns,
+                        "has_action_column": has_action_column,
                     },
                 )
             except Exception as e:
@@ -189,7 +195,8 @@ async def upload_import_file(
             # No cloud storage - keep file locally
             logger.info(
                 f"Import file validated (local storage): client_id={authenticated_client_id}, "
-                f"filename={file.filename}, path={temp_file_path}, entity={entity.value}"
+                f"filename={file.filename}, path={temp_file_path}, entity={entity.value}, "
+                f"columns={len(columns)}, has_action_column={has_action_column}"
             )
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
@@ -199,6 +206,8 @@ async def upload_import_file(
                     "file_path": temp_file_path,
                     "entity": entity.value,
                     "filename": file.filename,
+                    "columns": columns,
+                    "has_action_column": has_action_column,
                 },
             )
     except HTTPException:
@@ -330,6 +339,7 @@ async def preview_import(
             total_records=preview_result["total_records"],
             valid_count=preview_result["valid_count"],
             invalid_count=preview_result["invalid_count"],
+            has_action_column=preview_result["has_action_column"],
             records=preview_result["records"],
         )
 

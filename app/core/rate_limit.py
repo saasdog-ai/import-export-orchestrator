@@ -3,7 +3,7 @@
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException, Request, Response, status
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -91,11 +91,11 @@ class InMemoryRateLimiter:
         }
 
         if requests_last_minute >= config.requests_per_minute:
-            rate_limit_info["retry_after"] = 60 - (current_time - timestamps[-1])
+            rate_limit_info["retry_after"] = int(60 - (current_time - timestamps[-1]))
             return False, rate_limit_info
 
         if requests_last_hour >= config.requests_per_hour:
-            rate_limit_info["retry_after"] = 3600 - (current_time - timestamps[0])
+            rate_limit_info["retry_after"] = int(3600 - (current_time - timestamps[0]))
             return False, rate_limit_info
 
         # Request allowed - record it
@@ -160,11 +160,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request with rate limiting."""
         if not self.enabled:
-            return await call_next(request)
+            return cast(Response, await call_next(request))
 
         # Skip rate limiting for health checks
         if request.url.path.startswith("/health"):
-            return await call_next(request)
+            return cast(Response, await call_next(request))
 
         # Get rate limit key and config
         key = get_rate_limit_key(request)
@@ -187,7 +187,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         # Process request
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         # Add rate limit headers
         response.headers["X-RateLimit-Limit"] = str(config.requests_per_minute)

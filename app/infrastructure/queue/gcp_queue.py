@@ -34,9 +34,9 @@ class GCPPubSubQueue:
         self.subscriber_client = pubsub_v1.SubscriberClient()
 
         # Topic and subscription paths will be initialized lazily
-        self.project_id = None
-        self.topic_path = None
-        self.subscription_path = None
+        self.project_id: str | None = None
+        self.topic_path: str | None = None
+        self.subscription_path: str | None = None
 
     async def _ensure_topic_and_subscription(self) -> None:
         """Ensure topic and subscription exist, creating them if necessary."""

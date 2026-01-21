@@ -85,6 +85,7 @@ async def test_upload_import_file_success(
         mock_settings.export_local_path = str(tmp_path)
         mock_validator.validate_file_format.return_value = (True, None)
         mock_validator.validate_import_file = AsyncMock(return_value=(True, []))
+        mock_validator.extract_columns.return_value = (["id", "amount", "date"], False)
 
         response = await upload_import_file(
             file=mock_upload_file,
@@ -96,6 +97,8 @@ async def test_upload_import_file_success(
         assert response.status_code == 200
         content = json.loads(response.body.decode()) if hasattr(response, "body") else response
         assert "validated" in str(content).lower() or "validated" in str(response)
+        assert content.get("columns") == ["id", "amount", "date"]
+        assert content.get("has_action_column") is False
 
 
 @pytest.mark.asyncio
@@ -141,6 +144,7 @@ async def test_upload_import_file_no_cloud_storage(mock_upload_file, test_client
         mock_settings.export_local_path = str(tmp_path)
         mock_validator.validate_file_format.return_value = (True, None)
         mock_validator.validate_import_file = AsyncMock(return_value=(True, []))
+        mock_validator.extract_columns.return_value = (["id", "amount", "date"], False)
 
         response = await upload_import_file(
             file=mock_upload_file,
@@ -150,6 +154,8 @@ async def test_upload_import_file_no_cloud_storage(mock_upload_file, test_client
         )
 
         assert response.status_code == 200
+        content = json.loads(response.body.decode()) if hasattr(response, "body") else response
+        assert content.get("columns") == ["id", "amount", "date"]
 
 
 @pytest.mark.asyncio

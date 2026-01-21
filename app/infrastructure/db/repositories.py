@@ -1,6 +1,7 @@
 """Repository implementations for database operations."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
@@ -235,23 +236,23 @@ class JobRepository:
             deleted = result.rowcount > 0
 
             logger.info(f"DB job deleted: job_id={job_id}, success={deleted}")
-            return deleted
+            return bool(deleted)
 
     def _model_to_entity(self, db_job: JobDefinitionModel) -> JobDefinition:
         """Convert database model to domain entity."""
         from app.domain.entities import ExportConfig, ImportConfig
 
         return JobDefinition(
-            id=db_job.id,
-            client_id=db_job.client_id,
-            name=db_job.name,
+            id=db_job.id,  # type: ignore[arg-type]
+            client_id=db_job.client_id,  # type: ignore[arg-type]
+            name=db_job.name,  # type: ignore[arg-type]
             job_type=JobType(db_job.job_type),
             export_config=ExportConfig(**db_job.export_config) if db_job.export_config else None,
             import_config=ImportConfig(**db_job.import_config) if db_job.import_config else None,
-            cron_schedule=db_job.cron_schedule,
-            enabled=db_job.enabled,
-            created_at=_to_aware_utc(db_job.created_at),
-            updated_at=_to_aware_utc(db_job.updated_at),
+            cron_schedule=db_job.cron_schedule,  # type: ignore[arg-type]
+            enabled=db_job.enabled,  # type: ignore[arg-type]
+            created_at=_to_aware_utc(db_job.created_at),  # type: ignore[arg-type]
+            updated_at=_to_aware_utc(db_job.updated_at),  # type: ignore[arg-type]
         )
 
 
@@ -366,7 +367,7 @@ class JobRunRepository:
         )
 
         async with self.db.transaction() as session:
-            update_values = {
+            update_values: dict[str, Any] = {
                 "status": status.value,
                 "updated_at": _to_naive_utc(datetime.now(UTC)),
             }
@@ -399,13 +400,13 @@ class JobRunRepository:
     def _model_to_entity(self, db_run: JobRunModel) -> JobRun:
         """Convert database model to domain entity."""
         return JobRun(
-            id=db_run.id,
-            job_id=db_run.job_id,
+            id=db_run.id,  # type: ignore[arg-type]
+            job_id=db_run.job_id,  # type: ignore[arg-type]
             status=JobStatus(db_run.status),
-            started_at=_to_aware_utc(db_run.started_at),
-            completed_at=_to_aware_utc(db_run.completed_at),
-            error_message=db_run.error_message,
-            result_metadata=db_run.result_metadata,
-            created_at=_to_aware_utc(db_run.created_at),
-            updated_at=_to_aware_utc(db_run.updated_at),
+            started_at=_to_aware_utc(db_run.started_at),  # type: ignore[arg-type]
+            completed_at=_to_aware_utc(db_run.completed_at),  # type: ignore[arg-type]
+            error_message=db_run.error_message,  # type: ignore[arg-type]
+            result_metadata=db_run.result_metadata,  # type: ignore[arg-type]
+            created_at=_to_aware_utc(db_run.created_at),  # type: ignore[arg-type]
+            updated_at=_to_aware_utc(db_run.updated_at),  # type: ignore[arg-type]
         )

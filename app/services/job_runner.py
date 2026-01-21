@@ -131,7 +131,8 @@ class JobRunnerService:
                     # Fallback to in-memory queue
                     try:
                         job, job_run = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-                        await self._execute_job_run(job, job_run, worker_id)
+                        if job is not None and job_run is not None:
+                            await self._execute_job_run(job, job_run, worker_id)
                     except TimeoutError:
                         continue
 
@@ -428,6 +429,8 @@ class JobRunnerService:
             result_metadata = {
                 "imported_count": result.get("imported_count", 0),
                 "updated_count": result.get("updated_count", 0),
+                "deleted_count": result.get("deleted_count", 0),
+                "skipped_count": result.get("skipped_count", 0),
                 "failed_count": result.get("failed_count", 0),
                 "worker": worker_id,
             }
@@ -452,6 +455,7 @@ class JobRunnerService:
                 f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
                 f"status={'succeeded' if result.get('failed_count', 0) == 0 else 'failed'}, "
                 f"imported={result.get('imported_count', 0)}, updated={result.get('updated_count', 0)}, "
+                f"deleted={result.get('deleted_count', 0)}, skipped={result.get('skipped_count', 0)}, "
                 f"failed={result.get('failed_count', 0)}"
             )
         else:
