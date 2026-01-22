@@ -165,6 +165,9 @@ resource "aws_ecs_service" "main" {
   desired_count   = var.ecs_desired_count
   launch_type     = "FARGATE"
 
+  # Enable ECS Exec for secure container access (e.g., database queries)
+  enable_execute_command = true
+
   network_configuration {
     subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]

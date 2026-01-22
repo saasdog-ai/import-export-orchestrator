@@ -325,7 +325,7 @@ export function ExportCreate() {
   }
 
   const addFilter = () => {
-    const dateField = fields.find((f) => f.type === "date")
+    const dateField = fields.find((f) => f.type === "date" || f.type === "datetime")
     setFilters((prev) => [
       ...prev,
       {
@@ -551,7 +551,7 @@ export function ExportCreate() {
                 ) : (
                   filters.map((filter) => {
                     const fieldConfig = fields.find((f) => f.field === filter.field)
-                    const isDateField = fieldConfig?.type === "date"
+                    const isDateField = fieldConfig?.type === "date" || fieldConfig?.type === "datetime"
 
                     return (
                       <div

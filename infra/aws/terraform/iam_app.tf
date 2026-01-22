@@ -111,6 +111,28 @@ resource "aws_iam_role_policy" "ecs_task_logs" {
 #   })
 # }
 
+# IAM Policy for ECS Exec - allows secure shell access to containers
+resource "aws_iam_role_policy" "ecs_task_ssm" {
+  name = "${var.project_name}-ecs-task-ssm-${var.environment}"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # Output the ECS Task Role ARN for reference
 output "ecs_task_role_arn" {
   description = "ARN of the ECS task role (for application runtime permissions)"
