@@ -62,8 +62,9 @@ export interface ImportExportConfig {
 const ConfigContext = createContext<ImportExportConfig | null>(null)
 
 // Default configuration for standalone mode
+// Use VITE_API_URL if set (for S3 deployment), otherwise use /api (for proxy/CloudFront)
 const defaultConfig: ImportExportConfig = {
-  apiBaseUrl: '/api',
+  apiBaseUrl: import.meta.env.VITE_API_URL || '/api',
   getAuthToken: () => {
     // In standalone mode, try to get token from localStorage
     if (typeof window !== 'undefined') {

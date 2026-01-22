@@ -126,6 +126,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "MESSAGE_QUEUE_NAME"
           value = aws_sqs_queue.job_runner.name
+        },
+        {
+          name  = "ALLOWED_ORIGINS"
+          value = jsonencode(["http://${aws_s3_bucket_website_configuration.ui.website_endpoint}", "http://localhost:3000", "http://localhost:5173"])
         }
       ]
 

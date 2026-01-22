@@ -16,8 +16,9 @@ export { ValidationError, AuthenticationError }
 export type { ValidationErrorDetail } from './apiClient'
 
 // Default configuration for standalone mode
+// Use VITE_API_URL if set (for S3 deployment), otherwise use /api (for proxy/CloudFront)
 const defaultConfig: ImportExportConfig = {
-  apiBaseUrl: '/api',
+  apiBaseUrl: import.meta.env.VITE_API_URL || '/api',
   getAuthToken: () => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('auth_token') || ''
