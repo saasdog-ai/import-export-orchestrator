@@ -17,7 +17,7 @@ resource "aws_ecs_cluster" "main" {
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project_name}-${var.environment}"
-  retention_in_days = 1  # Minimal retention for dev to reduce costs
+  retention_in_days = 1 # Minimal retention for dev to reduce costs
 
   tags = var.common_tags
 }
