@@ -33,14 +33,40 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000)
     api_reload: bool = Field(default=False)
 
-    # Security (for future JWT implementation)
-    jwt_secret_key: str = Field(default="CHANGE_THIS_IN_PRODUCTION")
-    jwt_algorithm: str = Field(default="HS256")
-    jwt_access_token_expire_minutes: int = Field(default=30)
+    # JWT Authentication
     auth_enabled: bool = Field(
         default=False,
         description="Enable JWT authentication. Must be True in production.",
     )
+    jwt_jwks_url: str | None = Field(
+        default=None,
+        description="JWKS endpoint URL for fetching public keys (e.g., https://your-auth.com/.well-known/jwks.json)",
+    )
+    jwt_issuer: str | None = Field(
+        default=None,
+        description="Expected JWT issuer (iss claim). If set, tokens must have matching issuer.",
+    )
+    jwt_audience: str | None = Field(
+        default=None,
+        description="Expected JWT audience (aud claim). If set, tokens must have matching audience.",
+    )
+    jwt_client_id_claim: str = Field(
+        default="client_id",
+        description="JWT claim name containing the client ID. Falls back to 'sub' if not found.",
+    )
+    jwt_algorithm: str = Field(
+        default="RS256",
+        description="JWT signing algorithm. Use RS256 for asymmetric (JWKS), HS256 for symmetric.",
+    )
+    jwt_secret_key: str = Field(
+        default="CHANGE_THIS_IN_PRODUCTION",
+        description="Secret key for HS256 algorithm. Not used when JWKS is configured.",
+    )
+    jwt_jwks_cache_ttl: int = Field(
+        default=3600,
+        description="JWKS cache TTL in seconds (default: 1 hour)",
+    )
+    jwt_access_token_expire_minutes: int = Field(default=30)
     rate_limit_enabled: bool = Field(
         default=True,
         description="Enable rate limiting for API protection.",
@@ -126,10 +152,20 @@ class Settings(BaseSettings):
         if not self.auth_enabled:
             errors.append("Authentication must be enabled in production (set AUTH_ENABLED=true)")
 
-        if self.jwt_secret_key == "CHANGE_THIS_IN_PRODUCTION":
-            errors.append(
-                "JWT secret key must be changed in production (set JWT_SECRET_KEY to a secure value)"
-            )
+        # JWT configuration validation
+        if self.auth_enabled:
+            if self.jwt_algorithm.startswith("RS") or self.jwt_algorithm.startswith("ES"):
+                # Asymmetric algorithms require JWKS URL
+                if not self.jwt_jwks_url:
+                    errors.append(
+                        f"JWKS URL is required for {self.jwt_algorithm} algorithm (set JWT_JWKS_URL)"
+                    )
+            else:
+                # Symmetric algorithms require secret key
+                if self.jwt_secret_key == "CHANGE_THIS_IN_PRODUCTION":
+                    errors.append(
+                        "JWT secret key must be changed in production (set JWT_SECRET_KEY to a secure value)"
+                    )
 
         if not self.message_queue_name:
             errors.append("Message queue must be configured in production (set MESSAGE_QUEUE_NAME)")
