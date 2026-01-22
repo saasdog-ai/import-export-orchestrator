@@ -4,9 +4,11 @@
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster-${var.environment}"
 
+  # Container Insights disabled to stay within CloudWatch free tier (10 metrics)
+  # Enable for production monitoring
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "disabled"
   }
 
   tags = var.common_tags
