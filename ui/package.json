@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite",
     "dev:aws": "vite --config vite.config.aws.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

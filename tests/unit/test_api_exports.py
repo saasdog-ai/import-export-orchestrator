@@ -496,3 +496,189 @@ async def test_get_export_download_url_not_completed(mock_job_service, authentic
 
     # Verify
     assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+
+
+# ============================================================================
+# Field Aliasing Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_export_with_field_aliases(mock_job_service, authenticated_client_id):
+    """Test export creation with field aliases."""
+    # Setup mocks
+    job_id = uuid4()
+    run_id = uuid4()
+
+    created_job = JobDefinition(
+        id=job_id,
+        client_id=authenticated_client_id,
+        name="Export bill with aliases",
+        job_type=JobType.EXPORT,
+        export_config=ExportConfig(
+            entity=ExportEntity.BILL,
+            fields=[
+                ExportField(field="id", **{"as": "Bill ID"}),
+                ExportField(field="amount", **{"as": "Total Amount"}),
+                ExportField(field="vendor.name", **{"as": "Vendor"}),
+            ],
+        ),
+    )
+
+    job_run = JobRun(
+        id=run_id,
+        job_id=job_id,
+        status=JobStatus.PENDING,
+    )
+
+    mock_job_service.create_job = AsyncMock(return_value=created_job)
+    mock_job_service.run_job = AsyncMock(return_value=job_run)
+
+    # Execute
+    from app.api.dto import ExportRequest
+
+    request_dto = ExportRequest(
+        entity=ExportEntity.BILL,
+        fields=[
+            {"field": "id", "as": "Bill ID"},
+            {"field": "amount", "as": "Total Amount"},
+            {"field": "vendor.name", "as": "Vendor"},
+        ],
+        limit=100,
+    )
+
+    result = await create_export(
+        export_request=request_dto,
+        authenticated_client_id=authenticated_client_id,
+        job_service=mock_job_service,
+    )
+
+    # Verify the job was created with correct field configuration
+    mock_job_service.create_job.assert_called_once()
+    create_job_call = mock_job_service.create_job.call_args[0][0]
+    export_config = create_job_call.export_config
+
+    # Verify source fields are extracted correctly
+    assert export_config.get_source_fields() == ["id", "amount", "vendor.name"]
+
+    # Verify field mappings are correct
+    mappings = export_config.get_field_mappings()
+    assert mappings["id"] == "Bill ID"
+    assert mappings["amount"] == "Total Amount"
+    assert mappings["vendor.name"] == "Vendor"
+
+    # Verify response
+    assert result.run_id == run_id
+    assert result.status == JobStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_preview_export_with_field_aliases(mock_query_engine, authenticated_client_id):
+    """Test export preview with field aliases returns aliased field names."""
+    # Setup mocks - query engine returns records with aliased keys
+    preview_data = {
+        "count": 2,
+        "records": [
+            {"Bill ID": "1", "Total Amount": 100.0, "Vendor": "Acme Corp"},
+            {"Bill ID": "2", "Total Amount": 200.0, "Vendor": "Tech Inc"},
+        ],
+    }
+    mock_query_engine.execute_export_query = AsyncMock(return_value=preview_data)
+
+    # Execute
+    from app.api.dto import ExportPreviewRequest
+
+    preview_request = ExportPreviewRequest(
+        entity=ExportEntity.BILL,
+        fields=[
+            {"field": "id", "as": "Bill ID"},
+            {"field": "amount", "as": "Total Amount"},
+            {"field": "vendor.name", "as": "Vendor"},
+        ],
+        limit=20,
+    )
+
+    result = await preview_export(
+        preview_request=preview_request,
+        authenticated_client_id=authenticated_client_id,
+        query_engine=mock_query_engine,
+    )
+
+    # Verify query engine was called with correct config
+    mock_query_engine.execute_export_query.assert_called_once()
+    call_args = mock_query_engine.execute_export_query.call_args
+    query_config = call_args[0][0]
+
+    # Verify source fields and mappings
+    assert query_config.get_source_fields() == ["id", "amount", "vendor.name"]
+    mappings = query_config.get_field_mappings()
+    assert mappings["id"] == "Bill ID"
+    assert mappings["vendor.name"] == "Vendor"
+
+    # Verify response has records with aliased field names
+    assert result.count == 2
+    assert len(result.records) == 2
+    for record in result.records:
+        assert "Bill ID" in record
+        assert "Total Amount" in record
+        assert "Vendor" in record
+
+
+@pytest.mark.asyncio
+async def test_create_export_mixed_aliased_and_unaliased(mock_job_service, authenticated_client_id):
+    """Test export with mix of aliased and unaliased fields."""
+    job_id = uuid4()
+    run_id = uuid4()
+
+    created_job = JobDefinition(
+        id=job_id,
+        client_id=authenticated_client_id,
+        name="Export bill mixed",
+        job_type=JobType.EXPORT,
+        export_config=ExportConfig(
+            entity=ExportEntity.BILL,
+            fields=[
+                ExportField(field="id"),  # No alias
+                ExportField(field="amount", **{"as": "Total"}),  # Aliased
+                ExportField(field="date"),  # No alias
+            ],
+        ),
+    )
+
+    job_run = JobRun(
+        id=run_id,
+        job_id=job_id,
+        status=JobStatus.PENDING,
+    )
+
+    mock_job_service.create_job = AsyncMock(return_value=created_job)
+    mock_job_service.run_job = AsyncMock(return_value=job_run)
+
+    from app.api.dto import ExportRequest
+
+    request_dto = ExportRequest(
+        entity=ExportEntity.BILL,
+        fields=[
+            {"field": "id"},
+            {"field": "amount", "as": "Total"},
+            {"field": "date"},
+        ],
+        limit=100,
+    )
+
+    result = await create_export(
+        export_request=request_dto,
+        authenticated_client_id=authenticated_client_id,
+        job_service=mock_job_service,
+    )
+
+    # Verify field mappings
+    create_job_call = mock_job_service.create_job.call_args[0][0]
+    mappings = create_job_call.export_config.get_field_mappings()
+    assert mappings == {
+        "id": "id",  # No alias, uses source field
+        "amount": "Total",  # Aliased
+        "date": "date",  # No alias, uses source field
+    }
+
+    assert result.run_id == run_id

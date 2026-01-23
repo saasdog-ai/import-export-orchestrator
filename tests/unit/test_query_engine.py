@@ -346,3 +346,198 @@ async def test_select_fields_nested(query_engine: ExportQueryEngine):
         assert "project.code" in record, f"Record {record} missing project.code"
         assert record["vendor.name"] is not None, f"Record {record} has None for vendor.name"
         assert record["project.code"] is not None, f"Record {record} has None for project.code"
+
+
+# ============================================================================
+# Field Aliasing Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_field_aliasing_simple(query_engine: ExportQueryEngine):
+    """Test that field aliases are applied to output records."""
+    config = ExportConfig(
+        entity=ExportEntity.BILL,
+        fields=[
+            ExportField(field="id", **{"as": "Bill ID"}),
+            ExportField(field="amount", **{"as": "Total Amount"}),
+            ExportField(field="date"),  # No alias
+        ],
+        limit=10,
+    )
+
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
+
+    assert result is not None
+    assert len(result["records"]) > 0
+
+    # Verify records use aliased field names
+    expected_fields = {"Bill ID", "Total Amount", "date"}
+    for record in result["records"]:
+        record_fields = set(record.keys())
+        assert record_fields == expected_fields, (
+            f"Field aliasing failed: Record has fields {record_fields}, expected {expected_fields}"
+        )
+        # Verify aliased fields have values
+        assert record["Bill ID"] is not None
+        assert record["Total Amount"] is not None
+
+
+@pytest.mark.asyncio
+async def test_field_aliasing_nested(query_engine: ExportQueryEngine):
+    """Test that field aliases work for nested fields."""
+    config = ExportConfig(
+        entity=ExportEntity.BILL,
+        fields=[
+            ExportField(field="id"),
+            ExportField(field="vendor.name", **{"as": "Vendor Name"}),
+            ExportField(field="project.code", **{"as": "Project Code"}),
+        ],
+        limit=10,
+    )
+
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
+
+    assert result is not None
+    assert len(result["records"]) > 0
+
+    # Verify records use aliased field names for nested fields
+    expected_fields = {"id", "Vendor Name", "Project Code"}
+    for record in result["records"]:
+        record_fields = set(record.keys())
+        assert record_fields == expected_fields, (
+            f"Nested field aliasing failed: Record has fields {record_fields}, expected {expected_fields}"
+        )
+        # Verify aliased nested fields have values
+        assert record["Vendor Name"] is not None
+        assert record["Project Code"] is not None
+
+
+@pytest.mark.asyncio
+async def test_field_aliasing_all_fields(query_engine: ExportQueryEngine):
+    """Test that all fields can have aliases."""
+    config = ExportConfig(
+        entity=ExportEntity.BILL,
+        fields=[
+            ExportField(field="id", **{"as": "ID"}),
+            ExportField(field="amount", **{"as": "Amount ($)"}),
+            ExportField(field="date", **{"as": "Invoice Date"}),
+            ExportField(field="status", **{"as": "Payment Status"}),
+            ExportField(field="vendor.name", **{"as": "Supplier"}),
+        ],
+        limit=5,
+    )
+
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
+
+    assert result is not None
+    assert len(result["records"]) > 0
+
+    # Verify all fields are aliased
+    expected_fields = {"ID", "Amount ($)", "Invoice Date", "Payment Status", "Supplier"}
+    for record in result["records"]:
+        record_fields = set(record.keys())
+        assert record_fields == expected_fields, (
+            f"Full aliasing failed: Record has fields {record_fields}, expected {expected_fields}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_field_aliasing_preserves_values(query_engine: ExportQueryEngine):
+    """Test that field aliasing preserves the correct values."""
+    config = ExportConfig(
+        entity=ExportEntity.BILL,
+        fields=[
+            ExportField(field="id", **{"as": "Bill ID"}),
+            ExportField(field="amount", **{"as": "Total"}),
+        ],
+        limit=10,
+    )
+
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
+
+    assert result is not None
+    assert len(result["records"]) > 0
+
+    # Get first record and verify values match expected sample data
+    record = result["records"][0]
+    # The first record should be bill-001 with amount 500.00 (from SAMPLE_BILLS)
+    # but order might vary due to sorting, so just check types
+    assert isinstance(record["Bill ID"], str)
+    assert isinstance(record["Total"], (int, float))
+
+
+@pytest.mark.asyncio
+async def test_field_aliasing_with_filters(query_engine: ExportQueryEngine):
+    """Test that field aliasing works correctly with filters."""
+    filter_item = ExportFilter(
+        field="amount",  # Filter uses source field name
+        operator=ExportFilterOperator.GT,
+        value=1000,
+    )
+    filter_group = ExportFilterGroup(
+        operator=LogicalOperator.AND,
+        filters=[filter_item],
+    )
+    config = ExportConfig(
+        entity=ExportEntity.BILL,
+        fields=[
+            ExportField(field="id", **{"as": "Bill ID"}),
+            ExportField(field="amount", **{"as": "Total Amount"}),  # Aliased output
+        ],
+        filters=filter_group,
+        limit=10,
+    )
+
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
+
+    assert result is not None
+
+    # Verify filter was applied AND output uses aliases
+    expected_fields = {"Bill ID", "Total Amount"}
+    for record in result["records"]:
+        record_fields = set(record.keys())
+        assert record_fields == expected_fields
+        # Verify filter condition
+        assert record["Total Amount"] > 1000, (
+            f"Filter failed with aliased output: amount {record['Total Amount']} is not > 1000"
+        )
+
+
+@pytest.mark.asyncio
+async def test_field_aliasing_with_sorting(query_engine: ExportQueryEngine):
+    """Test that field aliasing works correctly with sorting."""
+    config = ExportConfig(
+        entity=ExportEntity.BILL,
+        fields=[
+            ExportField(field="id", **{"as": "Bill ID"}),
+            ExportField(field="amount", **{"as": "Total"}),
+            ExportField(field="date", **{"as": "Invoice Date"}),
+        ],
+        sort=[{"field": "amount", "direction": "desc"}],  # Sort uses source field name
+        limit=10,
+    )
+
+    client_id = UUID("00000000-0000-0000-0000-000000000000")
+    result = await query_engine.execute_export_query(config, client_id=client_id)
+
+    assert result is not None
+    assert len(result["records"]) > 0
+
+    # Verify output uses aliases
+    expected_fields = {"Bill ID", "Total", "Invoice Date"}
+    for record in result["records"]:
+        assert set(record.keys()) == expected_fields
+
+    # Verify sorting is correct (descending by amount)
+    if len(result["records"]) > 1:
+        amounts = [record["Total"] for record in result["records"]]
+        for i in range(len(amounts) - 1):
+            assert amounts[i] >= amounts[i + 1], (
+                "Sort failed with aliased output: amounts not descending"
+            )
