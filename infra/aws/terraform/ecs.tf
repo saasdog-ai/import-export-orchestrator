@@ -47,6 +47,27 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Allow task execution role to read secrets at container start
+resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
+  name = "${var.project_name}-ecs-exec-secrets-${var.environment}"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.database_url.arn
+        ]
+      }
+    ]
+  })
+}
+
 # ECS Task Role (for application-level permissions)
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task-${var.environment}"
@@ -92,11 +113,14 @@ resource "aws_ecs_task_definition" "main" {
         }
       ]
 
-      environment = [
+      secrets = [
         {
-          name  = "DATABASE_URL"
-          value = "postgresql+asyncpg://${var.database_username}:${var.database_password}@${aws_db_instance.main.endpoint}/${var.database_name}"
-        },
+          name      = "DATABASE_URL"
+          valueFrom = aws_secretsmanager_secret.database_url.arn
+        }
+      ]
+
+      environment = [
         {
           name  = "APP_ENV"
           value = var.environment

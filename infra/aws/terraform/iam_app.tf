@@ -93,7 +93,7 @@ resource "aws_iam_role_policy" "ecs_task_secrets" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          aws_secretsmanager_secret.db_password.arn
+          aws_secretsmanager_secret.database_url.arn
         ]
         Condition = {
           StringEquals = {

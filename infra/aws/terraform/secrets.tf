@@ -1,18 +1,18 @@
 # AWS Secrets Manager for sensitive configuration
 
-# Database password secret
-resource "aws_secretsmanager_secret" "db_password" {
-  name        = "${var.project_name}-db-password-${var.environment}"
-  description = "Database password for ${var.project_name} ${var.environment}"
+# Database URL secret (contains password, host, and credentials)
+resource "aws_secretsmanager_secret" "database_url" {
+  name        = "${var.project_name}-database-url-${var.environment}"
+  description = "Database connection URL for ${var.project_name} ${var.environment}"
 
   tags = merge(var.common_tags, {
-    Name        = "${var.project_name}-db-password-${var.environment}"
+    Name        = "${var.project_name}-database-url-${var.environment}"
     Environment = var.environment
     Project     = var.project_name
   })
 }
 
-resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id     = aws_secretsmanager_secret.db_password.id
-  secret_string = var.database_password
+resource "aws_secretsmanager_secret_version" "database_url" {
+  secret_id     = aws_secretsmanager_secret.database_url.id
+  secret_string = "postgresql+asyncpg://${var.database_username}:${var.database_password}@${aws_db_instance.main.endpoint}/${var.database_name}"
 }

@@ -81,6 +81,10 @@ acm_certificate_arn = ""  # Provide ACM cert ARN to enable HTTPS
 export TF_VAR_database_password="your-secure-password-here"
 ```
 
+> **Note**: Terraform uses this variable to create the RDS instance and store the full
+> `DATABASE_URL` in AWS Secrets Manager. At runtime, the ECS task pulls `DATABASE_URL`
+> from Secrets Manager — the password never appears in the task definition.
+
 ### Step 5: Initial Deployment
 
 ```bash
@@ -172,7 +176,7 @@ aws logs tail /ecs/import-export-orchestrator-dev --follow
 - [ ] **Increase log retention** — Set `log_retention_days` to 30-90 for compliance
 - [ ] **Multi-AZ NAT** — Consider NAT Gateway per AZ for high availability (increases cost)
 - [ ] **VPC Flow Logs** — Enable for network monitoring and security analysis
-- [ ] **Secrets Manager** — Database password is stored in Secrets Manager (auto-configured)
+- [ ] **Secrets Manager** — `DATABASE_URL` is injected from Secrets Manager at container start (auto-configured)
 
 ### Application
 
