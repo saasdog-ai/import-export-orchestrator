@@ -174,7 +174,7 @@ variable "acm_certificate_arn" {
 
 # GitHub Configuration (for OIDC)
 variable "github_repository" {
-  description = "GitHub repository in format 'owner/repo' (e.g., 'rajivskumar/import-export-orchestrator')"
+  description = "GitHub repository in format 'owner/repo' (e.g., 'saasdog-ai/import-export-orchestrator')"
   type        = string
   default     = ""
 }

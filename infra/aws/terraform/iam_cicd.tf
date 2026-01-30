@@ -380,7 +380,28 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           # ECR auth (global)
           "ecr:GetAuthorizationToken",
           # EC2 describe regions (global)
-          "ec2:DescribeRegions"
+          "ec2:DescribeRegions",
+          # CloudFront (global service)
+          "cloudfront:GetOriginAccessControl",
+          "cloudfront:CreateOriginAccessControl",
+          "cloudfront:DeleteOriginAccessControl",
+          "cloudfront:UpdateOriginAccessControl",
+          "cloudfront:ListOriginAccessControls",
+          "cloudfront:GetFunction",
+          "cloudfront:CreateFunction",
+          "cloudfront:DeleteFunction",
+          "cloudfront:UpdateFunction",
+          "cloudfront:PublishFunction",
+          "cloudfront:DescribeFunction",
+          "cloudfront:ListFunctions",
+          "cloudfront:CreateDistribution",
+          "cloudfront:DeleteDistribution",
+          "cloudfront:GetDistribution",
+          "cloudfront:UpdateDistribution",
+          "cloudfront:ListDistributions",
+          "cloudfront:TagResource",
+          "cloudfront:UntagResource",
+          "cloudfront:ListTagsForResource"
         ]
         Resource = "*"
       }
