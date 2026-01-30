@@ -17,7 +17,7 @@ resource "aws_ecs_cluster" "main" {
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project_name}-${var.environment}"
-  retention_in_days = 1 # Minimal retention for dev to reduce costs
+  retention_in_days = var.log_retention_days
 
   tags = var.common_tags
 }
@@ -131,7 +131,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "ALLOWED_ORIGINS"
-          value = jsonencode(["http://${aws_s3_bucket_website_configuration.ui.website_endpoint}", "http://localhost:3000", "http://localhost:5173"])
+          value = jsonencode(concat(["http://${aws_s3_bucket_website_configuration.ui.website_endpoint}"], var.allowed_origins))
         }
       ]
 

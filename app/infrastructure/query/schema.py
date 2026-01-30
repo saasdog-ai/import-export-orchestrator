@@ -1,84 +1,14 @@
 """Schema definitions for allowed fields and joins."""
 
 from app.domain.entities import ExportEntity
+from app.entities import registry
 
-# Allowed fields for each entity
-ENTITY_FIELDS: dict[ExportEntity, set[str]] = {
-    ExportEntity.BILL: {
-        "id",
-        "external_id",
-        "amount",
-        "date",
-        "due_date",
-        "description",
-        "currency",
-        "vendor_id",
-        "project_id",
-        "status",
-        "created_at",
-        "updated_at",
-    },
-    ExportEntity.INVOICE: {
-        "id",
-        "external_id",
-        "amount",
-        "date",
-        "due_date",
-        "description",
-        "currency",
-        "vendor_id",
-        "customer_id",
-        "project_id",
-        "status",
-        "created_at",
-        "updated_at",
-    },
-    ExportEntity.VENDOR: {
-        "id",
-        "external_id",
-        "name",
-        "email",
-        "phone",
-        "address",
-        "created_at",
-        "updated_at",
-    },
-    ExportEntity.PROJECT: {
-        "id",
-        "external_id",
-        "code",
-        "name",
-        "description",
-        "status",
-        "created_at",
-        "updated_at",
-    },
-}
-
-# Allowed nested field paths (entity.relation.field)
-NESTED_FIELDS: dict[ExportEntity, dict[str, set[str]]] = {
-    ExportEntity.BILL: {
-        "vendor": {"id", "name", "email"},
-        "project": {"id", "code", "name"},
-    },
-    ExportEntity.INVOICE: {
-        "vendor": {"id", "name", "email"},
-        "project": {"id", "code", "name"},
-    },
-    ExportEntity.VENDOR: {
-        "project": {"id", "code", "name"},
-    },
-    ExportEntity.PROJECT: {},
-}
-
-# Allowed join paths: (from_entity, to_entity) -> join condition info
-ALLOWED_JOINS: dict[tuple[ExportEntity, str], tuple[ExportEntity, str]] = {
-    (ExportEntity.BILL, "vendor"): (ExportEntity.VENDOR, "id"),
-    (ExportEntity.BILL, "project"): (ExportEntity.PROJECT, "id"),
-    (ExportEntity.INVOICE, "vendor"): (ExportEntity.VENDOR, "id"),
-    (ExportEntity.INVOICE, "project"): (ExportEntity.PROJECT, "id"),
-    (ExportEntity.VENDOR, "project"): (ExportEntity.PROJECT, "id"),
-}
+# All field/join metadata is auto-generated from the centralized entity registry
+ENTITY_FIELDS: dict[ExportEntity, set[str]] = registry.get_entity_fields()
+NESTED_FIELDS: dict[ExportEntity, dict[str, set[str]]] = registry.get_nested_fields()
+ALLOWED_JOINS: dict[tuple[ExportEntity, str], tuple[ExportEntity, str]] = (
+    registry.get_allowed_joins()
+)
 
 
 def validate_field_path(entity: ExportEntity, field_path: str) -> bool:

@@ -77,39 +77,34 @@ resource "aws_iam_role_policy" "ecs_task_logs" {
   })
 }
 
-# IAM Policy for ECS Task Role - Secrets Manager (optional)
-# This policy allows the application to read secrets from AWS Secrets Manager
-# Useful for database passwords and other sensitive configuration
-# 
-# Note: This policy is commented out by default because it requires a Resource ARN.
-# Uncomment and configure the Resource ARN when you're ready to use Secrets Manager.
-#
-# resource "aws_iam_role_policy" "ecs_task_secrets" {
-#   name = "${var.project_name}-ecs-task-secrets-${var.environment}"
-#   role = aws_iam_role.ecs_task.id
-#
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Effect = "Allow"
-#         Action = [
-#           "secretsmanager:GetSecretValue",
-#           "secretsmanager:DescribeSecret"
-#         ]
-#         Resource = [
-#           "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-db-password-*"
-#         ]
-#         Condition = {
-#           StringEquals = {
-#             "secretsmanager:ResourceTag/Environment" = var.environment
-#             "secretsmanager:ResourceTag/Project"    = var.project_name
-#           }
-#         }
-#       }
-#     ]
-#   })
-# }
+# IAM Policy for ECS Task Role - Secrets Manager
+# Allows the application to read the database password from Secrets Manager
+resource "aws_iam_role_policy" "ecs_task_secrets" {
+  name = "${var.project_name}-ecs-task-secrets-${var.environment}"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.db_password.arn
+        ]
+        Condition = {
+          StringEquals = {
+            "secretsmanager:ResourceTag/Environment" = var.environment
+            "secretsmanager:ResourceTag/Project"     = var.project_name
+          }
+        }
+      }
+    ]
+  })
+}
 
 # IAM Policy for ECS Exec - allows secure shell access to containers
 resource "aws_iam_role_policy" "ecs_task_ssm" {

@@ -10,7 +10,8 @@ This guide walks you through exporting data using the REST APIs with curl comman
    curl http://localhost:8000/health
    ```
 
-2. **Authentication**: The service uses JWT tokens for authentication
+2. **Authentication**: The service uses JWT tokens for multi-tenant isolation
+   - The `client_id` is extracted from the JWT token (not from URL path parameters)
    - In development mode (auth disabled), a default client_id is used
    - In production, you'll need a valid JWT token with `client_id` claim
 
@@ -164,9 +165,8 @@ curl -X GET "http://localhost:8000/exports/550e8400-e29b-41d4-a716-446655440000/
 
 ### Step 4: Download the File
 
-Use the `download_url` from Step 3 to download the file.
+**Option A**: Use the pre-signed `download_url` from Step 3:
 
-**curl Command**:
 ```bash
 # Replace DOWNLOAD_URL with the URL from Step 3
 curl -O "https://s3.amazonaws.com/bucket/exports/.../file.csv?X-Amz-Signature=..."
@@ -176,6 +176,17 @@ Or save with a specific filename:
 ```bash
 curl -o exported_bills.csv "https://s3.amazonaws.com/bucket/exports/.../file.csv?X-Amz-Signature=..."
 ```
+
+**Option B**: Download directly through the API (no pre-signed URL needed):
+
+**Endpoint**: `GET /exports/{run_id}/file`
+
+```bash
+curl -O -J http://localhost:8000/exports/550e8400-e29b-41d4-a716-446655440000/file \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+This returns the file content directly with appropriate `Content-Disposition` headers.
 
 ## Complete Example Script
 

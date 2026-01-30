@@ -7,8 +7,8 @@ resource "aws_sqs_queue" "job_runner" {
   # Default: 5 minutes (300 seconds)
   visibility_timeout_seconds = var.sqs_visibility_timeout
 
-  # Message retention period (14 days)
-  message_retention_seconds = 1209600
+  # Message retention period
+  message_retention_seconds = var.sqs_message_retention
 
   # Long polling wait time (20 seconds)
   receive_wait_time_seconds = var.sqs_receive_wait_time
@@ -28,7 +28,7 @@ resource "aws_sqs_queue" "job_runner" {
 resource "aws_sqs_queue" "job_runner_dlq" {
   name = "${var.project_name}-job-queue-dlq-${var.environment}"
 
-  message_retention_seconds = 1209600 # 14 days
+  message_retention_seconds = var.sqs_message_retention
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-job-queue-dlq-${var.environment}"

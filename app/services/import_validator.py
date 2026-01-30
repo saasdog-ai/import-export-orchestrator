@@ -41,13 +41,21 @@ class ImportValidator:
     MAX_FILE_SIZE = MAX_FILE_SIZE
     ALLOWED_EXTENSIONS = ALLOWED_FILE_EXTENSIONS
 
-    # Required fields for each entity
-    REQUIRED_FIELDS: dict[ExportEntity, list[str]] = {
-        ExportEntity.BILL: ["amount", "date"],
-        ExportEntity.INVOICE: ["amount", "date"],
-        ExportEntity.VENDOR: ["name"],
-        ExportEntity.PROJECT: ["code", "name"],
-    }
+    # Required fields auto-generated from the centralized entity registry.
+    # Lazy-loaded on first access to avoid import ordering issues.
+    _required_fields_cache: dict[ExportEntity, list[str]] | None = None
+
+    @classmethod
+    def _get_required_fields(cls) -> dict[ExportEntity, list[str]]:
+        if cls._required_fields_cache is None:
+            from app.entities import registry
+
+            cls._required_fields_cache = registry.get_required_fields()
+        return cls._required_fields_cache
+
+    # Keep REQUIRED_FIELDS as a property-like accessor for backward compat.
+    # All internal access goes through _get_required_fields() instead.
+    REQUIRED_FIELDS: dict[ExportEntity, list[str]] = {}
 
     # Field type validations
     FIELD_TYPES: dict[str, type] = {
@@ -160,7 +168,7 @@ class ImportValidator:
     def _validate_csv_content(file_path: str, entity: ExportEntity) -> list[dict[str, Any]]:
         """Validate CSV file content."""
         errors: list[dict[str, Any]] = []
-        required_fields = ImportValidator.REQUIRED_FIELDS.get(entity, [])
+        required_fields = ImportValidator._get_required_fields().get(entity, [])
 
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -314,7 +322,7 @@ class ImportValidator:
     ) -> list[dict[str, Any]]:
         """Validate a single row of data."""
         errors: list[dict[str, Any]] = []
-        required_fields = ImportValidator.REQUIRED_FIELDS.get(entity, [])
+        required_fields = ImportValidator._get_required_fields().get(entity, [])
 
         # Check required fields have values
         for field in required_fields:

@@ -119,6 +119,59 @@ variable "sqs_max_receive_count" {
   default     = 3
 }
 
+# CloudWatch Configuration
+variable "log_retention_days" {
+  description = "CloudWatch log retention in days (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653)"
+  type        = number
+  default     = 1
+}
+
+# RDS Backup Configuration
+variable "rds_backup_retention_period" {
+  description = "Number of days to retain automated backups (0 to disable, max 35)"
+  type        = number
+  default     = 7
+}
+
+variable "rds_backup_window" {
+  description = "Preferred backup window (UTC). Format: hh24:mi-hh24:mi"
+  type        = string
+  default     = "03:00-04:00"
+}
+
+variable "rds_maintenance_window" {
+  description = "Preferred maintenance window (UTC). Format: ddd:hh24:mi-ddd:hh24:mi"
+  type        = string
+  default     = "mon:04:00-mon:05:00"
+}
+
+variable "postgres_version" {
+  description = "PostgreSQL engine version for RDS"
+  type        = string
+  default     = "15"
+}
+
+# SQS Message Retention
+variable "sqs_message_retention" {
+  description = "SQS message retention period in seconds (60 to 1209600)"
+  type        = number
+  default     = 1209600 # 14 days
+}
+
+# CORS / ALB
+variable "allowed_origins" {
+  description = "Allowed CORS origins for the application"
+  type        = list(string)
+  default     = ["http://localhost:3000", "http://localhost:5173"]
+}
+
+# HTTPS / TLS
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN for HTTPS. Leave empty to use HTTP only."
+  type        = string
+  default     = ""
+}
+
 # GitHub Configuration (for OIDC)
 variable "github_repository" {
   description = "GitHub repository in format 'owner/repo' (e.g., 'rajivskumar/import-export-orchestrator')"

@@ -16,7 +16,7 @@ resource "aws_db_subnet_group" "main" {
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
   name   = "${var.project_name}-postgres-${var.environment}"
-  family = "postgres15"
+  family = "postgres${var.postgres_version}"
 
   parameter {
     name  = "log_statement"
@@ -40,7 +40,7 @@ resource "aws_db_parameter_group" "main" {
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-db-${var.environment}"
   engine         = "postgres"
-  engine_version = "15"
+  engine_version = var.postgres_version
   instance_class = var.database_instance_class
 
   allocated_storage     = var.database_allocated_storage
@@ -56,9 +56,9 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   parameter_group_name   = aws_db_parameter_group.main.name
 
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "mon:04:00-mon:05:00"
+  backup_retention_period = var.rds_backup_retention_period
+  backup_window           = var.rds_backup_window
+  maintenance_window      = var.rds_maintenance_window
 
   skip_final_snapshot       = var.environment == "dev"
   final_snapshot_identifier = var.environment != "dev" ? "${var.project_name}-final-snapshot-${var.environment}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null

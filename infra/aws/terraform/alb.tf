@@ -47,12 +47,49 @@ resource "aws_lb_target_group" "main" {
   tags = var.common_tags
 }
 
-# ALB Listener (HTTP)
-resource "aws_lb_listener" "main" {
-  count             = var.enable_alb ? 1 : 0
+# ALB Listener (HTTP) — forwards traffic when no HTTPS certificate is configured
+resource "aws_lb_listener" "http" {
+  count             = var.enable_alb && var.acm_certificate_arn == "" ? 1 : 0
   load_balancer_arn = aws_lb.main[0].arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main[0].arn
+  }
+
+  tags = var.common_tags
+}
+
+# ALB Listener (HTTP -> HTTPS redirect) — only when ACM certificate is provided
+resource "aws_lb_listener" "http_redirect" {
+  count             = var.enable_alb && var.acm_certificate_arn != "" ? 1 : 0
+  load_balancer_arn = aws_lb.main[0].arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  tags = var.common_tags
+}
+
+# ALB Listener (HTTPS) — only when ACM certificate is provided
+resource "aws_lb_listener" "https" {
+  count             = var.enable_alb && var.acm_certificate_arn != "" ? 1 : 0
+  load_balancer_arn = aws_lb.main[0].arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.acm_certificate_arn
 
   default_action {
     type             = "forward"

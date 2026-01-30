@@ -27,9 +27,33 @@ logger = get_logger(__name__)
 setup_logging()
 
 
+def _validate_entity_registry() -> None:
+    """Verify ExportEntity enum values match entity registry names.
+
+    Fails fast at startup if an entity was added to one but not the other.
+    """
+    from app.domain.entities import ExportEntity
+    from app.entities import registry
+
+    enum_names = {e.value for e in ExportEntity}
+    registry_names = set(registry.get_names())
+    missing_in_registry = enum_names - registry_names
+    missing_in_enum = registry_names - enum_names
+    errors: list[str] = []
+    if missing_in_registry:
+        errors.append(f"ExportEntity values missing from entity registry: {missing_in_registry}")
+    if missing_in_enum:
+        errors.append(f"Registry entities missing from ExportEntity enum: {missing_in_enum}")
+    if errors:
+        raise RuntimeError("Entity registry mismatch: " + "; ".join(errors))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    # Validate entity registry matches ExportEntity enum
+    _validate_entity_registry()
+
     # Startup
     await init_dependencies()
 

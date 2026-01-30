@@ -38,11 +38,16 @@ This document describes all environment variables used by the Import/Export Orch
 - **`API_RELOAD`** (default: `false`)
   - Enable auto-reload for development
 
+### Authentication
+- **`AUTH_ENABLED`** (default: `false`)
+  - Enable JWT authentication
+  - When `false`, all requests are allowed with a default client_id
+
 ### CORS
-- **`ALLOWED_ORIGINS`** (default: `["*"]`)
-  - Comma-separated list of allowed CORS origins
-  - **⚠️ Security:** Use specific domains in production, not `*`
-  - Example: `http://localhost:3000,https://app.example.com`
+- **`ALLOWED_ORIGINS`** (default: `["http://localhost:3000", "http://localhost:5173"]`)
+  - JSON array or comma-separated list of allowed CORS origins
+  - **⚠️ Security:** Use specific domains in production
+  - Example: `["https://app.example.com"]`
 
 ### Database Pool
 - **`DATABASE_POOL_SIZE`** (default: `10`)
@@ -57,7 +62,12 @@ This document describes all environment variables used by the Import/Export Orch
 - **`DATABASE_POOL_TIMEOUT`** (default: `30`)
   - Seconds to wait for a connection from the pool
 
-### Security (JWT - Currently Disabled)
+### Rate Limiting
+- **`RATE_LIMIT_ENABLED`** (default: `true`)
+  - Enable rate limiting for API protection
+  - Disable for load testing or internal-only deployments
+
+### Security (JWT)
 - **`JWT_SECRET_KEY`** (default: `CHANGE_THIS_IN_PRODUCTION`)
   - Secret key for JWT token signing
   - **⚠️ Security:** Must be changed in production
@@ -191,8 +201,8 @@ LOG_LEVEL=DEBUG
 # Database (local Docker)
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/job_runner
 
-# CORS (allow all for development)
-ALLOWED_ORIGINS=*
+# CORS (localhost for development)
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 
 # Cloud Storage (optional - files saved locally)
 # CLOUD_PROVIDER=

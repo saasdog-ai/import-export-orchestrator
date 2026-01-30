@@ -109,6 +109,7 @@ resource "aws_iam_role_policy" "cicd_deploy" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "PassECSRoles"
         Effect = "Allow"
         Action = [
           "iam:PassRole"
@@ -119,6 +120,8 @@ resource "aws_iam_role_policy" "cicd_deploy" {
         ]
       },
       {
+        # Regional services — restricted to the configured AWS region
+        Sid    = "RegionalServices"
         Effect = "Allow"
         Action = [
           # VPC and Networking
@@ -129,7 +132,6 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ec2:DescribeVpcAttribute",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeAccountAttributes",
-          "ec2:DescribeRegions",
           "ec2:CreateSubnet",
           "ec2:DeleteSubnet",
           "ec2:DescribeSubnets",
@@ -164,6 +166,10 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ec2:AuthorizeSecurityGroupEgress",
           "ec2:RevokeSecurityGroupIngress",
           "ec2:RevokeSecurityGroupEgress",
+          # Tags (EC2)
+          "ec2:CreateTags",
+          "ec2:DeleteTags",
+          "ec2:DescribeTags",
           # RDS
           "rds:CreateDBInstance",
           "rds:DeleteDBInstance",
@@ -197,8 +203,7 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ecs:DeregisterTaskDefinition",
           "ecs:DescribeTaskDefinition",
           "ecs:ListTaskDefinitions",
-          # ECR (for managing repositories and pushing images)
-          "ecr:GetAuthorizationToken",
+          # ECR
           "ecr:DescribeRepositories",
           "ecr:ListRepositories",
           "ecr:DescribeImages",
@@ -222,102 +227,6 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "ecr:TagResource",
           "ecr:UntagResource",
           "ecr:ListTagsForResource",
-          # S3
-          "s3:CreateBucket",
-          "s3:DeleteBucket",
-          "s3:ListBucket",
-          "s3:GetBucketLocation",
-          "s3:GetBucketVersioning",
-          "s3:PutBucketVersioning",
-          "s3:GetVersioning",
-          "s3:PutVersioning",
-          "s3:GetBucketEncryption",
-          "s3:PutBucketEncryption",
-          "s3:GetEncryption",
-          "s3:PutEncryption",
-          "s3:GetEncryptionConfiguration",
-          "s3:PutEncryptionConfiguration",
-          "s3:GetBucketPublicAccessBlock",
-          "s3:PutBucketPublicAccessBlock",
-          "s3:GetPublicAccessBlock",
-          "s3:PutPublicAccessBlock",
-          "s3:GetBucketLifecycleConfiguration",
-          "s3:PutBucketLifecycleConfiguration",
-          "s3:GetLifecycleConfiguration",
-          "s3:PutLifecycleConfiguration",
-          "s3:GetBucketPolicy",
-          "s3:PutBucketPolicy",
-          "s3:DeleteBucketPolicy",
-          "s3:GetPolicy",
-          "s3:PutPolicy",
-          "s3:DeletePolicy",
-          "s3:GetBucketAcl",
-          "s3:PutBucketAcl",
-          "s3:GetAcl",
-          "s3:PutAcl",
-          "s3:GetBucketCors",
-          "s3:PutBucketCors",
-          "s3:DeleteBucketCors",
-          "s3:GetCors",
-          "s3:PutCors",
-          "s3:DeleteCors",
-          "s3:GetBucketWebsite",
-          "s3:PutBucketWebsite",
-          "s3:DeleteBucketWebsite",
-          "s3:GetWebsite",
-          "s3:PutWebsite",
-          "s3:DeleteWebsite",
-          "s3:GetBucketNotification",
-          "s3:PutBucketNotification",
-          "s3:GetNotification",
-          "s3:PutNotification",
-          "s3:GetBucketRequestPayment",
-          "s3:PutBucketRequestPayment",
-          "s3:GetRequestPayment",
-          "s3:PutRequestPayment",
-          "s3:GetBucketLogging",
-          "s3:PutBucketLogging",
-          "s3:GetLogging",
-          "s3:PutLogging",
-          "s3:GetBucketTagging",
-          "s3:PutBucketTagging",
-          "s3:GetTagging",
-          "s3:PutTagging",
-          "s3:GetBucketObjectLockConfiguration",
-          "s3:PutBucketObjectLockConfiguration",
-          "s3:GetObjectLockConfiguration",
-          "s3:PutObjectLockConfiguration",
-          "s3:GetBucketAccelerateConfiguration",
-          "s3:PutBucketAccelerateConfiguration",
-          "s3:GetAccelerateConfiguration",
-          "s3:PutAccelerateConfiguration",
-          "s3:GetBucketAnalyticsConfiguration",
-          "s3:PutBucketAnalyticsConfiguration",
-          "s3:DeleteBucketAnalyticsConfiguration",
-          "s3:ListBucketAnalyticsConfigurations",
-          "s3:GetBucketIntelligentTieringConfiguration",
-          "s3:PutBucketIntelligentTieringConfiguration",
-          "s3:DeleteBucketIntelligentTieringConfiguration",
-          "s3:ListBucketIntelligentTieringConfigurations",
-          "s3:GetBucketInventoryConfiguration",
-          "s3:PutBucketInventoryConfiguration",
-          "s3:DeleteBucketInventoryConfiguration",
-          "s3:ListBucketInventoryConfigurations",
-          "s3:GetBucketMetricsConfiguration",
-          "s3:PutBucketMetricsConfiguration",
-          "s3:DeleteBucketMetricsConfiguration",
-          "s3:ListBucketMetricsConfigurations",
-          "s3:GetBucketOwnershipControls",
-          "s3:PutBucketOwnershipControls",
-          "s3:GetBucketReplication",
-          "s3:PutBucketReplication",
-          "s3:DeleteBucketReplication",
-          "s3:GetReplicationConfiguration",
-          "s3:PutReplicationConfiguration",
-          "s3:DeleteReplicationConfiguration",
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:DeleteObject",
           # SQS
           "sqs:CreateQueue",
           "sqs:DeleteQueue",
@@ -355,7 +264,33 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "logs:TagResource",
           "logs:UntagResource",
           "logs:ListTagsForResource",
-          # IAM (for creating roles and policies)
+          # Secrets Manager
+          "secretsmanager:CreateSecret",
+          "secretsmanager:DeleteSecret",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:TagResource",
+          "secretsmanager:UntagResource",
+          "secretsmanager:ListSecrets",
+          # CloudWatch
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:DeleteAlarms",
+          "cloudwatch:DescribeAlarms"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestedRegion" = var.aws_region
+          }
+        }
+      },
+      {
+        # Global services — IAM, S3, ECR auth, and STS are not region-scoped
+        Sid    = "GlobalServices"
+        Effect = "Allow"
+        Action = [
+          # IAM (global service)
           "iam:CreateRole",
           "iam:DeleteRole",
           "iam:GetRole",
@@ -380,20 +315,72 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "iam:TagOpenIDConnectProvider",
           "iam:UntagOpenIDConnectProvider",
           "iam:ListOpenIDConnectProviderTags",
-          # Secrets Manager (for database passwords)
-          "secretsmanager:CreateSecret",
-          "secretsmanager:DeleteSecret",
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:PutSecretValue",
-          "secretsmanager:DescribeSecret",
-          # CloudWatch (for monitoring)
-          "cloudwatch:PutMetricAlarm",
-          "cloudwatch:DeleteAlarms",
-          "cloudwatch:DescribeAlarms",
-          # Tags
-          "ec2:CreateTags",
-          "ec2:DeleteTags",
-          "ec2:DescribeTags"
+          # S3 (global namespace for bucket operations)
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:GetBucketVersioning",
+          "s3:PutBucketVersioning",
+          "s3:GetBucketEncryption",
+          "s3:PutBucketEncryption",
+          "s3:GetEncryptionConfiguration",
+          "s3:PutEncryptionConfiguration",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:GetBucketLifecycleConfiguration",
+          "s3:PutBucketLifecycleConfiguration",
+          "s3:GetBucketPolicy",
+          "s3:PutBucketPolicy",
+          "s3:DeleteBucketPolicy",
+          "s3:GetBucketAcl",
+          "s3:PutBucketAcl",
+          "s3:GetBucketCors",
+          "s3:PutBucketCors",
+          "s3:DeleteBucketCors",
+          "s3:GetBucketWebsite",
+          "s3:PutBucketWebsite",
+          "s3:DeleteBucketWebsite",
+          "s3:GetBucketNotification",
+          "s3:PutBucketNotification",
+          "s3:GetBucketRequestPayment",
+          "s3:PutBucketRequestPayment",
+          "s3:GetBucketLogging",
+          "s3:PutBucketLogging",
+          "s3:GetBucketTagging",
+          "s3:PutBucketTagging",
+          "s3:GetBucketObjectLockConfiguration",
+          "s3:PutBucketObjectLockConfiguration",
+          "s3:GetBucketAccelerateConfiguration",
+          "s3:PutBucketAccelerateConfiguration",
+          "s3:GetBucketAnalyticsConfiguration",
+          "s3:PutBucketAnalyticsConfiguration",
+          "s3:DeleteBucketAnalyticsConfiguration",
+          "s3:ListBucketAnalyticsConfigurations",
+          "s3:GetBucketIntelligentTieringConfiguration",
+          "s3:PutBucketIntelligentTieringConfiguration",
+          "s3:DeleteBucketIntelligentTieringConfiguration",
+          "s3:ListBucketIntelligentTieringConfigurations",
+          "s3:GetBucketInventoryConfiguration",
+          "s3:PutBucketInventoryConfiguration",
+          "s3:DeleteBucketInventoryConfiguration",
+          "s3:ListBucketInventoryConfigurations",
+          "s3:GetBucketMetricsConfiguration",
+          "s3:PutBucketMetricsConfiguration",
+          "s3:DeleteBucketMetricsConfiguration",
+          "s3:ListBucketMetricsConfigurations",
+          "s3:GetBucketOwnershipControls",
+          "s3:PutBucketOwnershipControls",
+          "s3:GetBucketReplication",
+          "s3:PutBucketReplication",
+          "s3:DeleteBucketReplication",
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          # ECR auth (global)
+          "ecr:GetAuthorizationToken",
+          # EC2 describe regions (global)
+          "ec2:DescribeRegions"
         ]
         Resource = "*"
       }

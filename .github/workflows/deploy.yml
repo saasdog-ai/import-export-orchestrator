@@ -78,11 +78,10 @@ jobs:
         env:
           TF_VAR_github_repository: ${{ github.repository }}
           TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID || '429763994533' }}
         run: |
-          # Configure backend for remote state (S3 + DynamoDB)
+          # Derive account ID from the authenticated OIDC session (no secret needed)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ENV="${{ github.event.inputs.environment || 'dev' }}"
-          ACCOUNT_ID="${AWS_ACCOUNT_ID:-429763994533}"
 
           terraform init \
             -backend-config="bucket=import-export-orchestrator-terraform-state-${ENV}-${ACCOUNT_ID}" \

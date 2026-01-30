@@ -6,127 +6,18 @@ from fastapi import APIRouter, Depends
 
 from app.api.dto import (
     SchemaEntity,
-    SchemaField,
-    SchemaRelationship,
-    SchemaRelationshipField,
     SchemaResponse,
 )
 from app.auth.backend import get_current_client_id
 from app.core.logging import get_logger
-from app.domain.entities import ExportEntity
+from app.entities import registry
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/schema", tags=["schema"])
 
 
-# Define the schema for each entity
-# In a real implementation, this could be loaded from database metadata or configuration
-ENTITY_SCHEMAS: dict[str, SchemaEntity] = {
-    ExportEntity.BILL.value: SchemaEntity(
-        name="bill",
-        label="Bills",
-        description="Bills represent invoices received from vendors",
-        fields=[
-            SchemaField(name="id", type="uuid", label="ID", required=False),
-            SchemaField(name="external_id", type="string", label="External ID", required=False),
-            SchemaField(name="amount", type="number", label="Amount", required=True),
-            SchemaField(name="date", type="date", label="Date", required=True),
-            SchemaField(name="due_date", type="date", label="Due Date", required=False),
-            SchemaField(name="status", type="string", label="Status", required=False),
-            SchemaField(name="description", type="string", label="Description", required=False),
-            SchemaField(name="currency", type="string", label="Currency", required=False),
-            SchemaField(name="vendor_id", type="uuid", label="Vendor ID", required=False),
-            SchemaField(name="project_id", type="uuid", label="Project ID", required=False),
-            SchemaField(name="created_at", type="datetime", label="Created At", required=False),
-            SchemaField(name="updated_at", type="datetime", label="Updated At", required=False),
-        ],
-        relationships=[
-            SchemaRelationship(
-                name="vendor",
-                label="Vendor",
-                entity="vendor",
-                type="many_to_one",
-                fields=[
-                    SchemaRelationshipField(name="name", type="string", label="Vendor Name"),
-                    SchemaRelationshipField(name="email", type="string", label="Vendor Email"),
-                ],
-            ),
-            SchemaRelationship(
-                name="project",
-                label="Project",
-                entity="project",
-                type="many_to_one",
-                fields=[
-                    SchemaRelationshipField(name="code", type="string", label="Project Code"),
-                    SchemaRelationshipField(name="name", type="string", label="Project Name"),
-                ],
-            ),
-        ],
-    ),
-    ExportEntity.INVOICE.value: SchemaEntity(
-        name="invoice",
-        label="Invoices",
-        description="Invoices represent bills sent to customers",
-        fields=[
-            SchemaField(name="id", type="uuid", label="ID", required=False),
-            SchemaField(name="external_id", type="string", label="External ID", required=False),
-            SchemaField(name="amount", type="number", label="Amount", required=True),
-            SchemaField(name="date", type="date", label="Date", required=True),
-            SchemaField(name="due_date", type="date", label="Due Date", required=False),
-            SchemaField(name="status", type="string", label="Status", required=False),
-            SchemaField(name="description", type="string", label="Description", required=False),
-            SchemaField(name="currency", type="string", label="Currency", required=False),
-            SchemaField(name="vendor_id", type="uuid", label="Vendor ID", required=False),
-            SchemaField(name="project_id", type="uuid", label="Project ID", required=False),
-            SchemaField(name="created_at", type="datetime", label="Created At", required=False),
-            SchemaField(name="updated_at", type="datetime", label="Updated At", required=False),
-        ],
-        relationships=[
-            SchemaRelationship(
-                name="project",
-                label="Project",
-                entity="project",
-                type="many_to_one",
-                fields=[
-                    SchemaRelationshipField(name="code", type="string", label="Project Code"),
-                    SchemaRelationshipField(name="name", type="string", label="Project Name"),
-                ],
-            ),
-        ],
-    ),
-    ExportEntity.VENDOR.value: SchemaEntity(
-        name="vendor",
-        label="Vendors",
-        description="Vendors are suppliers or service providers",
-        fields=[
-            SchemaField(name="id", type="uuid", label="ID", required=False),
-            SchemaField(name="external_id", type="string", label="External ID", required=False),
-            SchemaField(name="name", type="string", label="Name", required=True),
-            SchemaField(name="email", type="string", label="Email", required=False),
-            SchemaField(name="phone", type="string", label="Phone", required=False),
-            SchemaField(name="address", type="string", label="Address", required=False),
-            SchemaField(name="created_at", type="datetime", label="Created At", required=False),
-            SchemaField(name="updated_at", type="datetime", label="Updated At", required=False),
-        ],
-        relationships=[],
-    ),
-    ExportEntity.PROJECT.value: SchemaEntity(
-        name="project",
-        label="Projects",
-        description="Projects for organizing work and tracking costs",
-        fields=[
-            SchemaField(name="id", type="uuid", label="ID", required=False),
-            SchemaField(name="external_id", type="string", label="External ID", required=False),
-            SchemaField(name="code", type="string", label="Code", required=True),
-            SchemaField(name="name", type="string", label="Name", required=True),
-            SchemaField(name="description", type="string", label="Description", required=False),
-            SchemaField(name="status", type="string", label="Status", required=False),
-            SchemaField(name="created_at", type="datetime", label="Created At", required=False),
-            SchemaField(name="updated_at", type="datetime", label="Updated At", required=False),
-        ],
-        relationships=[],
-    ),
-}
+# Entity schemas are auto-generated from the centralized entity registry
+ENTITY_SCHEMAS: dict[str, SchemaEntity] = registry.get_entity_schemas()
 
 
 @router.get(

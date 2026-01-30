@@ -28,9 +28,38 @@ allowed_cidr_blocks = [
 s3_bucket_name = "exports"  # Will be prefixed with project name and environment
 
 # SQS Configuration
-sqs_visibility_timeout = 300  # 5 minutes (should be longer than longest job execution time)
-sqs_receive_wait_time  = 20   # Long polling wait time in seconds
-sqs_max_receive_count  = 3    # Max retries before moving to DLQ
+sqs_visibility_timeout = 300      # 5 minutes (should be longer than longest job execution time)
+sqs_receive_wait_time  = 20       # Long polling wait time in seconds
+sqs_max_receive_count  = 3        # Max retries before moving to DLQ
+sqs_message_retention  = 1209600  # 14 days (max). Production: keep at 14 days for debugging
+
+# PostgreSQL Configuration
+postgres_version = "15"  # Production: use the latest stable version
+
+# RDS Backup Configuration
+rds_backup_retention_period = 7             # Days (0 to disable, max 35). Production: 14-35
+rds_backup_window           = "03:00-04:00" # UTC. Choose a low-traffic window
+rds_maintenance_window      = "mon:04:00-mon:05:00"  # UTC. Must not overlap backup window
+
+# CloudWatch Configuration
+log_retention_days = 1  # Days. Production: 30-90
+
+# CORS Origins
+allowed_origins = [
+  "http://localhost:3000",
+  "http://localhost:5173"
+]
+# Production: replace with your actual domain(s)
+# allowed_origins = ["https://app.yourdomain.com"]
+
+# HTTPS / TLS (optional)
+# Provide an ACM certificate ARN to enable HTTPS on the ALB
+# When set, HTTP traffic is automatically redirected to HTTPS
+acm_certificate_arn = ""
+# Production: acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+
+# GitHub OIDC (for CI/CD)
+# github_repository = "your-org/import-export-orchestrator"
 
 common_tags = {
   Project     = "import-export-orchestrator"
@@ -38,4 +67,3 @@ common_tags = {
   Environment = "dev"
   Owner       = "devops"
 }
-

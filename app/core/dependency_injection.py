@@ -9,7 +9,7 @@ from app.infrastructure.db.repositories import (
 from app.infrastructure.query.engine import ExportQueryEngine
 from app.infrastructure.queue.factory import get_message_queue as create_message_queue
 from app.infrastructure.queue.interface import MessageQueueInterface
-from app.infrastructure.saas.client import MockSaaSApiClient
+from app.infrastructure.saas.client import MockSaaSApiClient, SaaSApiClientInterface
 from app.infrastructure.scheduling.scheduler import APSchedulerService
 from app.infrastructure.storage.factory import get_cloud_storage as create_cloud_storage
 from app.infrastructure.storage.interface import CloudStorageInterface
@@ -171,7 +171,7 @@ def get_job_service() -> JobService:
     return _job_service
 
 
-def get_saas_client() -> MockSaaSApiClient:
+def get_saas_client() -> SaaSApiClientInterface:
     """Get SaaS API client instance."""
     if _saas_client is None:
         raise RuntimeError("SaaS client not initialized.")

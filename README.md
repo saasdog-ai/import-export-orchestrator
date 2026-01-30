@@ -36,6 +36,7 @@ import-export-orchestrator/
 │   ├── auth/             # Authentication backend (pluggable)
 │   ├── core/             # Configuration, DI, logging
 │   ├── domain/           # Domain entities and business logic
+│   ├── entities/         # Entity registry (field metadata, relationships)
 │   ├── infrastructure/   # DB, query engine, scheduler, SaaS client
 │   ├── services/         # Business logic services
 │   └── main.py           # FastAPI application entry point
@@ -147,11 +148,21 @@ See [docs/DATE_FILTERING.md](docs/DATE_FILTERING.md) for detailed documentation.
 
 ### Export Operations
 
-- `POST /exports/clients/{client_id}` - Create and trigger an export job
-- `POST /exports/clients/{client_id}/preview` - Preview export results
+- `POST /exports` - Create and trigger an export job
+- `POST /exports/preview` - Preview export results (returns data without creating a job)
 - `GET /exports/{run_id}/result` - Get export result for a completed run
+- `GET /exports/{run_id}/download` - Get pre-signed download URL
+- `GET /exports/{run_id}/file` - Download export file directly
+
+### Import Operations
+
+- `POST /imports/upload` - Upload a CSV/JSON file for import
+- `POST /imports/preview` - Preview import changes before execution
+- `POST /imports/execute` - Execute the import (CREATE, UPDATE, UPSERT, or DELETE)
 
 See the interactive API documentation at `/docs` for detailed request/response schemas.
+
+> **Note**: Client isolation is handled via JWT `client_id` claim, not URL path parameters.
 
 ## Development
 
