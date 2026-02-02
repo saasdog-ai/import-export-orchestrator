@@ -273,6 +273,9 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "secretsmanager:TagResource",
           "secretsmanager:UntagResource",
           "secretsmanager:ListSecrets",
+          "secretsmanager:GetResourcePolicy",
+          "secretsmanager:PutResourcePolicy",
+          "secretsmanager:DeleteResourcePolicy",
           # CloudWatch
           "cloudwatch:PutMetricAlarm",
           "cloudwatch:DeleteAlarms",
@@ -351,6 +354,8 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "s3:PutBucketTagging",
           "s3:GetBucketObjectLockConfiguration",
           "s3:PutBucketObjectLockConfiguration",
+          "s3:GetAccelerateConfiguration",
+          "s3:PutAccelerateConfiguration",
           "s3:GetBucketAccelerateConfiguration",
           "s3:PutBucketAccelerateConfiguration",
           "s3:GetBucketAnalyticsConfiguration",
