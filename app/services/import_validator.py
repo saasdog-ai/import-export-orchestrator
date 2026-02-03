@@ -165,6 +165,169 @@ class ImportValidator:
             return [], False
 
     @staticmethod
+    def validate_csv_content_streaming(
+        file_path: str,
+        entity: ExportEntity,
+        error_file_path: str,
+        field_mappings: dict[str, str] | None = None,
+    ) -> tuple[int, int, int]:
+        """Validate CSV content in streaming fashion, writing errors to a JSONL file.
+
+        Memory-efficient alternative to validate_file_content() for large files.
+        Reads the CSV row-by-row and writes validation errors to a JSONL file
+        instead of accumulating them in memory.
+
+        Args:
+            file_path: Path to the CSV file
+            entity: Entity type to validate against
+            error_file_path: Path to write JSONL error file
+            field_mappings: Optional field mappings to apply before validation
+
+        Returns:
+            (total_rows, valid_count, invalid_count) where invalid_count is
+            the number of rows with at least one validation error.
+        """
+        required_fields = ImportValidator._get_required_fields().get(entity, [])
+        total_rows = 0
+        valid_count = 0
+        invalid_count = 0
+
+        try:
+            with (
+                open(file_path, encoding="utf-8") as csv_f,
+                open(error_file_path, "w", encoding="utf-8") as error_f,
+            ):
+                reader = csv.DictReader(csv_f)
+
+                # Check header
+                if not reader.fieldnames:
+                    error_f.write(
+                        json.dumps({"row": 0, "message": "CSV file has no header row"}) + "\n"
+                    )
+                    return 0, 0, 1
+
+                has_action_column = ACTION_COLUMN in reader.fieldnames
+
+                # Determine available field names (after mapping)
+                if field_mappings:
+                    available_fields = [
+                        field_mappings.get(fn, fn)
+                        for fn in reader.fieldnames
+                        if fn != ACTION_COLUMN
+                    ]
+                else:
+                    available_fields = [fn for fn in reader.fieldnames if fn != ACTION_COLUMN]
+
+                # Check required fields in header (skip for _action files)
+                if not has_action_column:
+                    missing_fields = [f for f in required_fields if f not in available_fields]
+                    if missing_fields:
+                        error_f.write(
+                            json.dumps(
+                                {
+                                    "row": 0,
+                                    "message": (
+                                        f"Missing required fields: {', '.join(missing_fields)}"
+                                    ),
+                                }
+                            )
+                            + "\n"
+                        )
+                        invalid_count += 1
+
+                # Validate rows
+                row_num = 1
+                for row in reader:
+                    # Apply field mappings if configured
+                    if field_mappings:
+                        row = ImportValidator.apply_field_mappings(row, field_mappings)
+
+                    # Handle DELETE action
+                    if has_action_column:
+                        action_value = row.get(ACTION_COLUMN, "")
+                        parsed_action = (
+                            RecordAction.from_string(action_value) if action_value else None
+                        )
+
+                        if parsed_action == RecordAction.DELETE:
+                            if not row.get("external_id"):
+                                error_f.write(
+                                    json.dumps(
+                                        {
+                                            "row": row_num,
+                                            "field": "external_id",
+                                            "message": (
+                                                "external_id is required for DELETE action"
+                                            ),
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                                invalid_count += 1
+                            else:
+                                valid_count += 1
+                            total_rows += 1
+                            row_num += 1
+                            continue
+
+                        if action_value and parsed_action is None:
+                            error_f.write(
+                                json.dumps(
+                                    {
+                                        "row": row_num,
+                                        "field": ACTION_COLUMN,
+                                        "message": (
+                                            f"Invalid action '{action_value}'. "
+                                            "Use CREATE/C, UPDATE/U, UPSERT/X, or DELETE/D"
+                                        ),
+                                    }
+                                )
+                                + "\n"
+                            )
+                            invalid_count += 1
+                            total_rows += 1
+                            row_num += 1
+                            continue
+
+                    # Normal validation
+                    row_errors = ImportValidator._validate_row(
+                        row, row_num, entity, available_fields
+                    )
+                    if row_errors:
+                        for error in row_errors:
+                            error_f.write(json.dumps(error) + "\n")
+                        invalid_count += 1
+                    else:
+                        valid_count += 1
+
+                    total_rows += 1
+                    row_num += 1
+
+                if total_rows == 0:
+                    error_f.write(
+                        json.dumps({"row": 1, "message": "CSV file has no data rows"}) + "\n"
+                    )
+                    invalid_count += 1
+
+        except UnicodeDecodeError:
+            with open(error_file_path, "w", encoding="utf-8") as error_f:
+                error_f.write(
+                    json.dumps(
+                        {"row": 0, "message": "File encoding error. File must be UTF-8 encoded"}
+                    )
+                    + "\n"
+                )
+            return 0, 0, 1
+        except csv.Error as e:
+            with open(error_file_path, "w", encoding="utf-8") as error_f:
+                error_f.write(
+                    json.dumps({"row": 0, "message": f"CSV parsing error: {str(e)}"}) + "\n"
+                )
+            return 0, 0, 1
+
+        return total_rows, valid_count, invalid_count
+
+    @staticmethod
     def _validate_csv_content(file_path: str, entity: ExportEntity) -> list[dict[str, Any]]:
         """Validate CSV file content."""
         errors: list[dict[str, Any]] = []

@@ -2,6 +2,7 @@
 
 import csv
 import json
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,43 @@ class FileParser:
 
         logger.info(f"Parsed {len(records)} records from CSV file: {file_path}")
         return records
+
+    @staticmethod
+    def parse_csv_streaming(
+        file_path: str, batch_size: int = 1000
+    ) -> Generator[list[dict[str, Any]], None, None]:
+        """
+        Yield batches of rows from a CSV file.
+
+        Memory-efficient alternative to parse_csv_file() for large files.
+        Each batch is a list of dictionaries with empty strings converted to None.
+
+        Args:
+            file_path: Path to the CSV file
+            batch_size: Number of rows per batch
+
+        Yields:
+            Lists of row dictionaries, each batch up to batch_size rows
+        """
+        if not Path(file_path).exists():
+            raise FileNotFoundError(f"CSV file not found: {file_path}")
+
+        total = 0
+        with open(file_path, encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            batch: list[dict[str, Any]] = []
+            for row in reader:
+                cleaned_row = {k: (v if v != "" else None) for k, v in row.items()}
+                batch.append(cleaned_row)
+                if len(batch) >= batch_size:
+                    yield batch
+                    total += len(batch)
+                    batch = []
+            if batch:
+                total += len(batch)
+                yield batch
+
+        logger.info(f"Streamed {total} records from CSV: {file_path}")
 
     @staticmethod
     def parse_json_file(file_path: str) -> list[dict[str, Any]]:

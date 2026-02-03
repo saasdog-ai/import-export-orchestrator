@@ -1,6 +1,7 @@
 """Service for executing job runs asynchronously."""
 
 import asyncio
+import json
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -20,7 +21,9 @@ from app.infrastructure.query.engine import ExportQueryEngine
 from app.infrastructure.queue.interface import MessageQueueInterface
 from app.infrastructure.saas.client import SaaSApiClientInterface
 from app.infrastructure.storage.file_generator import FileGenerator
+from app.infrastructure.storage.file_parser import FileParser
 from app.infrastructure.storage.interface import CloudStorageInterface
+from app.services.import_validator import ImportValidator
 
 logger = get_logger(__name__)
 
@@ -351,6 +354,235 @@ class JobRunnerService:
 
         return mapped_record
 
+    async def _stream_import_csv(
+        self,
+        job: JobDefinition,
+        job_run: JobRun,
+        worker_id: str,
+        local_file_path: str,
+        source_file: str,
+    ) -> None:
+        """Import a CSV file in streaming fashion with validation and progress tracking.
+
+        Phase 1: Stream-validate the CSV, writing errors to a JSONL file.
+                 If any validation errors, upload error file to S3 and fail the job.
+        Phase 2: Stream-import in batches, writing import errors to a JSONL file.
+                 Upload error file to S3 if there were import failures.
+        """
+        assert job.import_config is not None
+
+        import_dir = os.path.dirname(local_file_path) or "/tmp"
+        field_mappings = job.import_config.get_field_mappings()
+
+        # ------------------------------------------------------------------
+        # Phase 1: Streaming validation
+        # ------------------------------------------------------------------
+        validation_error_file = os.path.join(import_dir, f"validation_errors_{job_run.id}.jsonl")
+
+        await self.job_run_repository.update_job_statistics(
+            job_run.id, {"phase": "validation", "status": "started"}
+        )
+
+        total_rows, valid_count, invalid_count = ImportValidator.validate_csv_content_streaming(
+            local_file_path,
+            job.import_config.entity,
+            validation_error_file,
+            field_mappings=field_mappings,
+        )
+
+        await self.job_run_repository.update_job_statistics(
+            job_run.id,
+            {
+                "phase": "validation",
+                "total_rows": total_rows,
+                "valid_count": valid_count,
+                "invalid_count": invalid_count,
+            },
+        )
+
+        if invalid_count > 0:
+            # Upload validation error file to S3
+            error_remote_path = None
+            if self.cloud_storage:
+                error_remote_path = (
+                    f"imports/{job.client_id}/{job.id}/{job_run.id}/validation_errors.jsonl"
+                )
+                try:
+                    await self.cloud_storage.upload_file(
+                        validation_error_file,
+                        error_remote_path,
+                        content_type="application/x-ndjson",
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to upload validation error file: {e}")
+
+            try:
+                os.remove(validation_error_file)
+            except OSError:
+                pass
+
+            await self.job_run_repository.update_status(
+                job_run.id,
+                JobStatus.FAILED,
+                completed_at=datetime.now(UTC),
+                error_message=(
+                    f"Validation failed: {invalid_count} invalid rows out of {total_rows}"
+                ),
+                result_metadata={
+                    "total_rows": total_rows,
+                    "valid_count": valid_count,
+                    "invalid_count": invalid_count,
+                    "validation_error_file": error_remote_path or validation_error_file,
+                },
+            )
+            logger.info(
+                f"Import validation failed: run_id={job_run.id}, "
+                f"invalid_count={invalid_count}, total_rows={total_rows}"
+            )
+            return
+
+        # No validation errors — clean up empty error file
+        try:
+            os.remove(validation_error_file)
+        except OSError:
+            pass
+
+        # ------------------------------------------------------------------
+        # Phase 2: Streaming import
+        # ------------------------------------------------------------------
+        import_error_file = os.path.join(import_dir, f"import_errors_{job_run.id}.jsonl")
+
+        imported_count = 0
+        updated_count = 0
+        deleted_count = 0
+        skipped_count = 0
+        failed_count = 0
+        rows_processed = 0
+        last_stats_time = datetime.now(UTC)
+
+        with open(import_error_file, "w", encoding="utf-8") as error_f:
+            for batch in FileParser.parse_csv_streaming(local_file_path):
+                batch_start_row = rows_processed
+                rows_processed += len(batch)
+
+                # Apply field mappings
+                if field_mappings:
+                    batch = [self._apply_field_mappings(r, field_mappings) for r in batch]
+
+                try:
+                    result = await self.saas_client.import_data(
+                        job.import_config, client_id=job.client_id, data=batch
+                    )
+
+                    imported_count += result.get("imported_count", 0)
+                    updated_count += result.get("updated_count", 0)
+                    deleted_count += result.get("deleted_count", 0)
+                    skipped_count += result.get("skipped_count", 0)
+                    failed_count += result.get("failed_count", 0)
+
+                    # Write errors with adjusted row numbers
+                    for error in result.get("errors", []):
+                        error["row"] = batch_start_row + error.get("row", 0)
+                        error_f.write(json.dumps(error) + "\n")
+
+                except Exception as e:
+                    logger.error(
+                        f"Batch import failed at rows {batch_start_row + 1}-{rows_processed}: {e}",
+                        exc_info=True,
+                    )
+                    failed_count += len(batch)
+                    error_f.write(
+                        json.dumps(
+                            {
+                                "row": batch_start_row + 1,
+                                "message": f"Batch failed: {str(e)}",
+                            }
+                        )
+                        + "\n"
+                    )
+
+                # Update job statistics (time-throttled)
+                is_first = rows_processed == len(batch)
+                now = datetime.now(UTC)
+                elapsed = (now - last_stats_time).total_seconds()
+                if is_first or elapsed >= STATS_UPDATE_INTERVAL:
+                    await self.job_run_repository.update_job_statistics(
+                        job_run.id,
+                        {
+                            "phase": "import",
+                            "rows_processed": rows_processed,
+                            "total_rows": total_rows,
+                            "imported_count": imported_count,
+                            "updated_count": updated_count,
+                            "deleted_count": deleted_count,
+                            "skipped_count": skipped_count,
+                            "failed_count": failed_count,
+                        },
+                    )
+                    last_stats_time = now
+
+        # Final stats update
+        await self.job_run_repository.update_job_statistics(
+            job_run.id,
+            {
+                "phase": "import",
+                "rows_processed": rows_processed,
+                "total_rows": total_rows,
+                "imported_count": imported_count,
+                "updated_count": updated_count,
+                "deleted_count": deleted_count,
+                "skipped_count": skipped_count,
+                "failed_count": failed_count,
+            },
+        )
+
+        # Upload import error file if there were errors
+        error_remote_path = None
+        if failed_count > 0 and self.cloud_storage:
+            error_remote_path = f"imports/{job.client_id}/{job.id}/{job_run.id}/import_errors.jsonl"
+            try:
+                await self.cloud_storage.upload_file(
+                    import_error_file,
+                    error_remote_path,
+                    content_type="application/x-ndjson",
+                )
+            except Exception as e:
+                logger.error(f"Failed to upload import error file: {e}")
+
+        # Clean up local error file
+        try:
+            os.remove(import_error_file)
+        except OSError:
+            pass
+
+        # Build result metadata
+        result_metadata: dict[str, Any] = {
+            "imported_count": imported_count,
+            "updated_count": updated_count,
+            "deleted_count": deleted_count,
+            "skipped_count": skipped_count,
+            "failed_count": failed_count,
+            "total_rows": total_rows,
+            "source_file": source_file,
+            "worker": worker_id,
+        }
+        if error_remote_path:
+            result_metadata["import_error_file"] = error_remote_path
+
+        await self.job_run_repository.update_status(
+            job_run.id,
+            JobStatus.SUCCEEDED if failed_count == 0 else JobStatus.FAILED,
+            completed_at=datetime.now(UTC),
+            result_metadata=result_metadata,
+            error_message=f"{failed_count} records failed to import" if failed_count > 0 else None,
+        )
+
+        logger.info(
+            f"Streaming import completed: run_id={job_run.id}, total_rows={total_rows}, "
+            f"imported={imported_count}, updated={updated_count}, "
+            f"deleted={deleted_count}, skipped={skipped_count}, failed={failed_count}"
+        )
+
     async def _execute_import_job(
         self, job: JobDefinition, job_run: JobRun, worker_id: str
     ) -> None:
@@ -370,8 +602,6 @@ class JobRunnerService:
 
         if source_file:
             # Import from file (CSV or JSON)
-            from app.infrastructure.storage.file_parser import FileParser
-
             logger.info(
                 f"Import job processing file: run_id={job_run.id}, source_file={source_file}, "
                 f"entity={job.import_config.entity.value}"
@@ -383,7 +613,6 @@ class JobRunnerService:
             # If file is in cloud storage, download it first
             if self.cloud_storage and not os.path.exists(source_file):
                 try:
-                    # Download from cloud storage to temp location
                     from app.core.config import get_settings
 
                     settings = get_settings()
@@ -393,7 +622,6 @@ class JobRunnerService:
                         temp_dir, f"import_{job_run.id}_{os.path.basename(source_file)}"
                     )
 
-                    # Download file from cloud storage
                     logger.info(f"Downloading file from cloud storage: {source_file}")
                     await self.cloud_storage.download_file(source_file, local_file_path)
                     logger.info(f"Downloaded file to: {local_file_path}")
@@ -408,7 +636,13 @@ class JobRunnerService:
                     )
                     return
 
-            # Parse the file with row-level error tracking
+            # CSV files use streaming import (memory-efficient)
+            _, ext = os.path.splitext(local_file_path)
+            if ext.lower() == ".csv":
+                await self._stream_import_csv(job, job_run, worker_id, local_file_path, source_file)
+                return
+
+            # Non-CSV (JSON) — load all into memory (streaming JSON is complex)
             try:
                 data = FileParser.parse_file(local_file_path)
             except Exception as e:
@@ -422,66 +656,26 @@ class JobRunnerService:
                 )
                 return
 
-            # Apply field mappings if configured
             field_mappings = job.import_config.get_field_mappings()
             if field_mappings:
-                logger.info(
-                    f"Applying field mappings for import: run_id={job_run.id}, "
-                    f"mappings_count={len(field_mappings)}"
-                )
-                logger.debug(f"Field mappings: {field_mappings}")
                 data = [self._apply_field_mappings(record, field_mappings) for record in data]
 
-            # Import data with detailed error reporting (pass client_id for security)
-            import_errors = []
-            try:
-                result = await self.saas_client.import_data(
-                    job.import_config, client_id=job.client_id, data=data
-                )
+            result = await self.saas_client.import_data(
+                job.import_config, client_id=job.client_id, data=data
+            )
 
-                # Check if import_data returned errors
-                if isinstance(result, dict) and "errors" in result:
-                    import_errors = result["errors"]
-            except Exception as e:
-                # Track import errors with row information
-                error_msg = f"Import failed: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-
-                # Try to provide row-level error information
-                import_errors.append(
-                    {
-                        "row": None,
-                        "message": error_msg,
-                    }
-                )
-
-                await self.job_run_repository.update_status(
-                    job_run.id,
-                    JobStatus.FAILED,
-                    completed_at=datetime.now(UTC),
-                    error_message=error_msg,
-                    result_metadata={
-                        "import_errors": import_errors,
-                        "failed_count": len(import_errors),
-                    },
-                )
-                return
-
-            # Store result metadata with error details
-            result_metadata = {
+            result_metadata: dict[str, Any] = {
                 "imported_count": result.get("imported_count", 0),
                 "updated_count": result.get("updated_count", 0),
                 "deleted_count": result.get("deleted_count", 0),
                 "skipped_count": result.get("skipped_count", 0),
                 "failed_count": result.get("failed_count", 0),
+                "source_file": source_file,
                 "worker": worker_id,
             }
-            if source_file:
-                result_metadata["source_file"] = source_file
-            if import_errors:
-                result_metadata["import_errors"] = import_errors
+            if result.get("errors"):
+                result_metadata["import_errors"] = result["errors"]
 
-            # Update job run with result metadata
             await self.job_run_repository.update_status(
                 job_run.id,
                 JobStatus.SUCCEEDED if result.get("failed_count", 0) == 0 else JobStatus.FAILED,
@@ -492,12 +686,10 @@ class JobRunnerService:
                 else None,
             )
 
-            # Log job execution completion
             logger.info(
                 f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
-                f"status={'succeeded' if result.get('failed_count', 0) == 0 else 'failed'}, "
-                f"imported={result.get('imported_count', 0)}, updated={result.get('updated_count', 0)}, "
-                f"deleted={result.get('deleted_count', 0)}, skipped={result.get('skipped_count', 0)}, "
+                f"imported={result.get('imported_count', 0)}, "
+                f"updated={result.get('updated_count', 0)}, "
                 f"failed={result.get('failed_count', 0)}"
             )
         else:

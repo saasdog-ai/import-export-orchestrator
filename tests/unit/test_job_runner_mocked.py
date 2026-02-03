@@ -367,6 +367,142 @@ async def test_execute_import_job_success(
 
 
 @pytest.mark.asyncio
+async def test_stream_import_csv_success(
+    job_runner,
+    mock_saas_client,
+    mock_job_run_repository,
+):
+    """Test streaming CSV import with validation and batched import."""
+    client_id = uuid4()
+    job = JobDefinition(
+        id=uuid4(),
+        client_id=client_id,
+        name="CSV Import Job",
+        job_type=JobType.IMPORT,
+        import_config=ImportConfig(
+            source="cloud_storage",
+            entity=ExportEntity.BILL,
+            options={"source_file": "/tmp/test_import.csv"},
+        ),
+    )
+
+    job_run = JobRun(
+        id=uuid4(),
+        job_id=job.id,
+        status=JobStatus.PENDING,
+    )
+
+    # Mock SaaS client import_data
+    mock_saas_client.import_data = AsyncMock(
+        return_value={
+            "imported_count": 2,
+            "updated_count": 0,
+            "deleted_count": 0,
+            "skipped_count": 0,
+            "failed_count": 0,
+        }
+    )
+    mock_job_run_repository.update_status = AsyncMock(
+        return_value=JobRun(
+            id=job_run.id,
+            job_id=job.id,
+            status=JobStatus.SUCCEEDED,
+        )
+    )
+
+    # Mock streaming validation (no errors)
+    with (
+        patch(
+            "app.services.job_runner.ImportValidator.validate_csv_content_streaming",
+            return_value=(2, 2, 0),  # (total_rows, valid_count, invalid_count)
+        ),
+        patch(
+            "app.services.job_runner.FileParser.parse_csv_streaming",
+            return_value=iter([[{"id": "1", "amount": "100.0"}, {"id": "2", "amount": "200.0"}]]),
+        ),
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open", MagicMock()),
+        patch("os.remove"),
+    ):
+        await job_runner._stream_import_csv(
+            job, job_run, "worker-0", "/tmp/test_import.csv", "/tmp/test_import.csv"
+        )
+
+    # Verify import_data was called with the batch
+    mock_saas_client.import_data.assert_called_once()
+    call_args = mock_saas_client.import_data.call_args
+    assert call_args[1]["client_id"] == client_id
+    assert len(call_args[1]["data"]) == 2
+
+    # Verify job statistics were updated
+    mock_job_run_repository.update_job_statistics.assert_called()
+
+    # Verify final status is SUCCEEDED
+    mock_job_run_repository.update_status.assert_called_once()
+    status_call = mock_job_run_repository.update_status.call_args
+    assert status_call[0][0] == job_run.id
+    assert status_call[0][1] == JobStatus.SUCCEEDED
+    result_metadata = status_call[1]["result_metadata"]
+    assert result_metadata["imported_count"] == 2
+    assert result_metadata["failed_count"] == 0
+    assert result_metadata["total_rows"] == 2
+
+
+@pytest.mark.asyncio
+async def test_stream_import_csv_validation_failure(
+    job_runner,
+    mock_job_run_repository,
+):
+    """Test streaming CSV import fails when validation finds errors."""
+    job = JobDefinition(
+        id=uuid4(),
+        client_id=uuid4(),
+        name="CSV Import Job",
+        job_type=JobType.IMPORT,
+        import_config=ImportConfig(
+            source="cloud_storage",
+            entity=ExportEntity.BILL,
+            options={"source_file": "/tmp/test_import.csv"},
+        ),
+    )
+
+    job_run = JobRun(
+        id=uuid4(),
+        job_id=job.id,
+        status=JobStatus.PENDING,
+    )
+
+    mock_job_run_repository.update_status = AsyncMock(
+        return_value=JobRun(
+            id=job_run.id,
+            job_id=job.id,
+            status=JobStatus.FAILED,
+        )
+    )
+
+    # Mock streaming validation WITH errors
+    with (
+        patch(
+            "app.services.job_runner.ImportValidator.validate_csv_content_streaming",
+            return_value=(5, 3, 2),  # 2 invalid rows
+        ),
+        patch("os.remove"),
+    ):
+        await job_runner._stream_import_csv(
+            job, job_run, "worker-0", "/tmp/test_import.csv", "/tmp/test_import.csv"
+        )
+
+    # Verify job was marked as FAILED
+    mock_job_run_repository.update_status.assert_called_once()
+    status_call = mock_job_run_repository.update_status.call_args
+    assert status_call[0][1] == JobStatus.FAILED
+    assert "Validation failed" in status_call[1]["error_message"]
+    result_metadata = status_call[1]["result_metadata"]
+    assert result_metadata["invalid_count"] == 2
+    assert result_metadata["total_rows"] == 5
+
+
+@pytest.mark.asyncio
 async def test_execute_job_run_export(job_runner, mock_job_run_repository):
     """Test executing a job run for export job."""
     # Setup
