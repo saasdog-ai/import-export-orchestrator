@@ -35,6 +35,9 @@ DEFAULT_POOL_TIMEOUT = 30  # 30 seconds
 EXPORT_BATCH_SIZE = 1000
 IMPORT_BATCH_SIZE = 100
 
+# Job statistics update throttle (seconds)
+STATS_UPDATE_INTERVAL = 5
+
 # Retry configuration
 MAX_RETRY_ATTEMPTS = 3
 RETRY_BACKOFF_MULTIPLIER = 1

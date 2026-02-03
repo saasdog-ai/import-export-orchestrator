@@ -181,6 +181,14 @@ async def test_execute_export_job_success(
         assert "exports/" in upload_call[0][1]  # Remote path contains exports/
         assert upload_call[1]["content_type"] == "text/csv"
 
+        # Deep validation: Verify final job statistics were written
+        # (generator is mocked so only the final update after streaming runs)
+        mock_job_run_repository.update_job_statistics.assert_called()
+        last_stats_call = mock_job_run_repository.update_job_statistics.call_args
+        stats = last_stats_call[0][1]
+        assert stats["rows_exported"] == 2  # Written count from generate_csv_file_streaming
+        assert stats["total_rows"] == 5
+
         # Deep validation: Verify status update with correct metadata
         mock_job_run_repository.update_status.assert_called_once()
         update_call = mock_job_run_repository.update_status.call_args
@@ -261,6 +269,13 @@ async def test_execute_export_job_no_cloud_storage(
         assert client_id_arg == job.client_id  # Correct client_id
 
         mock_gen_csv.assert_called_once()
+
+        # Deep validation: Verify job statistics were updated
+        mock_job_run_repository.update_job_statistics.assert_called()
+        last_stats_call = mock_job_run_repository.update_job_statistics.call_args
+        stats = last_stats_call[0][1]
+        assert stats["rows_exported"] == 2
+        assert stats["total_rows"] == 2
 
         # Deep validation: Verify status update with local file path (no cloud storage)
         mock_job_run_repository.update_status.assert_called_once()

@@ -64,6 +64,7 @@ class JobRunModel(Base):
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     result_metadata = Column(JSON, nullable=True)
+    job_statistics = Column(JSON, nullable=True)
     created_at = Column(
         DateTime,
         default=lambda: datetime.now(UTC).replace(tzinfo=None),

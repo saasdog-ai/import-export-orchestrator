@@ -401,6 +401,9 @@ class JobRun(BaseModel):
     result_metadata: dict[str, Any] | None = Field(
         default=None, description="Metadata about the job result"
     )
+    job_statistics: dict[str, Any] | None = Field(
+        default=None, description="Live progress statistics updated during job execution"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

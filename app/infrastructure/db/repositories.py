@@ -397,6 +397,16 @@ class JobRunRepository:
 
             return entity
 
+    async def update_job_statistics(self, run_id: UUID, statistics: dict[str, Any]) -> None:
+        """Update job run statistics (lightweight single-column UPDATE)."""
+        async with self.db.async_session_maker() as session:
+            await session.execute(
+                update(JobRunModel)
+                .where(JobRunModel.id == run_id)
+                .values(job_statistics=statistics)
+            )
+            await session.commit()
+
     def _model_to_entity(self, db_run: JobRunModel) -> JobRun:
         """Convert database model to domain entity."""
         return JobRun(
@@ -407,6 +417,7 @@ class JobRunRepository:
             completed_at=_to_aware_utc(db_run.completed_at),  # type: ignore[arg-type]
             error_message=db_run.error_message,  # type: ignore[arg-type]
             result_metadata=db_run.result_metadata,  # type: ignore[arg-type]
+            job_statistics=db_run.job_statistics,  # type: ignore[arg-type]
             created_at=_to_aware_utc(db_run.created_at),  # type: ignore[arg-type]
             updated_at=_to_aware_utc(db_run.updated_at),  # type: ignore[arg-type]
         )

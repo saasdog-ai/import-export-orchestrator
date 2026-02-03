@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from app.core.config import get_settings
+from app.core.constants import STATS_UPDATE_INTERVAL
 from app.core.logging import get_logger
 from app.domain.entities import (
     JobDefinition,
@@ -208,8 +209,43 @@ class JobRunnerService:
             count, batch_gen = await self.query_engine.execute_export_streaming(
                 job.export_config, client_id=job.client_id
             )
+
+            # Wrap generator with progress tracking (time-throttled DB updates)
+            rows_exported = 0
+            batches_completed = 0
+            last_stats_time = datetime.now(UTC)
+
+            async def _tracked_batch_gen():
+                nonlocal rows_exported, batches_completed, last_stats_time
+                async for batch in batch_gen:
+                    rows_exported += len(batch)
+                    batches_completed += 1
+                    is_first = batches_completed == 1
+                    now = datetime.now(UTC)
+                    elapsed = (now - last_stats_time).total_seconds()
+                    if is_first or elapsed >= STATS_UPDATE_INTERVAL:
+                        await self.job_run_repository.update_job_statistics(
+                            job_run.id,
+                            {
+                                "rows_exported": rows_exported,
+                                "total_rows": count,
+                                "batches_completed": batches_completed,
+                            },
+                        )
+                        last_stats_time = now
+                    yield batch
+
             local_file_path, written = await FileGenerator.generate_csv_file_streaming(
-                batch_gen, output_fields, export_dir
+                _tracked_batch_gen(), output_fields, export_dir
+            )
+            # Final stats update (last batch)
+            await self.job_run_repository.update_job_statistics(
+                job_run.id,
+                {
+                    "rows_exported": written,
+                    "total_rows": count,
+                    "batches_completed": batches_completed,
+                },
             )
             # Use written count as authoritative
             count = written
