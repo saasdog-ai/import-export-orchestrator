@@ -131,22 +131,18 @@ async def test_execute_export_job_success(
         status=JobStatus.PENDING,
     )
 
-    # Mock query engine response
-    mock_query_engine.execute_export_query = AsyncMock(
-        return_value={
-            "count": 5,
-            "records": [
-                {"id": "1", "amount": 100.0},
-                {"id": "2", "amount": 200.0},
-            ],
-        }
-    )
+    # Mock streaming query engine response
+    async def fake_batch_gen():
+        yield [{"id": "1", "amount": 100.0}, {"id": "2", "amount": 200.0}]
+
+    mock_query_engine.execute_export_streaming = AsyncMock(return_value=(5, fake_batch_gen()))
 
     # Mock FileGenerator static methods
     with (
         patch(
-            "app.services.job_runner.FileGenerator.generate_csv_file",
-            return_value="/tmp/export.csv",
+            "app.services.job_runner.FileGenerator.generate_csv_file_streaming",
+            new_callable=AsyncMock,
+            return_value=("/tmp/export.csv", 2),
         ) as mock_gen_csv,
         patch("app.services.job_runner.FileGenerator.get_file_extension", return_value=".csv"),
         patch("app.services.job_runner.FileGenerator.get_content_type", return_value="text/csv"),
@@ -161,16 +157,16 @@ async def test_execute_export_job_success(
             id=job_run.id,
             job_id=job.id,
             status=JobStatus.SUCCEEDED,
-            result_metadata={"count": 5, "format": "csv", "remote_file_path": "exports/file.csv"},
+            result_metadata={"count": 2, "format": "csv", "remote_file_path": "exports/file.csv"},
         )
         mock_job_run_repository.update_status = AsyncMock(return_value=updated_run)
 
         # Execute
         await job_runner._execute_export_job(job, job_run, "worker-0")
 
-        # Deep validation: Verify calls with correct parameters
-        mock_query_engine.execute_export_query.assert_called_once()
-        call_args = mock_query_engine.execute_export_query.call_args
+        # Deep validation: Verify streaming export was called
+        mock_query_engine.execute_export_streaming.assert_called_once()
+        call_args = mock_query_engine.execute_export_streaming.call_args
         config_arg = call_args[0][0]  # First positional arg (config)
         client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
         assert config_arg.entity == ExportEntity.BILL
@@ -178,9 +174,6 @@ async def test_execute_export_job_success(
         assert client_id_arg == job.client_id  # Correct client_id
 
         mock_gen_csv.assert_called_once()
-        # Verify CSV generation was called with correct data
-        csv_call_args = mock_gen_csv.call_args
-        assert csv_call_args is not None
 
         mock_cloud_storage.upload_file.assert_called_once()
         upload_call = mock_cloud_storage.upload_file.call_args
@@ -194,13 +187,10 @@ async def test_execute_export_job_success(
         assert update_call[0][0] == job_run.id  # Correct job run ID
         assert update_call[0][1] == JobStatus.SUCCEEDED  # Status is SUCCEEDED
         result_metadata = update_call[1]["result_metadata"]
-        assert result_metadata["count"] == 5  # Correct count
+        assert result_metadata["count"] == 2  # Correct count (written count)
         assert result_metadata["format"] == "csv"  # Correct format
         assert "remote_file_path" in result_metadata  # Has remote file path
-        # Remote path is generated dynamically with UUIDs, so just verify it contains exports/
-        assert "exports/" in result_metadata["remote_file_path"], (
-            f"Remote file path should contain 'exports/', got: {result_metadata['remote_file_path']}"
-        )
+        assert "exports/" in result_metadata["remote_file_path"]
         assert result_metadata["remote_file_path"].endswith(".csv")  # Ends with .csv
 
 
@@ -236,18 +226,17 @@ async def test_execute_export_job_no_cloud_storage(
         status=JobStatus.PENDING,
     )
 
-    # Mock responses
-    mock_query_engine.execute_export_query = AsyncMock(
-        return_value={
-            "count": 2,
-            "records": [{"id": "1"}, {"id": "2"}],
-        }
-    )
+    # Mock streaming query engine response
+    async def fake_batch_gen():
+        yield [{"id": "1"}, {"id": "2"}]
+
+    mock_query_engine.execute_export_streaming = AsyncMock(return_value=(2, fake_batch_gen()))
 
     with (
         patch(
-            "app.services.job_runner.FileGenerator.generate_csv_file",
-            return_value="/tmp/export.csv",
+            "app.services.job_runner.FileGenerator.generate_csv_file_streaming",
+            new_callable=AsyncMock,
+            return_value=("/tmp/export.csv", 2),
         ) as mock_gen_csv,
         patch("os.makedirs"),
     ):
@@ -262,9 +251,9 @@ async def test_execute_export_job_no_cloud_storage(
         # Execute
         await job_runner._execute_export_job(job, job_run, "worker-0")
 
-        # Deep validation: Verify calls with correct parameters
-        mock_query_engine.execute_export_query.assert_called_once()
-        call_args = mock_query_engine.execute_export_query.call_args
+        # Deep validation: Verify streaming export was called
+        mock_query_engine.execute_export_streaming.assert_called_once()
+        call_args = mock_query_engine.execute_export_streaming.call_args
         config_arg = call_args[0][0]  # First positional arg (config)
         client_id_arg = call_args[1]["client_id"]  # Keyword arg (client_id)
         assert config_arg.entity == ExportEntity.BILL

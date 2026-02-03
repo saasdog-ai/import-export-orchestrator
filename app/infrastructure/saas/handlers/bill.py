@@ -5,8 +5,9 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import Column, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.infrastructure.db.models import (
     SampleBillModel,
@@ -15,9 +16,53 @@ from app.infrastructure.db.models import (
 )
 from app.infrastructure.saas.utils import model_to_dict, parse_date
 
+# Column map for SQL pushdown (includes relationship fields via dot notation)
+_COLUMN_MAP: dict[str, Column] = {
+    "id": SampleBillModel.id,
+    "external_id": SampleBillModel.external_id,
+    "bill_number": SampleBillModel.bill_number,
+    "vendor_id": SampleBillModel.vendor_id,
+    "project_id": SampleBillModel.project_id,
+    "amount": SampleBillModel.amount,
+    "date": SampleBillModel.date,
+    "due_date": SampleBillModel.due_date,
+    "paid_on_date": SampleBillModel.paid_on_date,
+    "description": SampleBillModel.description,
+    "currency": SampleBillModel.currency,
+    "status": SampleBillModel.status,
+    "created_at": SampleBillModel.created_at,
+    "updated_at": SampleBillModel.updated_at,
+    # Relationship columns
+    "vendor.name": SampleVendorModel.name,
+    "vendor.email_address": SampleVendorModel.email_address,
+    "vendor.email": SampleVendorModel.email_address,
+    "vendor.id": SampleVendorModel.id,
+    "vendor.status": SampleVendorModel.status,
+    "project.code": SampleProjectModel.code,
+    "project.name": SampleProjectModel.name,
+    "project.id": SampleProjectModel.id,
+    "project.status": SampleProjectModel.status,
+    "project.budget": SampleProjectModel.budget,
+}
+
 
 class BillHandler:
     """Handler for bill fetch, create, update, and delete operations."""
+
+    def build_query(self, client_id: UUID) -> Select:
+        """Return base SELECT with eager-loaded relationships, filtered by client_id."""
+        return (
+            select(SampleBillModel)
+            .where(SampleBillModel.client_id == client_id)
+            .options(
+                selectinload(SampleBillModel.vendor),
+                selectinload(SampleBillModel.project),
+            )
+        )
+
+    def get_column(self, field_path: str) -> Column | None:
+        """Resolve field path to SQLAlchemy column."""
+        return _COLUMN_MAP.get(field_path)
 
     async def fetch(self, session: AsyncSession, client_id: UUID) -> list[dict[str, Any]]:
         """Fetch bills from database with nested vendor and project data."""
@@ -25,6 +70,10 @@ class BillHandler:
             select(SampleBillModel)
             .where(SampleBillModel.client_id == client_id)
             .order_by(SampleBillModel.date.desc())
+            .options(
+                selectinload(SampleBillModel.vendor),
+                selectinload(SampleBillModel.project),
+            )
         )
         bills = result.scalars().all()
 
@@ -32,25 +81,13 @@ class BillHandler:
         for bill in bills:
             bill_dict = model_to_dict(bill)
 
-            # Add nested vendor if vendor_id exists
-            if bill.vendor_id:
-                vendor_result = await session.execute(
-                    select(SampleVendorModel).where(SampleVendorModel.id == bill.vendor_id)
-                )
-                vendor = vendor_result.scalar_one_or_none()
-                if vendor:
-                    bill_dict["vendor"] = model_to_dict(vendor)
-                    bill_dict["vendor_id"] = str(bill.vendor_id)
+            if bill.vendor:
+                bill_dict["vendor"] = model_to_dict(bill.vendor)
+                bill_dict["vendor_id"] = str(bill.vendor_id)
 
-            # Add nested project if project_id exists
-            if bill.project_id:
-                project_result = await session.execute(
-                    select(SampleProjectModel).where(SampleProjectModel.id == bill.project_id)
-                )
-                project = project_result.scalar_one_or_none()
-                if project:
-                    bill_dict["project"] = model_to_dict(project)
-                    bill_dict["project_id"] = str(bill.project_id)
+            if bill.project:
+                bill_dict["project"] = model_to_dict(bill.project)
+                bill_dict["project_id"] = str(bill.project_id)
 
             bills_dict.append(bill_dict)
 

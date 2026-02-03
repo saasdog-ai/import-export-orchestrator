@@ -5,15 +5,39 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import Column, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.models import SampleProjectModel
 from app.infrastructure.saas.utils import model_to_dict, parse_date
 
+# Column map for SQL pushdown
+_COLUMN_MAP: dict[str, Column] = {
+    "id": SampleProjectModel.id,
+    "external_id": SampleProjectModel.external_id,
+    "code": SampleProjectModel.code,
+    "name": SampleProjectModel.name,
+    "description": SampleProjectModel.description,
+    "status": SampleProjectModel.status,
+    "start_date": SampleProjectModel.start_date,
+    "end_date": SampleProjectModel.end_date,
+    "budget": SampleProjectModel.budget,
+    "currency": SampleProjectModel.currency,
+    "created_at": SampleProjectModel.created_at,
+    "updated_at": SampleProjectModel.updated_at,
+}
+
 
 class ProjectHandler:
     """Handler for project fetch, create, update, and delete operations."""
+
+    def build_query(self, client_id: UUID) -> Select:
+        """Return base SELECT filtered by client_id."""
+        return select(SampleProjectModel).where(SampleProjectModel.client_id == client_id)
+
+    def get_column(self, field_path: str) -> Column | None:
+        """Resolve field path to SQLAlchemy column."""
+        return _COLUMN_MAP.get(field_path)
 
     async def fetch(self, session: AsyncSession, client_id: UUID) -> list[dict[str, Any]]:
         """Fetch projects from database."""

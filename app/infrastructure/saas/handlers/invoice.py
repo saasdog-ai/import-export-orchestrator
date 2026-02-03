@@ -5,8 +5,9 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import Column, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.infrastructure.db.models import (
     SampleInvoiceModel,
@@ -14,9 +15,50 @@ from app.infrastructure.db.models import (
 )
 from app.infrastructure.saas.utils import model_to_dict, parse_date
 
+# Column map for SQL pushdown (includes relationship fields via dot notation)
+_COLUMN_MAP: dict[str, Column] = {
+    "id": SampleInvoiceModel.id,
+    "external_id": SampleInvoiceModel.external_id,
+    "invoice_number": SampleInvoiceModel.invoice_number,
+    "contact_id": SampleInvoiceModel.contact_id,
+    "issue_date": SampleInvoiceModel.issue_date,
+    "date": SampleInvoiceModel.issue_date,
+    "due_date": SampleInvoiceModel.due_date,
+    "paid_on_date": SampleInvoiceModel.paid_on_date,
+    "memo": SampleInvoiceModel.memo,
+    "currency": SampleInvoiceModel.currency,
+    "exchange_rate": SampleInvoiceModel.exchange_rate,
+    "sub_total": SampleInvoiceModel.sub_total,
+    "total_tax_amount": SampleInvoiceModel.total_tax_amount,
+    "total_amount": SampleInvoiceModel.total_amount,
+    "amount": SampleInvoiceModel.total_amount,
+    "balance": SampleInvoiceModel.balance,
+    "status": SampleInvoiceModel.status,
+    "created_at": SampleInvoiceModel.created_at,
+    "updated_at": SampleInvoiceModel.updated_at,
+    # Relationship columns
+    "vendor.name": SampleVendorModel.name,
+    "vendor.email_address": SampleVendorModel.email_address,
+    "vendor.email": SampleVendorModel.email_address,
+    "vendor.id": SampleVendorModel.id,
+    "vendor.status": SampleVendorModel.status,
+}
+
 
 class InvoiceHandler:
     """Handler for invoice fetch, create, update, and delete operations."""
+
+    def build_query(self, client_id: UUID) -> Select:
+        """Return base SELECT with eager-loaded relationships, filtered by client_id."""
+        return (
+            select(SampleInvoiceModel)
+            .where(SampleInvoiceModel.client_id == client_id)
+            .options(selectinload(SampleInvoiceModel.contact))
+        )
+
+    def get_column(self, field_path: str) -> Column | None:
+        """Resolve field path to SQLAlchemy column."""
+        return _COLUMN_MAP.get(field_path)
 
     async def fetch(self, session: AsyncSession, client_id: UUID) -> list[dict[str, Any]]:
         """Fetch invoices from database with nested contact (vendor) data."""
@@ -28,6 +70,7 @@ class InvoiceHandler:
                 if SampleInvoiceModel.issue_date
                 else SampleInvoiceModel.created_at.desc()
             )
+            .options(selectinload(SampleInvoiceModel.contact))
         )
         invoices = result.scalars().all()
 
@@ -35,15 +78,9 @@ class InvoiceHandler:
         for invoice in invoices:
             invoice_dict = model_to_dict(invoice)
 
-            # Add nested vendor/contact if contact_id exists
-            if invoice.contact_id:
-                vendor_result = await session.execute(
-                    select(SampleVendorModel).where(SampleVendorModel.id == invoice.contact_id)
-                )
-                vendor = vendor_result.scalar_one_or_none()
-                if vendor:
-                    invoice_dict["vendor"] = model_to_dict(vendor)
-                    invoice_dict["contact_id"] = str(invoice.contact_id)
+            if invoice.contact:
+                invoice_dict["vendor"] = model_to_dict(invoice.contact)
+                invoice_dict["contact_id"] = str(invoice.contact_id)
 
             invoices_dict.append(invoice_dict)
 

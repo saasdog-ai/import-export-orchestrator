@@ -1,5 +1,6 @@
 """SaaS API client interface and mock implementation."""
 
+from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import UUID
 
@@ -53,6 +54,30 @@ class SaaSApiClientInterface:
         Returns:
             Import result with counts and errors
         """
+        raise NotImplementedError
+
+    async def fetch_data_streaming(
+        self,
+        entity: ExportEntity,
+        client_id: UUID,
+        sort_columns: list[Any] | None = None,
+        filter_clauses: list[Any] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        batch_size: int = 1000,
+    ) -> AsyncGenerator[list[dict[str, Any]], None]:
+        """Yield batches of records with SQL-level constraints."""
+        raise NotImplementedError
+        # Make this a valid async generator
+        yield []  # pragma: no cover
+
+    async def get_total_count(
+        self,
+        entity: ExportEntity,
+        client_id: UUID,
+        filter_clauses: list[Any] | None = None,
+    ) -> int:
+        """Return total count of records matching filters."""
         raise NotImplementedError
 
 

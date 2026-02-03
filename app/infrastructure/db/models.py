@@ -142,6 +142,7 @@ class SampleInvoiceModel(Base):
     status = Column(String(20), nullable=True)  # DRAFT, SUBMITTED, PAID, etc.
     line_items = Column(JSON, nullable=True)  # Store line items as JSON array
     tracking_categories = Column(JSON, nullable=True)  # Store tracking categories as JSON
+    contact = relationship("SampleVendorModel", foreign_keys=[contact_id], lazy="noload")
     created_at = Column(
         DateTime,
         default=lambda: datetime.now(UTC).replace(tzinfo=None),
@@ -178,6 +179,8 @@ class SampleBillModel(Base):
     currency = Column(String(10), nullable=True)
     status = Column(String(20), nullable=True)  # pending, paid, overdue, etc.
     line_items = Column(JSON, nullable=True)  # Store line items as JSON array
+    vendor = relationship("SampleVendorModel", foreign_keys=[vendor_id], lazy="noload")
+    project = relationship("SampleProjectModel", foreign_keys=[project_id], lazy="noload")
     created_at = Column(
         DateTime,
         default=lambda: datetime.now(UTC).replace(tzinfo=None),

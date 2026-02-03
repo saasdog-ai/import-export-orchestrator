@@ -191,28 +191,10 @@ class JobRunnerService:
         if not job.export_config:
             raise ValueError("Export job missing export_config")
 
-        # Execute query using query engine (pass client_id for security)
-        result = await self.query_engine.execute_export_query(
-            job.export_config, client_id=job.client_id
-        )
-
-        records = result.get("records", [])
-        count = result.get("count", len(records))
         # Get output field names for CSV/JSON headers (uses aliases if configured)
         output_fields = [f.output_name for f in job.export_config.fields]
         source_fields = job.export_config.get_source_fields()
-        # Count how many fields have custom aliases
         aliased_fields = sum(1 for f in job.export_config.fields if f.as_ is not None)
-
-        logger.info(
-            f"Export query completed: run_id={job_run.id}, record_count={count}, "
-            f"fields={len(output_fields)}, aliased_fields={aliased_fields}"
-        )
-        if aliased_fields > 0:
-            logger.debug(
-                f"Field mappings for run_id={job_run.id}: "
-                f"source_fields={source_fields}, output_fields={output_fields}"
-            )
 
         # Generate local file
         export_format = self.settings.export_file_format
@@ -222,11 +204,35 @@ class JobRunnerService:
         os.makedirs(export_dir, exist_ok=True)
 
         if export_format == "csv":
-            local_file_path = FileGenerator.generate_csv_file(records, output_fields, export_dir)
+            # Use streaming export: SQL pushdown + batched CSV writes
+            count, batch_gen = await self.query_engine.execute_export_streaming(
+                job.export_config, client_id=job.client_id
+            )
+            local_file_path, written = await FileGenerator.generate_csv_file_streaming(
+                batch_gen, output_fields, export_dir
+            )
+            # Use written count as authoritative
+            count = written
         elif export_format == "json":
+            # JSON export falls back to full-fetch (streaming JSON is complex)
+            result = await self.query_engine.execute_export_query(
+                job.export_config, client_id=job.client_id
+            )
+            records = result.get("records", [])
+            count = result.get("count", len(records))
             local_file_path = FileGenerator.generate_json_file(records, export_dir)
         else:
             raise ValueError(f"Unsupported export format: {export_format}")
+
+        logger.info(
+            f"Export completed: run_id={job_run.id}, record_count={count}, "
+            f"fields={len(output_fields)}, aliased_fields={aliased_fields}"
+        )
+        if aliased_fields > 0:
+            logger.debug(
+                f"Field mappings for run_id={job_run.id}: "
+                f"source_fields={source_fields}, output_fields={output_fields}"
+            )
 
         # Upload to cloud storage if configured
         remote_file_path = None

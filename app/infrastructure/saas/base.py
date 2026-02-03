@@ -1,10 +1,13 @@
 """Base SaaS API client with generic import/export orchestration."""
 
+from collections.abc import AsyncGenerator
 from typing import Any, Protocol
 from uuid import UUID
 
+from sqlalchemy import Column, Select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import IMPORT_BATCH_SIZE
 from app.core.logging import get_logger
 from app.domain.entities import ExportEntity, ImportConfig, ImportMode, RecordAction
 from app.infrastructure.db.database import Database
@@ -62,6 +65,14 @@ class EntityHandler(Protocol):
         """Return the list of required field names for import validation."""
         ...
 
+    def build_query(self, client_id: UUID) -> Select:
+        """Return base SELECT with eager-loaded relationships, filtered by client_id."""
+        ...
+
+    def get_column(self, field_path: str) -> Column | None:
+        """Resolve field path (e.g., 'vendor.name') to SQLAlchemy column."""
+        ...
+
 
 class BaseSaaSApiClient:
     """Base SaaS API client with generic import/export orchestration.
@@ -111,6 +122,124 @@ class BaseSaaSApiClient:
         return data
 
     # ------------------------------------------------------------------
+    # fetch_data_streaming — batched DB reads with SQL pushdown
+    # ------------------------------------------------------------------
+
+    async def fetch_data_streaming(
+        self,
+        entity: ExportEntity,
+        client_id: UUID,
+        sort_columns: list[Any] | None = None,
+        filter_clauses: list[Any] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        batch_size: int = 1000,
+    ) -> AsyncGenerator[list[dict[str, Any]], None]:
+        """Yield batches of records with SQL-level filtering, sorting, and pagination.
+
+        Args:
+            entity: Entity type to fetch
+            client_id: Client ID for tenant isolation
+            sort_columns: Pre-built SQLAlchemy ORDER BY clauses
+            filter_clauses: Pre-built SQLAlchemy WHERE clauses
+            limit: Maximum total records to return (None = all)
+            offset: Starting offset
+            batch_size: Records per batch
+        """
+        from app.infrastructure.saas.utils import model_to_dict
+
+        handler = self._handlers.get(entity)
+        if handler is None:
+            logger.warning(f"No handler registered for entity: {entity.value}")
+            return
+
+        query = handler.build_query(client_id)
+
+        # Apply SQL WHERE clauses
+        if filter_clauses:
+            for clause in filter_clauses:
+                query = query.where(clause)
+
+        # Apply SQL ORDER BY
+        if sort_columns:
+            query = query.order_by(*sort_columns)
+
+        # Track how many records we've yielded
+        total_yielded = 0
+        batch_offset = offset
+
+        while True:
+            # Calculate batch limit
+            current_batch_size = batch_size
+            if limit is not None:
+                remaining = limit - total_yielded
+                if remaining <= 0:
+                    break
+                current_batch_size = min(batch_size, remaining)
+
+            batch_query = query.offset(batch_offset).limit(current_batch_size)
+
+            async with self.db.transaction() as session:
+                result = await session.execute(batch_query)
+                models = result.scalars().all()
+
+            if not models:
+                break
+
+            # Convert models to dicts with relationship data
+            batch_records = []
+            for model in models:
+                record = model_to_dict(model)
+                # Add relationship dicts if loaded
+                if hasattr(model, "vendor") and model.vendor is not None:
+                    record["vendor"] = model_to_dict(model.vendor)
+                    record["vendor_id"] = str(model.vendor_id) if model.vendor_id else None
+                if hasattr(model, "project") and model.project is not None:
+                    record["project"] = model_to_dict(model.project)
+                    record["project_id"] = str(model.project_id) if model.project_id else None
+                if hasattr(model, "contact") and model.contact is not None:
+                    record["vendor"] = model_to_dict(model.contact)
+                    record["contact_id"] = str(model.contact_id) if model.contact_id else None
+                batch_records.append(record)
+
+            yield batch_records
+
+            total_yielded += len(batch_records)
+            batch_offset += len(batch_records)
+
+            # If we got fewer than requested, there are no more rows
+            if len(batch_records) < current_batch_size:
+                break
+
+        logger.info(
+            f"Streaming fetch complete: entity={entity.value}, total_yielded={total_yielded}"
+        )
+
+    async def get_total_count(
+        self,
+        entity: ExportEntity,
+        client_id: UUID,
+        filter_clauses: list[Any] | None = None,
+    ) -> int:
+        """Return total count of records matching filters."""
+        handler = self._handlers.get(entity)
+        if handler is None:
+            return 0
+
+        base_query = handler.build_query(client_id)
+        # Extract the model from the base query's columns
+        # Build a count query from the subquery
+        count_subquery = base_query.with_only_columns(func.count()).order_by(None)
+
+        if filter_clauses:
+            for clause in filter_clauses:
+                count_subquery = count_subquery.where(clause)
+
+        async with self.db.transaction() as session:
+            result = await session.execute(count_subquery)
+            return int(result.scalar_one())
+
+    # ------------------------------------------------------------------
     # import_data — generic orchestration loop
     # ------------------------------------------------------------------
 
@@ -156,166 +285,182 @@ class BaseSaaSApiClient:
         failed_count = 0
         errors: list[dict[str, Any]] = []
 
-        async with self.db.transaction() as session:
-            for row_num, record in enumerate(data, start=1):
-                try:
-                    # Determine action for this record
-                    if has_per_record_actions:
-                        action_str = record.pop(ACTION_KEY, None)
-                        record_action = RecordAction.from_string(action_str) if action_str else None
-                        if record_action is None:
-                            errors.append(
-                                {
-                                    "row": row_num,
-                                    "field": ACTION_KEY,
-                                    "message": f"Invalid action '{action_str}'",
-                                }
+        # Process in batches to avoid holding one huge transaction
+        for batch_start in range(0, len(data), IMPORT_BATCH_SIZE):
+            batch = data[batch_start : batch_start + IMPORT_BATCH_SIZE]
+
+            async with self.db.transaction() as session:
+                for i, record in enumerate(batch):
+                    row_num = batch_start + i + 1
+                    try:
+                        # Determine action for this record
+                        if has_per_record_actions:
+                            action_str = record.pop(ACTION_KEY, None)
+                            record_action = (
+                                RecordAction.from_string(action_str) if action_str else None
                             )
-                            failed_count += 1
-                            continue
-                        if record_action == RecordAction.DELETE:
-                            import_mode = None
-                            is_delete = True
+                            if record_action is None:
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "field": ACTION_KEY,
+                                        "message": f"Invalid action '{action_str}'",
+                                    }
+                                )
+                                failed_count += 1
+                                continue
+                            if record_action == RecordAction.DELETE:
+                                import_mode = None
+                                is_delete = True
+                            else:
+                                import_mode = ImportMode(record_action.value)
+                                is_delete = False
                         else:
-                            import_mode = ImportMode(record_action.value)
+                            import_mode = global_import_mode
                             is_delete = False
-                    else:
-                        import_mode = global_import_mode
-                        is_delete = False
 
-                    # Handle DELETE action
-                    if is_delete:
+                        # Handle DELETE action
+                        if is_delete:
+                            match_value = record.get(match_key)
+                            if not match_value:
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "field": match_key,
+                                        "message": f"Match key '{match_key}' required for DELETE",
+                                    }
+                                )
+                                failed_count += 1
+                                continue
+
+                            existing = await handler.find_existing(
+                                session, client_id, match_key, match_value
+                            )
+                            if not existing:
+                                skipped_count += 1
+                                continue
+                            delete_result = await handler.delete(session, existing)
+                            if delete_result["action"] == "deleted":
+                                deleted_count += 1
+                            else:
+                                failed_count += 1
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "message": delete_result.get("error", "Delete failed"),
+                                    }
+                                )
+                            continue
+
+                        # Validate required fields
+                        required_fields = handler.get_required_fields()
+                        missing_required = False
+                        for field in required_fields:
+                            if (
+                                field not in record
+                                or record[field] is None
+                                or (isinstance(record[field], str) and record[field].strip() == "")
+                            ):
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "field": field,
+                                        "message": f"Required field '{field}' is missing or empty",
+                                    }
+                                )
+                                failed_count += 1
+                                missing_required = True
+                                break
+
+                        if missing_required:
+                            continue
+
+                        # For UPDATE mode, require match_key to be present
+                        if import_mode == ImportMode.UPDATE:
+                            match_value = record.get(match_key)
+                            if not match_value or (
+                                isinstance(match_value, str) and not match_value.strip()
+                            ):
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "field": match_key,
+                                        "message": (
+                                            f"Match key '{match_key}' is required for UPDATE mode"
+                                        ),
+                                    }
+                                )
+                                failed_count += 1
+                                continue
+
+                        # SECURITY: Ensure all records have the correct client_id
+                        record["client_id"] = client_id
+
+                        assert import_mode is not None
+
+                        # Find existing record
                         match_value = record.get(match_key)
-                        if not match_value:
-                            errors.append(
-                                {
-                                    "row": row_num,
-                                    "field": match_key,
-                                    "message": f"Match key '{match_key}' required for DELETE",
-                                }
+                        existing = None
+                        if match_value:
+                            existing = await handler.find_existing(
+                                session, client_id, match_key, match_value
                             )
-                            failed_count += 1
-                            continue
 
-                        existing = await handler.find_existing(
-                            session, client_id, match_key, match_value
-                        )
-                        if not existing:
-                            skipped_count += 1
-                            continue
-                        delete_result = await handler.delete(session, existing)
-                        if delete_result["action"] == "deleted":
-                            deleted_count += 1
-                        else:
-                            failed_count += 1
-                            errors.append(
-                                {
-                                    "row": row_num,
-                                    "message": delete_result.get("error", "Delete failed"),
-                                }
-                            )
-                        continue
-
-                    # Validate required fields
-                    required_fields = handler.get_required_fields()
-                    missing_required = False
-                    for field in required_fields:
-                        if (
-                            field not in record
-                            or record[field] is None
-                            or (isinstance(record[field], str) and record[field].strip() == "")
-                        ):
-                            errors.append(
-                                {
-                                    "row": row_num,
-                                    "field": field,
-                                    "message": f"Required field '{field}' is missing or empty",
-                                }
-                            )
-                            failed_count += 1
-                            missing_required = True
-                            break
-
-                    if missing_required:
-                        continue
-
-                    # For UPDATE mode, require match_key to be present
-                    if import_mode == ImportMode.UPDATE:
-                        match_value = record.get(match_key)
-                        if not match_value or (
-                            isinstance(match_value, str) and not match_value.strip()
-                        ):
-                            errors.append(
-                                {
-                                    "row": row_num,
-                                    "field": match_key,
-                                    "message": f"Match key '{match_key}' is required for UPDATE mode",
-                                }
-                            )
-                            failed_count += 1
-                            continue
-
-                    # SECURITY: Ensure all records have the correct client_id
-                    record["client_id"] = client_id
-
-                    assert import_mode is not None
-
-                    # Find existing record
-                    match_value = record.get(match_key)
-                    existing = None
-                    if match_value:
-                        existing = await handler.find_existing(
-                            session, client_id, match_key, match_value
-                        )
-
-                    # Handle import modes
-                    if import_mode == ImportMode.CREATE:
-                        if existing:
-                            errors.append(
-                                {
-                                    "row": row_num,
-                                    "message": f"Record with {match_key}='{match_value}' already exists",
-                                }
-                            )
-                            failed_count += 1
-                            continue
-                        import_result = await handler.create(session, record, client_id)
-                    elif import_mode == ImportMode.UPDATE:
-                        if not existing:
-                            skipped_count += 1
-                            continue
-                        import_result = await handler.update(session, existing, record)
-                    elif import_mode == ImportMode.UPSERT:
-                        if existing:
-                            import_result = await handler.update(session, existing, record)
-                        else:
+                        # Handle import modes
+                        if import_mode == ImportMode.CREATE:
+                            if existing:
+                                errors.append(
+                                    {
+                                        "row": row_num,
+                                        "message": (
+                                            f"Record with {match_key}='{match_value}' already exists"
+                                        ),
+                                    }
+                                )
+                                failed_count += 1
+                                continue
                             import_result = await handler.create(session, record, client_id)
-                    else:
-                        errors.append(
-                            {"row": row_num, "message": f"Unsupported import mode: {import_mode}"}
-                        )
+                        elif import_mode == ImportMode.UPDATE:
+                            if not existing:
+                                skipped_count += 1
+                                continue
+                            import_result = await handler.update(session, existing, record)
+                        elif import_mode == ImportMode.UPSERT:
+                            if existing:
+                                import_result = await handler.update(session, existing, record)
+                            else:
+                                import_result = await handler.create(session, record, client_id)
+                        else:
+                            errors.append(
+                                {
+                                    "row": row_num,
+                                    "message": f"Unsupported import mode: {import_mode}",
+                                }
+                            )
+                            failed_count += 1
+                            continue
+
+                        if import_result["action"] == "created":
+                            imported_count += 1
+                        elif import_result["action"] == "updated":
+                            updated_count += 1
+                        elif import_result["action"] == "skipped":
+                            skipped_count += 1
+                        else:
+                            failed_count += 1
+                            errors.append(
+                                {
+                                    "row": row_num,
+                                    "message": import_result.get("error", "Unknown error"),
+                                }
+                            )
+
+                    except Exception as e:
+                        error_msg = f"Failed to import record: {str(e)}"
+                        logger.error(f"Row {row_num}: {error_msg}", exc_info=True)
+                        errors.append({"row": row_num, "message": error_msg})
                         failed_count += 1
-                        continue
-
-                    if import_result["action"] == "created":
-                        imported_count += 1
-                    elif import_result["action"] == "updated":
-                        updated_count += 1
-                    elif import_result["action"] == "skipped":
-                        skipped_count += 1
-                    else:
-                        failed_count += 1
-                        errors.append(
-                            {"row": row_num, "message": import_result.get("error", "Unknown error")}
-                        )
-
-                except Exception as e:
-                    error_msg = f"Failed to import record: {str(e)}"
-                    logger.error(f"Row {row_num}: {error_msg}", exc_info=True)
-                    errors.append({"row": row_num, "message": error_msg})
-                    failed_count += 1
-
-            await session.commit()
+                # auto-commit at end of batch via transaction context manager
 
         mode_str = "per-record" if has_per_record_actions else global_import_mode.value
         result: dict[str, Any] = {

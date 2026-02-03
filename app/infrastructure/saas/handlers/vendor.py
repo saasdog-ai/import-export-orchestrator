@@ -4,15 +4,40 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import Column, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.models import SampleVendorModel
 from app.infrastructure.saas.utils import model_to_dict
 
+# Column map for SQL pushdown
+_COLUMN_MAP: dict[str, Column] = {
+    "id": SampleVendorModel.id,
+    "external_id": SampleVendorModel.external_id,
+    "name": SampleVendorModel.name,
+    "email_address": SampleVendorModel.email_address,
+    "email": SampleVendorModel.email_address,
+    "phone": SampleVendorModel.phone,
+    "tax_number": SampleVendorModel.tax_number,
+    "is_supplier": SampleVendorModel.is_supplier,
+    "is_customer": SampleVendorModel.is_customer,
+    "status": SampleVendorModel.status,
+    "currency": SampleVendorModel.currency,
+    "created_at": SampleVendorModel.created_at,
+    "updated_at": SampleVendorModel.updated_at,
+}
+
 
 class VendorHandler:
     """Handler for vendor fetch, create, update, and delete operations."""
+
+    def build_query(self, client_id: UUID) -> Select:
+        """Return base SELECT filtered by client_id."""
+        return select(SampleVendorModel).where(SampleVendorModel.client_id == client_id)
+
+    def get_column(self, field_path: str) -> Column | None:
+        """Resolve field path to SQLAlchemy column."""
+        return _COLUMN_MAP.get(field_path)
 
     async def fetch(self, session: AsyncSession, client_id: UUID) -> list[dict[str, Any]]:
         """Fetch vendors from database."""

@@ -1,11 +1,13 @@
 """Query engine for translating DSL filters to SQLAlchemy expressions."""
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, not_, or_
+from sqlalchemy import and_, asc, desc, not_, or_
 
+from app.core.constants import EXPORT_BATCH_SIZE
 from app.core.logging import get_logger
 from app.domain.entities import (
     ExportConfig,
@@ -139,6 +141,159 @@ class ExportQueryEngine:
             "limit": config.limit,
             "offset": config.offset,
         }
+
+    # ------------------------------------------------------------------
+    # Streaming export with SQL pushdown
+    # ------------------------------------------------------------------
+
+    async def execute_export_streaming(
+        self, config: ExportConfig, client_id: UUID
+    ) -> tuple[int, AsyncGenerator[list[dict[str, Any]], None]]:
+        """Execute an export with SQL-level filtering/sorting, yielding batches.
+
+        Returns:
+            Tuple of (total_count, async_generator_of_batches).
+            Each batch is a list of dicts with only the requested fields.
+        """
+        source_fields = config.get_source_fields()
+        field_mappings = config.get_field_mappings()
+
+        # Validate fields
+        for field in source_fields:
+            if not validate_field_path(config.entity, field):
+                raise ValueError(
+                    f"Field '{field}' is not allowed for entity '{config.entity.value}'"
+                )
+
+        # Validate filters
+        if config.filters:
+            self._validate_filter_group(config.entity, config.filters)
+
+        # Get handler for column resolution
+        handler = self._get_handler(config.entity)
+
+        # Build SQL WHERE clauses from filter DSL
+        filter_clauses = []
+        if config.filters and handler is not None:
+            sql_expr = self._translate_filter_group(handler, config.filters)
+            if sql_expr is not None:
+                filter_clauses.append(sql_expr)
+
+        # Build SQL ORDER BY from sort config
+        sort_columns: list[Any] = []
+        if config.sort and handler is not None:
+            for sort_item in config.sort:
+                field = sort_item.get("field", "")
+                direction = sort_item.get("direction", "asc").lower()
+                col = handler.get_column(field)
+                if col is not None:
+                    sort_columns.append(desc(col) if direction == "desc" else asc(col))
+
+        # Get total count
+        total_count = await self.saas_client.get_total_count(
+            config.entity, client_id, filter_clauses=filter_clauses
+        )
+
+        # Build streaming generator with field selection applied
+        raw_generator = self.saas_client.fetch_data_streaming(
+            entity=config.entity,
+            client_id=client_id,
+            sort_columns=sort_columns if sort_columns else None,
+            filter_clauses=filter_clauses if filter_clauses else None,
+            limit=config.limit,
+            offset=config.offset,
+            batch_size=EXPORT_BATCH_SIZE,
+        )
+
+        async def _select_fields_streaming() -> AsyncGenerator[list[dict[str, Any]], None]:
+            async for batch in raw_generator:
+                yield self._select_fields(batch, source_fields, config.entity, field_mappings)
+
+        return total_count, _select_fields_streaming()
+
+    def _get_handler(self, entity: ExportEntity) -> Any | None:
+        """Get the entity handler from the SaaS client."""
+        # Access the handler registry on the SaaS client (BaseSaaSApiClient)
+        if hasattr(self.saas_client, "_handlers"):
+            return self.saas_client._handlers.get(entity)
+        return None
+
+    def _translate_filter_group(self, handler: Any, group: ExportFilterGroup) -> Any | None:
+        """Translate a filter group into a SQLAlchemy expression."""
+        expressions = []
+
+        for filter_item in group.filters:
+            expr = self._translate_filter(handler, filter_item)
+            if expr is not None:
+                expressions.append(expr)
+
+        for sub_group in group.groups:
+            expr = self._translate_filter_group(handler, sub_group)
+            if expr is not None:
+                expressions.append(expr)
+
+        if not expressions:
+            return None
+
+        return self._combine_filters(group.operator, expressions)
+
+    def _translate_filter(self, handler: Any, filter_item: ExportFilter) -> Any | None:
+        """Translate a single filter into a SQLAlchemy expression."""
+        col = handler.get_column(filter_item.field)
+        if col is None:
+            logger.warning(f"Cannot resolve column for filter field: {filter_item.field}")
+            return None
+
+        value = filter_item.value
+
+        # Resolve relative dates
+        if isinstance(value, str) and value.startswith("relative:"):
+            try:
+                value = resolve_relative_date(value)
+            except ValueError as e:
+                logger.warning(f"Failed to resolve relative date: {e}")
+                return None
+
+        # For BETWEEN, resolve each element
+        if filter_item.operator == ExportFilterOperator.BETWEEN and isinstance(value, list):
+            resolved = []
+            for v in value:
+                if isinstance(v, str) and v.startswith("relative:"):
+                    try:
+                        resolved.append(resolve_relative_date(v))
+                    except ValueError:
+                        return None
+                else:
+                    resolved.append(v)
+            value = resolved
+
+        op = filter_item.operator
+        if op == ExportFilterOperator.EQ:
+            return col == value
+        elif op == ExportFilterOperator.NE:
+            return col != value
+        elif op == ExportFilterOperator.LT:
+            return col < value
+        elif op == ExportFilterOperator.LTE:
+            return col <= value
+        elif op == ExportFilterOperator.GT:
+            return col > value
+        elif op == ExportFilterOperator.GTE:
+            return col >= value
+        elif op == ExportFilterOperator.IN:
+            return col.in_(value)
+        elif op == ExportFilterOperator.BETWEEN:
+            return col.between(value[0], value[1])
+        elif op == ExportFilterOperator.CONTAINS:
+            return col.ilike(f"%{value}%")
+        elif op == ExportFilterOperator.STARTSWITH:
+            return col.like(f"{value}%")
+        elif op == ExportFilterOperator.ENDSWITH:
+            return col.like(f"%{value}")
+        elif op == ExportFilterOperator.ILIKE:
+            return col.ilike(f"%{value}%")
+        else:
+            return None
 
     def _validate_filter_group(self, entity: ExportEntity, group: ExportFilterGroup) -> None:
         """Validate a filter group recursively."""

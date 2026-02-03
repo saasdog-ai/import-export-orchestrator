@@ -236,7 +236,7 @@ class ExportConfig(BaseModel):
     limit: int | None = Field(
         default=None,
         ge=1,
-        le=10000,
+        le=100000,
         description="Maximum number of records to export.",
     )
     offset: int = Field(
