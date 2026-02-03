@@ -172,6 +172,60 @@ class AzureBlobStorage:
             logger.error(f"Failed to generate SAS URL: {e}")
             raise
 
+    async def generate_presigned_upload_url(
+        self, remote_file_path: str, content_type: str, expiration_seconds: int = 3600
+    ) -> str:
+        """Generate a SAS URL for uploading to Azure Blob Storage."""
+        logger.info(
+            f"Cloud storage presigned upload URL request: service=Azure, "
+            f"container={self.container_name}, remote_path={remote_file_path}, "
+            f"content_type={content_type}, expiration_seconds={expiration_seconds}"
+        )
+
+        try:
+            from datetime import UTC, datetime, timedelta
+
+            from azure.storage.blob import BlobSasPermissions, generate_blob_sas
+
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, blob=remote_file_path
+            )
+
+            sas_token = generate_blob_sas(
+                account_name=self.blob_service_client.account_name,
+                container_name=self.container_name,
+                blob_name=remote_file_path,
+                account_key=None,
+                permission=BlobSasPermissions(write=True, create=True),
+                expiry=datetime.now(UTC) + timedelta(seconds=expiration_seconds),
+            )
+
+            url = f"{blob_client.url}?{sas_token}"
+
+            logger.info(
+                f"Cloud storage presigned upload URL generated: service=Azure, "
+                f"container={self.container_name}, remote_path={remote_file_path}, "
+                f"url_length={len(url)}"
+            )
+            return url
+        except AzureError as e:
+            logger.error(f"Failed to generate SAS upload URL: {e}")
+            raise
+
+    async def file_exists(self, remote_file_path: str) -> bool:
+        """Check if a file exists in Azure Blob Storage."""
+        try:
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, blob=remote_file_path
+            )
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: blob_client.get_blob_properties())
+            return True
+        except Exception:
+            # ResourceNotFoundError is raised if blob doesn't exist
+            return False
+
     async def delete_file(self, remote_file_path: str) -> None:
         """Delete a file from Azure Blob Storage."""
         try:

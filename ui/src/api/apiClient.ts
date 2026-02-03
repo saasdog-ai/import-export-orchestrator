@@ -12,6 +12,7 @@ import type {
   ImportExecuteRequest,
   ImportPreviewRequest,
   ImportPreviewResponse,
+  ImportRequestUploadResponse,
   ImportUploadResponse,
   JobDefinition,
   JobDefinitionClone,
@@ -136,23 +137,49 @@ export function createApiClient(config: ImportExportConfig) {
 
     // Import API
     async uploadImportFile(file: File, entity: string): Promise<ImportUploadResponse> {
-      const formData = new FormData()
-      formData.append('file', file)
+      const contentType = file.type || 'text/csv'
 
-      const authHeader = getAuthTokenHeader()
-      const headers: HeadersInit = {}
-      if (authHeader) {
-        headers['Authorization'] = authHeader
-      }
-
-      const response = await fetch(`${apiBaseUrl}/imports/upload?entity=${entity}`, {
+      // Step 1: Request presigned upload URL
+      const requestUploadResponse = await fetch(`${apiBaseUrl}/imports/request-upload`, {
         method: 'POST',
-        headers,
-        body: formData,
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          filename: file.name,
+          entity,
+          content_type: contentType,
+        }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }))
+      if (!requestUploadResponse.ok) {
+        const errorData = await requestUploadResponse.json().catch(() => ({ detail: 'Unknown error' }))
+        throw new Error(errorData.detail || errorData.message || `HTTP ${requestUploadResponse.status}`)
+      }
+
+      const { upload_url, file_key } = await requestUploadResponse.json() as ImportRequestUploadResponse
+
+      // Step 2: Upload file directly to cloud storage via presigned URL
+      const uploadResponse = await fetch(upload_url, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': contentType },
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Direct upload failed: HTTP ${uploadResponse.status}`)
+      }
+
+      // Step 3: Confirm upload and validate
+      const confirmResponse = await fetch(`${apiBaseUrl}/imports/confirm-upload`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          file_key,
+          entity,
+        }),
+      })
+
+      if (!confirmResponse.ok) {
+        const errorData = await confirmResponse.json().catch(() => ({ message: 'Unknown error' }))
         if (errorData.status === 'validation_failed' && errorData.validation_errors) {
           throw new ValidationError(
             errorData.message || 'File validation failed',
@@ -160,10 +187,10 @@ export function createApiClient(config: ImportExportConfig) {
             errorData.error_count || errorData.validation_errors.length
           )
         }
-        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+        throw new Error(errorData.detail || errorData.message || `HTTP ${confirmResponse.status}`)
       }
 
-      return response.json()
+      return confirmResponse.json()
     },
 
     async previewImport(request: ImportPreviewRequest): Promise<ImportPreviewResponse> {

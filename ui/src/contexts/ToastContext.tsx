@@ -13,8 +13,6 @@ interface ToastContextValue {
 
 const ToastContext = React.createContext<ToastContextValue | null>(null)
 
-const DEFAULT_DURATION = 5000
-
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([])
 
@@ -25,18 +23,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const addToast = React.useCallback(
     (toast: Omit<Toast, "id">) => {
       const id = crypto.randomUUID()
-      const duration = toast.duration ?? DEFAULT_DURATION
-
       setToasts((prev) => [...prev, { ...toast, id }])
-
-      // Auto-remove after duration
-      if (duration > 0) {
-        setTimeout(() => {
-          removeToast(id)
-        }, duration)
-      }
     },
-    [removeToast]
+    []
   )
 
   const createToastHelper = React.useCallback(

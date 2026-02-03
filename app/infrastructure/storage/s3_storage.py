@@ -137,6 +137,55 @@ class S3Storage:
             logger.error(f"Failed to download file from S3: {e}")
             raise
 
+    async def generate_presigned_upload_url(
+        self, remote_file_path: str, content_type: str, expiration_seconds: int = 3600
+    ) -> str:
+        """Generate a pre-signed URL for uploading to S3."""
+        logger.info(
+            f"Cloud storage presigned upload URL request: service=S3, bucket={self.bucket_name}, "
+            f"remote_path={remote_file_path}, content_type={content_type}, "
+            f"expiration_seconds={expiration_seconds}"
+        )
+
+        try:
+            loop = asyncio.get_event_loop()
+            url = await loop.run_in_executor(
+                None,
+                lambda: self.s3_client.generate_presigned_url(
+                    "put_object",
+                    Params={
+                        "Bucket": self.bucket_name,
+                        "Key": remote_file_path,
+                        "ContentType": content_type,
+                    },
+                    ExpiresIn=expiration_seconds,
+                ),
+            )
+
+            logger.info(
+                f"Cloud storage presigned upload URL generated: service=S3, bucket={self.bucket_name}, "
+                f"remote_path={remote_file_path}, url_length={len(url)}"
+            )
+            return str(url)
+        except ClientError as e:
+            logger.error(f"Failed to generate pre-signed upload URL: {e}")
+            raise
+
+    async def file_exists(self, remote_file_path: str) -> bool:
+        """Check if a file exists in S3."""
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.s3_client.head_object(Bucket=self.bucket_name, Key=remote_file_path),
+            )
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                return False
+            logger.error(f"Failed to check file existence in S3: {e}")
+            raise
+
     async def delete_file(self, remote_file_path: str) -> None:
         """Delete a file from S3."""
         try:

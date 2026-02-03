@@ -16,6 +16,9 @@ ALLOWED_FILE_EXTENSIONS = {".csv", ".json"}
 CONTENT_TYPE_CSV = "text/csv"
 CONTENT_TYPE_JSON = "application/json"
 
+# Allowed content types for presigned uploads
+ALLOWED_UPLOAD_CONTENT_TYPES = {"text/csv", "application/json"}
+
 # Export formats
 EXPORT_FORMAT_CSV = "csv"
 EXPORT_FORMAT_JSON = "json"

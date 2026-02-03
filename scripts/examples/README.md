@@ -19,7 +19,7 @@ python scripts/examples/run_sample_export.py
 - Retrieves the download URL
 
 ### `test_import.py`
-Tests the import functionality by uploading a CSV file and executing an import job.
+Tests the import functionality by executing an import job from a local CSV file.
 
 **Usage:**
 ```bash
@@ -27,10 +27,11 @@ python scripts/examples/test_import.py
 ```
 
 **What it does:**
-- Uploads a CSV file for import
-- Validates the file
-- Executes the import job
-- Displays results
+- Calls `POST /imports/execute` with a local CSV file path
+- Polls for job completion
+- Verifies by exporting and checking record count
+
+**Note:** In production, the import flow uses presigned URLs (`/imports/request-upload` → direct upload to cloud → `/imports/confirm-upload` → `/imports/execute`). This script uses local file paths for simplicity.
 
 ### `test_import_validation.py`
 Tests the multi-phase import validation system with both valid and invalid inputs.

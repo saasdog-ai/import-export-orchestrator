@@ -275,61 +275,64 @@ class JobRunnerService:
 
         # Upload to cloud storage if configured
         remote_file_path = None
-        if self.cloud_storage:
-            try:
-                # Generate remote path: exports/{client_id}/{job_id}/{run_id}.{ext}
-                file_ext = FileGenerator.get_file_extension(export_format)
-                remote_file_path = f"exports/{job.client_id}/{job.id}/{job_run.id}{file_ext}"
+        uploaded_to_cloud = False
+        try:
+            if self.cloud_storage:
+                try:
+                    # Generate remote path: exports/{client_id}/{job_id}/{run_id}.{ext}
+                    file_ext = FileGenerator.get_file_extension(export_format)
+                    remote_file_path = f"exports/{job.client_id}/{job.id}/{job_run.id}{file_ext}"
 
-                content_type = FileGenerator.get_content_type(export_format)
-                await self.cloud_storage.upload_file(
-                    local_file_path, remote_file_path, content_type=content_type
-                )
+                    content_type = FileGenerator.get_content_type(export_format)
+                    await self.cloud_storage.upload_file(
+                        local_file_path, remote_file_path, content_type=content_type
+                    )
+                    uploaded_to_cloud = True
 
-                logger.info(
-                    f"Export file uploaded to cloud storage: run_id={job_run.id}, "
-                    f"remote_path={remote_file_path}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to upload file to cloud storage: {e}", exc_info=True)
-                # Continue even if upload fails - file is still available locally
-        else:
-            logger.warning("Cloud storage not configured. File saved locally only.")
+                    logger.info(
+                        f"Export file uploaded to cloud storage: run_id={job_run.id}, "
+                        f"remote_path={remote_file_path}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to upload file to cloud storage: {e}", exc_info=True)
+                    # Continue even if upload fails - file is still available locally
+            else:
+                logger.warning("Cloud storage not configured. File saved locally only.")
 
-        # Clean up local file after upload (if successful)
-        if self.cloud_storage and remote_file_path:
-            try:
-                os.remove(local_file_path)
-                logger.debug(f"Removed local file: {local_file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to remove local file: {e}")
+            # Store file metadata in result_metadata
+            result_metadata = {
+                "count": count,
+                "format": export_format,
+                "fields": output_fields,
+                "worker": worker_id,
+            }
+            if uploaded_to_cloud:
+                result_metadata["remote_file_path"] = remote_file_path
+            else:
+                result_metadata["local_file_path"] = local_file_path
 
-        # Store file metadata in result_metadata
-        result_metadata = {
-            "count": count,
-            "format": export_format,
-            "fields": output_fields,
-            "worker": worker_id,
-        }
-        if remote_file_path:
-            result_metadata["remote_file_path"] = remote_file_path
-        else:
-            result_metadata["local_file_path"] = local_file_path
+            # Update job run with result metadata (status already updated to SUCCEEDED)
+            await self.job_run_repository.update_status(
+                job_run.id,
+                JobStatus.SUCCEEDED,
+                completed_at=datetime.now(UTC),
+                result_metadata=result_metadata,
+            )
 
-        # Update job run with result metadata (status already updated to SUCCEEDED)
-        await self.job_run_repository.update_status(
-            job_run.id,
-            JobStatus.SUCCEEDED,
-            completed_at=datetime.now(UTC),
-            result_metadata=result_metadata,
-        )
-
-        # Log job execution completion
-        logger.info(
-            f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
-            f"status=succeeded, record_count={count}, format={export_format}, "
-            f"file_location={'cloud' if remote_file_path else 'local'}"
-        )
+            # Log job execution completion
+            logger.info(
+                f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
+                f"status=succeeded, record_count={count}, format={export_format}, "
+                f"file_location={'cloud' if uploaded_to_cloud else 'local'}"
+            )
+        finally:
+            # Clean up local file only after successful cloud upload
+            if uploaded_to_cloud:
+                try:
+                    os.remove(local_file_path)
+                    logger.debug(f"Removed local file: {local_file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove local file: {e}")
 
     def _apply_field_mappings(
         self, record: dict[str, Any], field_mappings: dict[str, str]
@@ -609,6 +612,7 @@ class JobRunnerService:
 
             # Download file from cloud storage if needed
             local_file_path = source_file
+            downloaded_temp_file = False
 
             # If file is in cloud storage, download it first
             if self.cloud_storage and not os.path.exists(source_file):
@@ -624,6 +628,7 @@ class JobRunnerService:
 
                     logger.info(f"Downloading file from cloud storage: {source_file}")
                     await self.cloud_storage.download_file(source_file, local_file_path)
+                    downloaded_temp_file = True
                     logger.info(f"Downloaded file to: {local_file_path}")
                 except Exception as e:
                     error_msg = f"Failed to download file from cloud storage: {str(e)}"
@@ -636,62 +641,73 @@ class JobRunnerService:
                     )
                     return
 
-            # CSV files use streaming import (memory-efficient)
-            _, ext = os.path.splitext(local_file_path)
-            if ext.lower() == ".csv":
-                await self._stream_import_csv(job, job_run, worker_id, local_file_path, source_file)
-                return
-
-            # Non-CSV (JSON) — load all into memory (streaming JSON is complex)
             try:
-                data = FileParser.parse_file(local_file_path)
-            except Exception as e:
-                error_msg = f"Failed to parse import file {source_file}: {str(e)}"
-                logger.error(error_msg, exc_info=True)
+                # CSV files use streaming import (memory-efficient)
+                _, ext = os.path.splitext(local_file_path)
+                if ext.lower() == ".csv":
+                    await self._stream_import_csv(
+                        job, job_run, worker_id, local_file_path, source_file
+                    )
+                    return
+
+                # Non-CSV (JSON) — load all into memory (streaming JSON is complex)
+                try:
+                    data = FileParser.parse_file(local_file_path)
+                except Exception as e:
+                    error_msg = f"Failed to parse import file {source_file}: {str(e)}"
+                    logger.error(error_msg, exc_info=True)
+                    await self.job_run_repository.update_status(
+                        job_run.id,
+                        JobStatus.FAILED,
+                        completed_at=datetime.now(UTC),
+                        error_message=error_msg,
+                    )
+                    return
+
+                field_mappings = job.import_config.get_field_mappings()
+                if field_mappings:
+                    data = [self._apply_field_mappings(record, field_mappings) for record in data]
+
+                result = await self.saas_client.import_data(
+                    job.import_config, client_id=job.client_id, data=data
+                )
+
+                result_metadata: dict[str, Any] = {
+                    "imported_count": result.get("imported_count", 0),
+                    "updated_count": result.get("updated_count", 0),
+                    "deleted_count": result.get("deleted_count", 0),
+                    "skipped_count": result.get("skipped_count", 0),
+                    "failed_count": result.get("failed_count", 0),
+                    "source_file": source_file,
+                    "worker": worker_id,
+                }
+                if result.get("errors"):
+                    result_metadata["import_errors"] = result["errors"]
+
                 await self.job_run_repository.update_status(
                     job_run.id,
-                    JobStatus.FAILED,
+                    JobStatus.SUCCEEDED if result.get("failed_count", 0) == 0 else JobStatus.FAILED,
                     completed_at=datetime.now(UTC),
-                    error_message=error_msg,
+                    result_metadata=result_metadata,
+                    error_message=f"{result.get('failed_count', 0)} records failed to import"
+                    if result.get("failed_count", 0) > 0
+                    else None,
                 )
-                return
 
-            field_mappings = job.import_config.get_field_mappings()
-            if field_mappings:
-                data = [self._apply_field_mappings(record, field_mappings) for record in data]
-
-            result = await self.saas_client.import_data(
-                job.import_config, client_id=job.client_id, data=data
-            )
-
-            result_metadata: dict[str, Any] = {
-                "imported_count": result.get("imported_count", 0),
-                "updated_count": result.get("updated_count", 0),
-                "deleted_count": result.get("deleted_count", 0),
-                "skipped_count": result.get("skipped_count", 0),
-                "failed_count": result.get("failed_count", 0),
-                "source_file": source_file,
-                "worker": worker_id,
-            }
-            if result.get("errors"):
-                result_metadata["import_errors"] = result["errors"]
-
-            await self.job_run_repository.update_status(
-                job_run.id,
-                JobStatus.SUCCEEDED if result.get("failed_count", 0) == 0 else JobStatus.FAILED,
-                completed_at=datetime.now(UTC),
-                result_metadata=result_metadata,
-                error_message=f"{result.get('failed_count', 0)} records failed to import"
-                if result.get("failed_count", 0) > 0
-                else None,
-            )
-
-            logger.info(
-                f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
-                f"imported={result.get('imported_count', 0)}, "
-                f"updated={result.get('updated_count', 0)}, "
-                f"failed={result.get('failed_count', 0)}"
-            )
+                logger.info(
+                    f"Job execution completed: run_id={job_run.id}, job_id={job.id}, "
+                    f"imported={result.get('imported_count', 0)}, "
+                    f"updated={result.get('updated_count', 0)}, "
+                    f"failed={result.get('failed_count', 0)}"
+                )
+            finally:
+                # Clean up temp file downloaded from cloud storage
+                if downloaded_temp_file and os.path.exists(local_file_path):
+                    try:
+                        os.remove(local_file_path)
+                        logger.debug(f"Cleaned up temp import file: {local_file_path}")
+                    except OSError as e:
+                        logger.warning(f"Failed to clean up temp import file: {e}")
         else:
             # Fallback: Fetch data from SaaS API (for backward compatibility)
             logger.warning("No source_file in import config. Fetching from SaaS API (mock).")

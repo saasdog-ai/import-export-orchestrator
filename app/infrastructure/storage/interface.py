@@ -54,6 +54,36 @@ class CloudStorageInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def generate_presigned_upload_url(
+        self, remote_file_path: str, content_type: str, expiration_seconds: int = 3600
+    ) -> str:
+        """
+        Generate a pre-signed URL for uploading a file.
+
+        Args:
+            remote_file_path: Path/name for the file in cloud storage
+            content_type: MIME type of the file (e.g., 'text/csv')
+            expiration_seconds: URL expiration time in seconds (default: 1 hour)
+
+        Returns:
+            Pre-signed URL for uploading the file
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def file_exists(self, remote_file_path: str) -> bool:
+        """
+        Check if a file exists in cloud storage.
+
+        Args:
+            remote_file_path: Path/name of the file in cloud storage
+
+        Returns:
+            True if the file exists, False otherwise
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_file(self, remote_file_path: str) -> None:
         """
         Delete a file from cloud storage.

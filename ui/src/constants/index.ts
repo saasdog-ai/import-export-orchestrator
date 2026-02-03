@@ -21,15 +21,6 @@ export const PAGINATION = {
   PAGE_SIZE_OPTIONS: [10, 20, 50, 100],
 } as const
 
-// Toast notification durations (in milliseconds)
-export const TOAST_DURATION = {
-  DEFAULT: 5000,
-  SUCCESS: 3000,
-  ERROR: 7000,
-  WARNING: 5000,
-  INFO: 5000,
-} as const
-
 // Job status values
 export const JOB_STATUS = {
   PENDING: "pending",

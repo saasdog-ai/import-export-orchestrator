@@ -1,22 +1,25 @@
 """API routes for import operations."""
 
 import os
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from app.api.dto import (
     ErrorResponse,
+    ImportConfirmUploadRequest,
+    ImportConfirmUploadResponse,
     ImportExecuteRequest,
     ImportPreviewRequest,
     ImportPreviewResponse,
+    ImportRequestUploadRequest,
+    ImportRequestUploadResponse,
 )
 from app.auth.backend import get_current_client_id
 from app.core.config import get_settings
 from app.core.dependency_injection import get_cloud_storage, get_job_service
 from app.core.logging import get_logger
-from app.domain.entities import ExportEntity
 from app.infrastructure.storage.interface import CloudStorageInterface
 from app.services.import_validator import ImportValidator
 from app.services.job_service import JobService
@@ -27,101 +30,166 @@ settings = get_settings()
 
 
 @router.post(
-    "/upload",
-    summary="Upload and validate import file",
+    "/request-upload",
+    response_model=ImportRequestUploadResponse,
+    summary="Request a presigned URL for direct file upload",
     description="""
-    Phase 1: Upload a file, validate its format and content, then store it temporarily in cloud storage.
+    Step 1 of the presigned upload flow: get a presigned URL for uploading a file
+    directly to cloud storage, bypassing API Gateway size limits.
 
-    This endpoint performs:
-    1. File format validation (extension, size, encoding)
-    2. Content validation (required fields, data types, malicious input detection)
-    3. Temporary storage in cloud storage (if configured)
-
-    If validation succeeds, returns a `file_path` that can be used in Phase 2 (`/execute`).
-    If validation fails, returns detailed error information including row and field locations.
+    After receiving the URL, upload the file directly using an HTTP PUT request,
+    then call `/imports/confirm-upload` to validate the file.
     """,
     responses={
-        200: {
-            "description": "File uploaded and validated successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "status": "success",
-                        "message": "File validated and uploaded successfully",
-                        "file_path": "imports/temp/550e8400-e29b-41d4-a716-446655440000/bills.csv",
-                        "record_count": 100,
-                    }
-                }
-            },
-        },
-        400: {
-            "description": "Validation failed",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "status": "error",
-                        "message": "Validation failed",
-                        "errors": [
-                            {
-                                "row": 2,
-                                "field": "amount",
-                                "error": "Field 'amount' must be a valid number",
-                            }
-                        ],
-                    }
-                }
-            },
-            "model": ErrorResponse,
-        },
-        413: {"description": "File too large", "model": ErrorResponse},
+        200: {"description": "Presigned upload URL generated"},
+        400: {"description": "Invalid content type or filename", "model": ErrorResponse},
+        500: {"description": "Cloud storage not configured", "model": ErrorResponse},
+    },
+)
+async def request_upload(
+    request: ImportRequestUploadRequest,
+    authenticated_client_id: UUID = Depends(get_current_client_id),
+    cloud_storage: CloudStorageInterface = Depends(get_cloud_storage),
+) -> ImportRequestUploadResponse:
+    """Request a presigned URL for uploading an import file directly to cloud storage."""
+    from app.core.constants import ALLOWED_FILE_EXTENSIONS, ALLOWED_UPLOAD_CONTENT_TYPES
+
+    logger.info(
+        f"Presigned upload URL request: client_id={authenticated_client_id}, "
+        f"filename={request.filename}, entity={request.entity.value}, "
+        f"content_type={request.content_type}"
+    )
+
+    # Validate content type
+    if request.content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported content type: {request.content_type}. "
+            f"Allowed types: {', '.join(sorted(ALLOWED_UPLOAD_CONTENT_TYPES))}",
+        )
+
+    # Validate filename extension
+    _, ext = os.path.splitext(request.filename)
+    if ext.lower() not in ALLOWED_FILE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file extension: {ext}. "
+            f"Allowed extensions: {', '.join(sorted(ALLOWED_FILE_EXTENSIONS))}",
+        )
+
+    if not cloud_storage:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cloud storage is not configured. Presigned uploads require cloud storage.",
+        )
+
+    # Generate S3 key with UUID to avoid collisions
+    file_key = f"imports/{authenticated_client_id}/temp/{uuid4()}_{request.filename}"
+    expiration = settings.presigned_url_expiration or 3600
+
+    try:
+        upload_url = await cloud_storage.generate_presigned_upload_url(
+            file_key, request.content_type, expiration_seconds=expiration
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate presigned upload URL: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate upload URL",
+        ) from e
+
+    logger.info(
+        f"Presigned upload URL generated: client_id={authenticated_client_id}, "
+        f"file_key={file_key}, expires_in={expiration}"
+    )
+
+    return ImportRequestUploadResponse(
+        upload_url=upload_url,
+        file_key=file_key,
+        expires_in=expiration,
+    )
+
+
+@router.post(
+    "/confirm-upload",
+    response_model=ImportConfirmUploadResponse,
+    summary="Confirm and validate a file uploaded via presigned URL",
+    description="""
+    Step 2 of the presigned upload flow: after uploading a file directly to cloud storage
+    using the presigned URL from `/request-upload`, call this endpoint to validate
+    the file and get column information for the mapping UI.
+
+    The `file_key` from the `/request-upload` response must be provided.
+    The validated `file_path` can then be passed to `/preview` or `/execute`.
+    """,
+    responses={
+        200: {"description": "File validated successfully"},
+        400: {"description": "Validation failed", "model": ErrorResponse},
+        403: {"description": "Tenant isolation violation", "model": ErrorResponse},
+        404: {"description": "File not found in cloud storage", "model": ErrorResponse},
         500: {"description": "Internal server error", "model": ErrorResponse},
     },
 )
-async def upload_import_file(
-    file: UploadFile = File(...),
-    entity: ExportEntity = Query(default=ExportEntity.BILL, description="Entity type to import"),
+async def confirm_upload(
+    request: ImportConfirmUploadRequest,
     authenticated_client_id: UUID = Depends(get_current_client_id),
     cloud_storage: CloudStorageInterface = Depends(get_cloud_storage),
-) -> JSONResponse:
-    """
-    Upload and validate an import file.
-    This is Phase 1 of the import process:
-    1. Upload file to temporary location in cloud storage
-    2. Download and validate file format and content
-    3. Return validation results
-    If validation fails, errors include row and field information.
-    """
-    try:
-        # Log request input (excluding file content)
-        file_size = file.size if hasattr(file, "size") else "unknown"
-        logger.info(
-            f"Import file upload request: client_id={authenticated_client_id}, "
-            f"filename={file.filename}, content_type={file.content_type}, "
-            f"file_size={file_size}, entity={entity.value}"
+) -> ImportConfirmUploadResponse | JSONResponse:
+    """Confirm and validate a file that was uploaded via presigned URL."""
+    logger.info(
+        f"Confirm upload request: client_id={authenticated_client_id}, "
+        f"file_key={request.file_key}, entity={request.entity.value}"
+    )
+
+    # Verify tenant isolation — file_key must start with this client's prefix
+    expected_prefix = f"imports/{authenticated_client_id}/"
+    if not request.file_key.startswith(expected_prefix):
+        logger.warning(
+            f"Tenant isolation violation: client_id={authenticated_client_id}, "
+            f"file_key={request.file_key}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: file does not belong to this client",
         )
 
-        # Phase 1: Upload to temporary location
-        # Generate temp file path
-        # Save uploaded file temporarily
-        temp_dir = settings.export_local_path or "/tmp"
-        os.makedirs(temp_dir, exist_ok=True)
-        temp_file_path = os.path.join(temp_dir, f"import_{authenticated_client_id}_{file.filename}")
-        # Save file locally first for validation
-        with open(temp_file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        actual_file_size = len(content)
-        logger.info(
-            f"File saved for validation: path={temp_file_path}, size={actual_file_size} bytes"
+    if not cloud_storage:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cloud storage is not configured",
         )
+
+    # Verify the file exists in cloud storage
+    try:
+        exists = await cloud_storage.file_exists(request.file_key)
+    except Exception as e:
+        logger.error(f"Failed to check file existence: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify file in cloud storage",
+        ) from e
+
+    if not exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found in cloud storage. Ensure the file was uploaded successfully.",
+        )
+
+    # Download file to local temp path for validation
+    temp_dir = settings.export_local_path or "/tmp"
+    os.makedirs(temp_dir, exist_ok=True)
+    filename = os.path.basename(request.file_key)
+    temp_file_path = os.path.join(temp_dir, f"confirm_{authenticated_client_id}_{filename}")
+
+    try:
+        await cloud_storage.download_file(request.file_key, temp_file_path)
 
         # Validate file format
         is_valid, format_error = ImportValidator.validate_file_format(temp_file_path)
         if not is_valid:
             logger.warning(
-                f"File format validation failed: filename={file.filename}, error={format_error}"
+                f"File format validation failed: file_key={request.file_key}, error={format_error}"
             )
-            os.remove(temp_file_path)
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
@@ -131,18 +199,17 @@ async def upload_import_file(
                     "error_count": 1,
                 },
             )
+
         # Validate file content
         is_valid, validation_errors = await ImportValidator.validate_import_file(
-            temp_file_path, entity
+            temp_file_path, request.entity
         )
         if not is_valid:
             error_count = len(validation_errors)
             logger.warning(
-                f"File content validation failed: filename={file.filename}, "
-                f"entity={entity.value}, error_count={error_count}"
+                f"File content validation failed: file_key={request.file_key}, "
+                f"entity={request.entity.value}, error_count={error_count}"
             )
-            # Clean up temp file
-            os.remove(temp_file_path)
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
@@ -152,70 +219,37 @@ async def upload_import_file(
                     "error_count": error_count,
                 },
             )
-        # Extract column names for the frontend mapping UI
+
+        # Extract columns
         columns, has_action_column = ImportValidator.extract_columns(temp_file_path)
 
-        # Validation passed - upload to cloud storage
-        if cloud_storage:
-            # Upload to temp location in cloud storage
-            temp_blob_path = f"imports/{authenticated_client_id}/temp/{file.filename}"
-            try:
-                remote_path = await cloud_storage.upload_file(
-                    temp_file_path, temp_blob_path, content_type=file.content_type
-                )
-                # Clean up local temp file
-                os.remove(temp_file_path)
-                logger.info(
-                    f"Import file validated and uploaded: client_id={authenticated_client_id}, "
-                    f"filename={file.filename}, remote_path={remote_path}, entity={entity.value}, "
-                    f"columns={len(columns)}, has_action_column={has_action_column}"
-                )
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": "validated",
-                        "message": "File uploaded and validated successfully",
-                        "file_path": remote_path,
-                        "entity": entity.value,
-                        "filename": file.filename,
-                        "columns": columns,
-                        "has_action_column": has_action_column,
-                    },
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to upload file to cloud storage: filename={file.filename}, error={str(e)}"
-                )
-                os.remove(temp_file_path)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to upload file to cloud storage: {str(e)}",
-                ) from e
-        else:
-            # No cloud storage - keep file locally
-            logger.info(
-                f"Import file validated (local storage): client_id={authenticated_client_id}, "
-                f"filename={file.filename}, path={temp_file_path}, entity={entity.value}, "
-                f"columns={len(columns)}, has_action_column={has_action_column}"
-            )
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "status": "validated",
-                    "message": "File validated successfully (stored locally)",
-                    "file_path": temp_file_path,
-                    "entity": entity.value,
-                    "filename": file.filename,
-                    "columns": columns,
-                    "has_action_column": has_action_column,
-                },
-            )
+        logger.info(
+            f"Confirm upload validated: client_id={authenticated_client_id}, "
+            f"file_key={request.file_key}, entity={request.entity.value}, "
+            f"columns={len(columns)}, has_action_column={has_action_column}"
+        )
+
+        return ImportConfirmUploadResponse(
+            status="validated",
+            message="File uploaded and validated successfully",
+            file_path=request.file_key,
+            entity=request.entity.value,
+            filename=filename,
+            columns=columns,
+            has_action_column=has_action_column,
+        )
     except HTTPException:
         raise
-    except ValueError as e:
-        # Convert ValueError to HTTPException for validation errors
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    # Generic exceptions are handled by global exception handler for secure error messages
+    except Exception as e:
+        logger.error(f"Error during confirm-upload: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate uploaded file",
+        ) from e
+    finally:
+        # Clean up local temp file
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
 
 @router.post(
@@ -236,7 +270,7 @@ async def upload_import_file(
     - Valid and invalid counts
     - Each record with its data, validation status, and any errors
 
-    The `file_path` should be obtained from the `/upload` endpoint.
+    The `file_path` should be obtained from the `/confirm-upload` endpoint.
     """,
     responses={
         200: {
@@ -361,7 +395,7 @@ async def preview_import(
     2. Triggers the import job execution
     3. Returns the job run ID for tracking
 
-    The `file_path` should be obtained from the `/upload` endpoint.
+    The `file_path` should be obtained from the `/confirm-upload` endpoint.
     Field mappings can be used to rename source columns to target field names.
     """,
     responses={

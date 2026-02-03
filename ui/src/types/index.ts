@@ -152,6 +152,12 @@ export interface ImportUploadResponse {
   has_action_column?: boolean
 }
 
+export interface ImportRequestUploadResponse {
+  upload_url: string
+  file_key: string
+  expires_in: number
+}
+
 // Job types
 export interface ImportConfig {
   source: string

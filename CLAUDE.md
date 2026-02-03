@@ -121,6 +121,33 @@ If entity X has a relationship to entity Y (e.g., bill -> vendor), the `fetch()`
 ```
 The query engine resolves `vendor.name` by looking up `record["vendor"]["name"]`.
 
+## Import Flow (Presigned URL Upload)
+
+The import flow uses presigned URLs so clients upload files directly to cloud storage, bypassing API Gateway size limits:
+
+1. **`POST /imports/request-upload`** — Client sends `{filename, entity, content_type}`. Server validates, generates an S3/Azure/GCP presigned PUT URL, returns `{upload_url, file_key, expires_in}`.
+2. **Client uploads directly** — Client PUTs the file to the presigned URL (bypasses API Gateway entirely).
+3. **`POST /imports/confirm-upload`** — Client sends `{file_key, entity}`. Server downloads from cloud, validates file format and content, returns `{columns, file_path, entity, filename}`. Enforces tenant isolation via file key prefix.
+4. **`POST /imports/preview`** — (Optional) Preview all records with per-row validation status before executing.
+5. **`POST /imports/execute`** — Execute the import using `{file_path, entity}` from confirm-upload.
+
+### Key design decisions
+- Files are downloaded to `/tmp` for validation because `ImportValidator` operates on local file paths
+- Temp files are cleaned up in `finally` blocks after processing (both import and export paths)
+- Tenant isolation: `file_key` must match `imports/{client_id}/...` — server rejects mismatched keys with 403
+- Allowed upload types: `text/csv`, `application/json` (defined in `app/core/constants.py`)
+- The old `POST /imports/upload` multipart endpoint has been removed
+
+### Storage interface methods for presigned uploads
+- `CloudStorageInterface.generate_presigned_upload_url()` — S3 `put_object`, Azure SAS with write permissions, GCP signed URL with PUT
+- `CloudStorageInterface.file_exists()` — S3 `head_object`, Azure `get_blob_properties`, GCP `blob.exists()`
+
+### Temp file lifecycle
+- **Export with cloud storage**: generate locally → upload to cloud → delete local file
+- **Export without cloud storage** (dev): file stays in `/tmp` for download via `/exports/{run_id}/file`
+- **Import from cloud storage**: download to `/tmp` → validate/process → delete local file in `finally`
+- **Import from local file** (dev): use file directly, no temp file created
+
 ## Infrastructure Deployment
 
 ### AWS

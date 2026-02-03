@@ -232,6 +232,44 @@ class HealthResponse(BaseModel):
 # ============================================================================
 
 
+class ImportRequestUploadRequest(BaseModel):
+    """Request to get a presigned URL for uploading an import file directly to cloud storage."""
+
+    filename: str = Field(..., description="Original filename (e.g., 'bills.csv')")
+    entity: ExportEntity = Field(..., description="Entity type to import")
+    content_type: str = Field(default="text/csv", description="MIME type of the file")
+
+
+class ImportRequestUploadResponse(BaseModel):
+    """Response containing a presigned upload URL."""
+
+    upload_url: str = Field(..., description="Presigned PUT URL for direct upload")
+    file_key: str = Field(..., description="Cloud storage key to pass to confirm-upload")
+    expires_in: int = Field(..., description="Seconds until the upload URL expires")
+
+
+class ImportConfirmUploadRequest(BaseModel):
+    """Request to confirm and validate a file uploaded via presigned URL."""
+
+    file_key: str = Field(..., description="Cloud storage key from request-upload response")
+    entity: ExportEntity = Field(..., description="Entity type to import")
+
+
+class ImportConfirmUploadResponse(BaseModel):
+    """Response after validating an uploaded file."""
+
+    status: str = Field(..., description="Validation status (e.g., 'validated')")
+    message: str = Field(..., description="Human-readable status message")
+    file_path: str = Field(..., description="Cloud storage path to pass to /preview or /execute")
+    entity: str = Field(..., description="Entity type")
+    filename: str = Field(..., description="Original filename")
+    columns: list[str] = Field(..., description="Column names from the file")
+    has_action_column: bool = Field(
+        default=False,
+        description="Whether the file has an _action column for per-record actions",
+    )
+
+
 class ImportPreviewRequest(BaseModel):
     """Request to preview import data with validation results.
 

@@ -9,8 +9,9 @@ A production-ready backend job runner service for asynchronous import/export ope
 - **Cron Scheduling**: Schedule jobs using cron expressions with APScheduler
 - **REST API**: Comprehensive REST API for job management and monitoring
 - **Database Tracking**: Track job status and history in PostgreSQL
-- **Pluggable Security**: JWT authentication placeholder (ready for implementation)
-- **Cloud-Agnostic**: Designed to run on AWS, Azure, or GCP
+- **Presigned URL Uploads**: Import files upload directly to cloud storage via presigned URLs, bypassing API Gateway size limits
+- **JWT Authentication**: Multi-tenant isolation via JWT with JWKS, secret-key, and dev bypass modes
+- **Multi-Cloud Storage**: S3, Azure Blob Storage, and GCP Cloud Storage support for file storage
 - **Containerized**: Fully containerized with Docker and Docker Compose
 - **Clean Architecture**: Hexagonal architecture with strong abstractions
 
@@ -33,18 +34,26 @@ A production-ready backend job runner service for asynchronous import/export ope
 import-export-orchestrator/
 ├── app/
 │   ├── api/              # FastAPI routers and DTOs
-│   ├── auth/             # Authentication backend (pluggable)
-│   ├── core/             # Configuration, DI, logging
+│   ├── auth/             # JWT authentication (JWKS + secret-key modes)
+│   ├── core/             # Configuration, DI, logging, constants
 │   ├── domain/           # Domain entities and business logic
 │   ├── entities/         # Entity registry (field metadata, relationships)
-│   ├── infrastructure/   # DB, query engine, scheduler, SaaS client
+│   ├── infrastructure/
+│   │   ├── db/           # SQLAlchemy models, repositories, migrations
+│   │   ├── query/        # Query engine and schema generation
+│   │   ├── queue/        # SQS, Azure Queue, GCP Pub/Sub adapters
+│   │   ├── storage/      # S3, Azure Blob, GCP Cloud Storage adapters
+│   │   ├── saas/         # SaaS API client and entity handlers
+│   │   └── scheduling/   # APScheduler integration
 │   ├── services/         # Business logic services
 │   └── main.py           # FastAPI application entry point
+├── ui/                   # React frontend (Vite + TypeScript + Tailwind)
 ├── infra/
 │   ├── aws/terraform/    # AWS infrastructure (ECS/Fargate)
-│   ├── azure/            # Azure infrastructure (placeholder)
-│   └── gcp/              # GCP infrastructure (placeholder)
-├── tests/                # Test suite
+│   ├── azure/            # Azure infrastructure
+│   └── gcp/              # GCP infrastructure
+├── tests/                # Test suite (unit + integration)
+├── test-data/            # Sample CSV files for import testing
 ├── alembic/              # Database migrations
 └── docker-compose.yml    # Local development setup
 ```
@@ -156,9 +165,22 @@ See [docs/DATE_FILTERING.md](docs/DATE_FILTERING.md) for detailed documentation.
 
 ### Import Operations
 
-- `POST /imports/upload` - Upload a CSV/JSON file for import
-- `POST /imports/preview` - Preview import changes before execution
+- `POST /imports/request-upload` - Get a presigned URL for direct file upload to cloud storage
+- `POST /imports/confirm-upload` - Validate an uploaded file and get column metadata
+- `POST /imports/preview` - Preview import changes with per-row validation before execution
 - `POST /imports/execute` - Execute the import (CREATE, UPDATE, UPSERT, or DELETE)
+
+#### Presigned URL Upload Flow
+
+Imports use a presigned URL flow so clients upload files directly to cloud storage, bypassing API Gateway size limits:
+
+1. **Request upload URL**: `POST /imports/request-upload` with `{filename, entity, content_type}` — returns a presigned PUT URL and a `file_key`
+2. **Upload directly**: Client PUTs the file to the presigned URL (goes directly to S3/Azure/GCP, no API Gateway involved)
+3. **Confirm & validate**: `POST /imports/confirm-upload` with `{file_key, entity}` — server downloads from cloud, validates format and content, returns column info for the mapping UI
+4. **Preview** (optional): `POST /imports/preview` with `{file_path, entity}` — returns per-row validation results
+5. **Execute**: `POST /imports/execute` with `{file_path, entity}` — runs the import job asynchronously
+
+Tenant isolation is enforced via file key prefix (`imports/{client_id}/...`). The server rejects requests where the `file_key` doesn't match the authenticated client.
 
 See the interactive API documentation at `/docs` for detailed request/response schemas.
 
@@ -265,11 +287,13 @@ Configure the following secrets in GitHub:
 
 ### Authentication
 
-The project includes a pluggable authentication module (`app/auth/`) with a JWT backend. Currently, authentication is disabled (allow-all mode) to allow development. To enable:
+The project includes a JWT authentication module (`app/auth/`) supporting:
 
-1. Update `JWTAuthBackend.enabled = True` in `app/auth/backend.py`
-2. Implement JWT validation in `validate_token()` method
-3. Update API routes to enforce authentication
+- **JWKS mode** (RS256/ES256): Fetches public keys from a JWKS endpoint for token verification
+- **Secret key mode** (HS256): Uses a shared secret for token signing/verification
+- **Dev mode**: When `AUTH_ENABLED=false` (default), all requests use a default client ID (`00000000-0000-0000-0000-000000000000`)
+
+To enable authentication in production, set `AUTH_ENABLED=true` and configure the JWT settings in `.env` (see `.env.example`).
 
 ### Secrets Management
 

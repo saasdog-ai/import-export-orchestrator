@@ -9,7 +9,6 @@ export interface Toast {
   title: string
   description?: string
   variant: ToastVariant
-  duration?: number
 }
 
 interface ToastProps extends Toast {

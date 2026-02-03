@@ -120,6 +120,52 @@ class GCPCloudStorage:
             logger.error(f"Failed to generate signed URL: {e}")
             raise
 
+    async def generate_presigned_upload_url(
+        self, remote_file_path: str, content_type: str, expiration_seconds: int = 3600
+    ) -> str:
+        """Generate a signed URL for uploading to GCP Cloud Storage."""
+        logger.info(
+            f"Cloud storage presigned upload URL request: service=GCP, bucket={self.bucket_name}, "
+            f"remote_path={remote_file_path}, content_type={content_type}, "
+            f"expiration_seconds={expiration_seconds}"
+        )
+
+        try:
+            bucket = self.storage_client.bucket(self.bucket_name)
+            blob = bucket.blob(remote_file_path)
+
+            loop = asyncio.get_event_loop()
+            url = await loop.run_in_executor(
+                None,
+                lambda: blob.generate_signed_url(
+                    expiration=expiration_seconds,
+                    method="PUT",
+                    content_type=content_type,
+                ),
+            )
+
+            logger.info(
+                f"Cloud storage presigned upload URL generated: service=GCP, "
+                f"bucket={self.bucket_name}, remote_path={remote_file_path}, "
+                f"url_length={len(url)}"
+            )
+            return str(url)
+        except GoogleCloudError as e:
+            logger.error(f"Failed to generate signed upload URL: {e}")
+            raise
+
+    async def file_exists(self, remote_file_path: str) -> bool:
+        """Check if a file exists in GCP Cloud Storage."""
+        try:
+            bucket = self.storage_client.bucket(self.bucket_name)
+            blob = bucket.blob(remote_file_path)
+
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, lambda: blob.exists())
+        except GoogleCloudError as e:
+            logger.error(f"Failed to check file existence in GCP: {e}")
+            raise
+
     async def delete_file(self, remote_file_path: str) -> None:
         """Delete a file from GCP Cloud Storage."""
         try:
