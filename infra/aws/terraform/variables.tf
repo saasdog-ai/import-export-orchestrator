@@ -162,7 +162,7 @@ variable "sqs_message_retention" {
 variable "allowed_origins" {
   description = "Allowed CORS origins for the application"
   type        = list(string)
-  default     = ["http://localhost:3000", "http://localhost:5173"]
+  default     = ["http://localhost:3000", "http://localhost:4000", "http://localhost:5173"]
 }
 
 # HTTPS / TLS

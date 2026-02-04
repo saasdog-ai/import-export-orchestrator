@@ -76,11 +76,6 @@ export function createApiClient(config: ImportExportConfig) {
     return headers
   }
 
-  function getAuthTokenHeader(): string | null {
-    const token = getAuthToken()
-    return token ? `Bearer ${token}` : null
-  }
-
   async function handleResponse<T>(response: Response): Promise<T> {
     if (response.status === 401) {
       onUnauthorized?.()

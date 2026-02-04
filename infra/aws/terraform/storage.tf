@@ -38,6 +38,19 @@ resource "aws_s3_bucket_public_access_block" "exports" {
   restrict_public_buckets = true
 }
 
+# CORS configuration for presigned URL uploads from browser
+resource "aws_s3_bucket_cors_configuration" "exports" {
+  bucket = aws_s3_bucket.exports.id
+
+  cors_rule {
+    allowed_headers = ["Content-Type"]
+    allowed_methods = ["PUT"]
+    allowed_origins = var.allowed_origins
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }
+}
+
 # Lifecycle policy to transition old files to cheaper storage
 resource "aws_s3_bucket_lifecycle_configuration" "exports" {
   bucket = aws_s3_bucket.exports.id

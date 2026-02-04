@@ -38,7 +38,7 @@ def resolve_relative_date(relative_value: str) -> datetime:
     - relative:this_quarter
     - relative:this_year
     """
-    now = datetime.now(UTC)
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     if relative_value == "relative:last_7_days":
         return now - timedelta(days=7)
@@ -422,8 +422,9 @@ class ExportQueryEngine:
         # Parse field_value if it's a date string for comparison with datetime
         if isinstance(filter_value, datetime) and isinstance(field_value, str):
             try:
-                # Try to parse ISO format datetime string
-                field_value = datetime.fromisoformat(field_value.replace("Z", "+00:00"))
+                # Try to parse ISO format datetime string, strip tz to match naive UTC
+                parsed = datetime.fromisoformat(field_value.replace("Z", "+00:00"))
+                field_value = parsed.replace(tzinfo=None)
             except ValueError:
                 pass
 
