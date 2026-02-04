@@ -148,6 +148,18 @@ The import flow uses presigned URLs so clients upload files directly to cloud st
 - **Import from cloud storage**: download to `/tmp` → validate/process → delete local file in `finally`
 - **Import from local file** (dev): use file directly, no temp file created
 
+## Datetime Convention
+
+All datetimes are **naive UTC** throughout the codebase. Never use timezone-aware datetimes.
+
+- **DB columns**: `TIMESTAMP WITHOUT TIME ZONE` — defaults use `datetime.now(UTC).replace(tzinfo=None)`
+- **Query engine**: `resolve_relative_date()` returns naive UTC — `datetime.now(UTC).replace(tzinfo=None)`
+- **Serialization**: `model_to_dict()` appends `"Z"` suffix to ISO strings for API responses
+- **Parsing**: `parse_date()` strips tzinfo from any timezone-aware input via `.astimezone(UTC).replace(tzinfo=None)`
+- **In-memory filters**: ISO strings with `"Z"` are parsed and stripped to naive UTC before comparison
+
+**Why**: asyncpg rejects comparisons between timezone-aware parameters and `TIMESTAMP WITHOUT TIME ZONE` columns. Keeping everything naive UTC avoids this mismatch.
+
 ## Infrastructure Deployment
 
 ### AWS
@@ -156,6 +168,7 @@ Terraform configs in `infra/aws/terraform/`. Key files:
 - `ecs.tf` — Fargate task definition with env vars
 - `rds.tf` — PostgreSQL database
 - `alb.tf` — Load balancer (with optional HTTPS)
+- `storage.tf` — S3 bucket with versioning, encryption, CORS (for presigned uploads), and lifecycle rules
 - `secrets.tf` — Secrets Manager for DB password
 
 ### Deploy
@@ -168,6 +181,21 @@ terraform apply
 
 ### CI/CD
 `.github/workflows/deploy.yml` uses GitHub OIDC for keyless AWS auth. Account ID is auto-detected via `aws sts get-caller-identity`.
+
+### Known issue: ECS deployment with `:latest` tag
+The deploy workflow pushes to ECR with `:latest` tag, but Terraform doesn't detect image content changes when the tag stays the same. After a deploy, you may need to force a new ECS deployment:
+```bash
+aws ecs update-service --cluster import-export-orchestrator-cluster-dev \
+  --service import-export-orchestrator-service-dev \
+  --task-definition import-export-orchestrator-dev:<REVISION> \
+  --force-new-deployment
+```
+Check the current task definition revision with:
+```bash
+aws ecs describe-services --cluster import-export-orchestrator-cluster-dev \
+  --services import-export-orchestrator-service-dev \
+  --query 'services[0].deployments[*].{status:status,taskDef:taskDefinition,running:runningCount}'
+```
 
 ## Testing Patterns
 

@@ -336,6 +336,7 @@ The export filter DSL supports:
 - **String operators**: `contains`, `startswith`, `endswith`, `ilike`
 - **Logical operators**: `and`, `or`, `not`
 - **Nested fields**: `vendor.name`, `project.code`
+- **Relative dates**: `relative:last_7_days`, `relative:last_30_days`, `relative:last_90_days`, `relative:this_month`, `relative:last_month`, `relative:this_quarter`, `relative:this_year`
 
 Example:
 ```json
@@ -346,7 +347,7 @@ Example:
     "operator": "and",
     "filters": [
       {"field": "amount", "operator": "gt", "value": 1000},
-      {"field": "vendor.name", "operator": "contains", "value": "Acme"}
+      {"field": "created_at", "operator": "gte", "value": "relative:last_30_days"}
     ]
   },
   "limit": 100
