@@ -51,10 +51,10 @@ variable "database_username" {
 }
 
 variable "database_password" {
-  description = "RDS master password (MUST be provided via environment variable or Secrets Manager, never in tfvars)"
+  description = "RDS master password (required for standalone mode, ignored when use_shared_infra = true)"
   type        = string
   sensitive   = true
-  # NO default value - must be provided via environment variable or Secrets Manager
+  default     = "" # Empty default - required only when creating standalone RDS
 }
 
 variable "ecs_task_cpu" {
