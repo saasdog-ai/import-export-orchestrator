@@ -93,14 +93,8 @@ resource "aws_iam_role_policy" "ecs_task_secrets" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          aws_secretsmanager_secret.database_url.arn
+          local.db_credentials_secret_arn
         ]
-        Condition = {
-          StringEquals = {
-            "secretsmanager:ResourceTag/Environment" = var.environment
-            "secretsmanager:ResourceTag/Project"     = var.project_name
-          }
-        }
       }
     ]
   })

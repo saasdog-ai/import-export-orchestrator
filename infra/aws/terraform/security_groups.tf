@@ -1,10 +1,12 @@
 # Security Groups
+# These resources are only created when use_shared_infra = false
 
 # Security Group for ECS Tasks
 resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project_name}-ecs-tasks-${var.environment}"
+  count       = var.use_shared_infra ? 0 : 1
+  name        = "${local.infra_name}-ecs-tasks-${var.environment}"
   description = "Security group for ECS tasks"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   egress {
     from_port   = 0
@@ -16,22 +18,23 @@ resource "aws_security_group" "ecs_tasks" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-ecs-tasks-sg-${var.environment}"
+      Name = "${local.infra_name}-ecs-tasks-sg-${var.environment}"
     }
   )
 }
 
 # Security Group for RDS
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-${var.environment}"
+  count       = var.use_shared_infra ? 0 : 1
+  name        = "${local.infra_name}-rds-${var.environment}"
   description = "Security group for RDS instance"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = aws_vpc.main[0].id
 
   ingress {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks.id]
+    security_groups = [aws_security_group.ecs_tasks[0].id]
     description     = "PostgreSQL access from ECS tasks"
   }
 
@@ -45,17 +48,17 @@ resource "aws_security_group" "rds" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-rds-sg-${var.environment}"
+      Name = "${local.infra_name}-rds-sg-${var.environment}"
     }
   )
 }
 
 # Security Group for ALB
 resource "aws_security_group" "alb" {
-  count       = var.enable_alb ? 1 : 0
-  name        = "${var.project_name}-alb-${var.environment}"
+  count       = var.use_shared_infra ? 0 : (var.enable_alb ? 1 : 0)
+  name        = "${local.infra_name}-alb-${var.environment}"
   description = "Security group for Application Load Balancer"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   ingress {
     from_port   = 80
@@ -83,20 +86,19 @@ resource "aws_security_group" "alb" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-alb-sg-${var.environment}"
+      Name = "${local.infra_name}-alb-sg-${var.environment}"
     }
   )
 }
 
 # Allow ECS tasks to communicate with ALB
 resource "aws_security_group_rule" "ecs_from_alb" {
-  count                    = var.enable_alb ? 1 : 0
+  count                    = var.use_shared_infra ? 0 : (var.enable_alb ? 1 : 0)
   type                     = "ingress"
   from_port                = 8000
   to_port                  = 8000
   protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb[0].id
-  security_group_id        = aws_security_group.ecs_tasks.id
+  source_security_group_id = local.alb_security_group_id
+  security_group_id        = local.ecs_security_group_id
   description              = "Allow traffic from ALB to ECS tasks"
 }
-

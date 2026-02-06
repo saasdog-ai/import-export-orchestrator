@@ -1,7 +1,9 @@
 # VPC and Networking Resources
+# These resources are only created when use_shared_infra = false
 
 # VPC
 resource "aws_vpc" "main" {
+  count                = var.use_shared_infra ? 0 : 1
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -9,27 +11,28 @@ resource "aws_vpc" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-vpc-${var.environment}"
+      Name = "${local.infra_name}-vpc-${var.environment}"
     }
   )
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
+  count  = var.use_shared_infra ? 0 : 1
+  vpc_id = aws_vpc.main[0].id
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-igw-${var.environment}"
+      Name = "${local.infra_name}-igw-${var.environment}"
     }
   )
 }
 
 # Public Subnets
 resource "aws_subnet" "public" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
+  count             = var.use_shared_infra ? 0 : 2
+  vpc_id            = aws_vpc.main[0].id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
@@ -38,7 +41,7 @@ resource "aws_subnet" "public" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-public-subnet-${count.index + 1}-${var.environment}"
+      Name = "${local.infra_name}-public-subnet-${count.index + 1}-${var.environment}"
       Type = "public"
     }
   )
@@ -46,15 +49,15 @@ resource "aws_subnet" "public" {
 
 # Private Subnets
 resource "aws_subnet" "private" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
+  count             = var.use_shared_infra ? 0 : 2
+  vpc_id            = aws_vpc.main[0].id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-private-subnet-${count.index + 1}-${var.environment}"
+      Name = "${local.infra_name}-private-subnet-${count.index + 1}-${var.environment}"
       Type = "private"
     }
   )
@@ -67,37 +70,38 @@ data "aws_availability_zones" "available" {
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+  count  = var.use_shared_infra ? 0 : 1
+  vpc_id = aws_vpc.main[0].id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+    gateway_id = aws_internet_gateway.main[0].id
   }
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-public-rt-${var.environment}"
+      Name = "${local.infra_name}-public-rt-${var.environment}"
     }
   )
 }
 
 # Route Table Associations for Public Subnets
 resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
+  count          = var.use_shared_infra ? 0 : length(aws_subnet.public)
   subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
+  route_table_id = aws_route_table.public[0].id
 }
 
 # NAT Gateway Elastic IP
 resource "aws_eip" "nat" {
-  count  = 1
+  count  = var.use_shared_infra ? 0 : 1
   domain = "vpc"
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-nat-eip-${var.environment}"
+      Name = "${local.infra_name}-nat-eip-${var.environment}"
     }
   )
 
@@ -106,14 +110,14 @@ resource "aws_eip" "nat" {
 
 # NAT Gateway
 resource "aws_nat_gateway" "main" {
-  count         = 1
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+  count         = var.use_shared_infra ? 0 : 1
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = aws_subnet.public[0].id
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-nat-${var.environment}"
+      Name = "${local.infra_name}-nat-${var.environment}"
     }
   )
 
@@ -122,8 +126,8 @@ resource "aws_nat_gateway" "main" {
 
 # Route Table for Private Subnets
 resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
-  vpc_id = aws_vpc.main.id
+  count  = var.use_shared_infra ? 0 : 2
+  vpc_id = aws_vpc.main[0].id
 
   route {
     cidr_block     = "0.0.0.0/0"
@@ -133,15 +137,14 @@ resource "aws_route_table" "private" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-private-rt-${count.index + 1}-${var.environment}"
+      Name = "${local.infra_name}-private-rt-${count.index + 1}-${var.environment}"
     }
   )
 }
 
 # Route Table Associations for Private Subnets
 resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
+  count          = var.use_shared_infra ? 0 : length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
-

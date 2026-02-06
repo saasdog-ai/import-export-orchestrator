@@ -67,3 +67,27 @@ common_tags = {
   Environment = "dev"
   Owner       = "devops"
 }
+
+# =============================================================================
+# Shared Infrastructure Mode (Optional)
+# =============================================================================
+# When deploying multiple SaasDog projects, you can share VPC, ECS cluster,
+# and RDS to reduce costs. The first project creates shared resources,
+# subsequent projects reference them.
+#
+# See SHARED_INFRA.md for detailed documentation.
+
+# Name prefix for shared resources (used when creating infrastructure)
+shared_project_name = "saasdog-ai"
+
+# Uncomment below to use existing shared infrastructure:
+# use_shared_infra = true
+# shared_vpc_id = "vpc-..."
+# shared_public_subnet_ids = ["subnet-...", "subnet-..."]
+# shared_private_subnet_ids = ["subnet-...", "subnet-..."]
+# shared_alb_security_group_id = "sg-..."
+# shared_ecs_security_group_id = "sg-..."
+# shared_rds_security_group_id = "sg-..."
+# shared_ecs_cluster_arn = "arn:aws:ecs:us-east-1:...:cluster/..."
+# shared_rds_endpoint = "....rds.amazonaws.com:5432"
+# shared_db_credentials_secret_arn = "arn:aws:secretsmanager:..."

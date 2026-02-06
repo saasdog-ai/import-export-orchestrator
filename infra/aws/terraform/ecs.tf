@@ -1,8 +1,9 @@
 # ECS Resources
 
-# ECS Cluster
+# ECS Cluster - only created when use_shared_infra = false
 resource "aws_ecs_cluster" "main" {
-  name = "${var.project_name}-cluster-${var.environment}"
+  count = var.use_shared_infra ? 0 : 1
+  name  = "${local.infra_name}-cluster-${var.environment}"
 
   # Container Insights disabled to stay within CloudWatch free tier (10 metrics)
   # Enable for production monitoring
@@ -14,7 +15,7 @@ resource "aws_ecs_cluster" "main" {
   tags = var.common_tags
 }
 
-# CloudWatch Log Group
+# CloudWatch Log Group - always created (project-specific)
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project_name}-${var.environment}"
   retention_in_days = var.log_retention_days
@@ -61,7 +62,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
           "secretsmanager:GetSecretValue"
         ]
         Resource = [
-          aws_secretsmanager_secret.database_url.arn
+          local.db_credentials_secret_arn
         ]
       }
     ]
@@ -90,7 +91,7 @@ resource "aws_iam_role" "ecs_task" {
 
 # Note: S3 and SQS policies are now defined in iam_app.tf for better organization
 
-# ECS Task Definition
+# ECS Task Definition - always created (project-specific)
 resource "aws_ecs_task_definition" "main" {
   family                   = "${var.project_name}-${var.environment}"
   network_mode             = "awsvpc"
@@ -116,7 +117,7 @@ resource "aws_ecs_task_definition" "main" {
       secrets = [
         {
           name      = "DATABASE_URL"
-          valueFrom = aws_secretsmanager_secret.database_url.arn
+          valueFrom = local.db_credentials_secret_arn
         }
       ]
 
@@ -181,10 +182,10 @@ resource "aws_ecs_task_definition" "main" {
   tags = var.common_tags
 }
 
-# ECS Service
+# ECS Service - always created (project-specific), uses shared or standalone cluster
 resource "aws_ecs_service" "main" {
   name            = "${var.project_name}-service-${var.environment}"
-  cluster         = aws_ecs_cluster.main.id
+  cluster         = local.ecs_cluster_arn
   task_definition = aws_ecs_task_definition.main.arn
   desired_count   = var.ecs_desired_count
   launch_type     = "FARGATE"
@@ -193,8 +194,8 @@ resource "aws_ecs_service" "main" {
   enable_execute_command = true
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    subnets          = local.private_subnet_ids
+    security_groups  = [local.ecs_security_group_id]
     assign_public_ip = false
   }
 
@@ -218,4 +219,3 @@ resource "aws_ecs_service" "main" {
 
   tags = var.common_tags
 }
-

@@ -190,3 +190,80 @@ variable "common_tags" {
   }
 }
 
+# =============================================================================
+# Shared Infrastructure Mode
+# =============================================================================
+# When use_shared_infra = true, the project uses existing shared resources
+# instead of creating its own VPC, ECS cluster, RDS, etc.
+# This allows multiple projects to share infrastructure for cost savings.
+
+variable "use_shared_infra" {
+  description = "Use shared infrastructure instead of creating standalone resources"
+  type        = bool
+  default     = false
+}
+
+variable "shared_project_name" {
+  description = "Name prefix for shared resources (e.g., 'saasdog-ai')"
+  type        = string
+  default     = "saasdog-ai"
+}
+
+# Shared VPC & Networking
+variable "shared_vpc_id" {
+  description = "VPC ID when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+
+variable "shared_public_subnet_ids" {
+  description = "Public subnet IDs when using shared infrastructure"
+  type        = list(string)
+  default     = []
+}
+
+variable "shared_private_subnet_ids" {
+  description = "Private subnet IDs when using shared infrastructure"
+  type        = list(string)
+  default     = []
+}
+
+# Shared Security Groups
+variable "shared_alb_security_group_id" {
+  description = "ALB security group ID when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+
+variable "shared_ecs_security_group_id" {
+  description = "ECS tasks security group ID when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+
+variable "shared_rds_security_group_id" {
+  description = "RDS security group ID when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+
+# Shared ECS Cluster
+variable "shared_ecs_cluster_arn" {
+  description = "ECS cluster ARN when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+
+# Shared RDS
+variable "shared_rds_endpoint" {
+  description = "RDS endpoint (host:port) when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+
+variable "shared_db_credentials_secret_arn" {
+  description = "Secrets Manager ARN for DB credentials when using shared infrastructure"
+  type        = string
+  default     = ""
+}
+

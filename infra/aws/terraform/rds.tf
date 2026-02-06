@@ -1,21 +1,24 @@
 # RDS Database Resources
+# These resources are only created when use_shared_infra = false
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group-${var.environment}"
-  subnet_ids = aws_subnet.private[*].id
+  count      = var.use_shared_infra ? 0 : 1
+  name       = "${local.infra_name}-db-subnet-group-${var.environment}"
+  subnet_ids = local.private_subnet_ids
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-db-subnet-group-${var.environment}"
+      Name = "${local.infra_name}-db-subnet-group-${var.environment}"
     }
   )
 }
 
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
-  name   = "${var.project_name}-postgres-${var.environment}"
+  count  = var.use_shared_infra ? 0 : 1
+  name   = "${local.infra_name}-postgres-${var.environment}"
   family = "postgres${var.postgres_version}"
 
   parameter {
@@ -31,14 +34,15 @@ resource "aws_db_parameter_group" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-pg-params-${var.environment}"
+      Name = "${local.infra_name}-pg-params-${var.environment}"
     }
   )
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier     = "${var.project_name}-db-${var.environment}"
+  count          = var.use_shared_infra ? 0 : 1
+  identifier     = "${local.infra_name}-db-${var.environment}"
   engine         = "postgres"
   engine_version = var.postgres_version
   instance_class = var.database_instance_class
@@ -52,24 +56,23 @@ resource "aws_db_instance" "main" {
   username = var.database_username
   password = var.database_password
 
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  parameter_group_name   = aws_db_parameter_group.main.name
+  vpc_security_group_ids = [local.rds_security_group_id]
+  db_subnet_group_name   = aws_db_subnet_group.main[0].name
+  parameter_group_name   = aws_db_parameter_group.main[0].name
 
   backup_retention_period = var.rds_backup_retention_period
   backup_window           = var.rds_backup_window
   maintenance_window      = var.rds_maintenance_window
 
   skip_final_snapshot       = var.environment == "dev"
-  final_snapshot_identifier = var.environment != "dev" ? "${var.project_name}-final-snapshot-${var.environment}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
+  final_snapshot_identifier = var.environment != "dev" ? "${local.infra_name}-final-snapshot-${var.environment}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   deletion_protection = var.environment == "prod"
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.project_name}-db-${var.environment}"
+      Name = "${local.infra_name}-db-${var.environment}"
     }
   )
 }
-

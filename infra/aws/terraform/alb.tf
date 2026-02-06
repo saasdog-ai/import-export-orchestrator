@@ -1,4 +1,5 @@
 # Application Load Balancer Resources
+# ALB is always project-specific (not shared), but uses shared VPC/subnets if use_shared_infra = true
 
 # ALB
 resource "aws_lb" "main" {
@@ -7,8 +8,8 @@ resource "aws_lb" "main" {
   name               = substr("${var.project_name}-alb-${var.environment}", 0, 32)
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb[0].id]
-  subnets            = aws_subnet.public[*].id
+  security_groups    = [local.alb_security_group_id]
+  subnets            = local.public_subnet_ids
 
   enable_deletion_protection = var.environment == "prod"
   enable_http2               = true
@@ -28,7 +29,7 @@ resource "aws_lb_target_group" "main" {
   name        = substr("${var.project_name}-tg-${var.environment}", 0, 32)
   port        = 8000
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
   target_type = "ip"
 
   health_check {
@@ -100,4 +101,3 @@ resource "aws_lb_listener" "https" {
 }
 
 # Note: ALB DNS name output is defined in outputs.tf to avoid duplication
-
