@@ -1,17 +1,18 @@
+# -----------------------------------------------------------------------------
 # SQS Queue for Job Processing
+# -----------------------------------------------------------------------------
 
 resource "aws_sqs_queue" "job_runner" {
-  name = "${var.project_name}-job-queue-${var.environment}"
+  name = "${local.name_prefix}-job-queue-${var.environment}"
 
   # Visibility timeout should be longer than the longest job execution time
-  # Default: 5 minutes (300 seconds)
   visibility_timeout_seconds = var.sqs_visibility_timeout
 
-  # Message retention period
-  message_retention_seconds = var.sqs_message_retention
+  # Message retention period (14 days)
+  message_retention_seconds = 1209600
 
   # Long polling wait time (20 seconds)
-  receive_wait_time_seconds = var.sqs_receive_wait_time
+  receive_wait_time_seconds = 20
 
   # Dead letter queue configuration
   redrive_policy = jsonencode({
@@ -19,19 +20,18 @@ resource "aws_sqs_queue" "job_runner" {
     maxReceiveCount     = var.sqs_max_receive_count
   })
 
-  tags = merge(var.common_tags, {
-    Name = "${var.project_name}-job-queue-${var.environment}"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-job-queue-${var.environment}"
   })
 }
 
 # Dead Letter Queue for failed messages
 resource "aws_sqs_queue" "job_runner_dlq" {
-  name = "${var.project_name}-job-queue-dlq-${var.environment}"
+  name = "${local.name_prefix}-job-queue-dlq-${var.environment}"
 
-  message_retention_seconds = var.sqs_message_retention
+  message_retention_seconds = 1209600
 
-  tags = merge(var.common_tags, {
-    Name = "${var.project_name}-job-queue-dlq-${var.environment}"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-job-queue-dlq-${var.environment}"
   })
 }
-

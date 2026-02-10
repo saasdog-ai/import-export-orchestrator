@@ -1,31 +1,60 @@
-# ECS Resources
+# -----------------------------------------------------------------------------
+# ECR Repository
+# -----------------------------------------------------------------------------
 
-# ECS Cluster - only created when use_shared_infra = false
-resource "aws_ecs_cluster" "main" {
-  count = var.use_shared_infra ? 0 : 1
-  name  = "${local.infra_name}-cluster-${var.environment}"
+resource "aws_ecr_repository" "app" {
+  name                 = "${local.name_prefix}-${var.environment}"
+  image_tag_mutability = "MUTABLE"
 
-  # Container Insights disabled to stay within CloudWatch free tier (10 metrics)
-  # Enable for production monitoring
-  setting {
-    name  = "containerInsights"
-    value = "disabled"
+  image_scanning_configuration {
+    scan_on_push = true
   }
 
-  tags = var.common_tags
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-${var.environment}"
+  })
 }
 
-# CloudWatch Log Group - always created (project-specific)
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 10 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# -----------------------------------------------------------------------------
+# CloudWatch Log Group
+# -----------------------------------------------------------------------------
+
 resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/ecs/${var.project_name}-${var.environment}"
+  name              = "/ecs/${local.name_prefix}-${var.environment}"
   retention_in_days = var.log_retention_days
 
-  tags = var.common_tags
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-${var.environment}"
+  })
 }
 
-# ECS Task Execution Role (for pulling images, writing logs, etc.)
-resource "aws_iam_role" "ecs_task_execution" {
-  name = "${var.project_name}-ecs-task-execution-${var.environment}"
+# -----------------------------------------------------------------------------
+# ECS Task Execution Role (for pulling images, writing logs, reading secrets)
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "${local.name_prefix}-ecs-exec-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -40,18 +69,18 @@ resource "aws_iam_role" "ecs_task_execution" {
     ]
   })
 
-  tags = var.common_tags
+  tags = local.common_tags
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
-  role       = aws_iam_role.ecs_task_execution.name
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
+  role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 # Allow task execution role to read secrets at container start
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  name = "${var.project_name}-ecs-exec-secrets-${var.environment}"
-  role = aws_iam_role.ecs_task_execution.id
+  name = "${local.name_prefix}-exec-secrets-${var.environment}"
+  role = aws_iam_role.ecs_task_execution_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -62,16 +91,19 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
           "secretsmanager:GetSecretValue"
         ]
         Resource = [
-          local.db_credentials_secret_arn
+          aws_secretsmanager_secret.database_url.arn
         ]
       }
     ]
   })
 }
 
+# -----------------------------------------------------------------------------
 # ECS Task Role (for application-level permissions)
-resource "aws_iam_role" "ecs_task" {
-  name = "${var.project_name}-ecs-task-${var.environment}"
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${local.name_prefix}-ecs-task-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -86,77 +118,106 @@ resource "aws_iam_role" "ecs_task" {
     ]
   })
 
-  tags = var.common_tags
+  tags = local.common_tags
 }
 
-# Note: S3 and SQS policies are now defined in iam_app.tf for better organization
+# S3 access for exports bucket
+resource "aws_iam_role_policy" "ecs_task_s3" {
+  name = "${local.name_prefix}-task-s3-${var.environment}"
+  role = aws_iam_role.ecs_task_role.id
 
-# ECS Task Definition - always created (project-specific)
-resource "aws_ecs_task_definition" "main" {
-  family                   = "${var.project_name}-${var.environment}"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.exports.arn,
+          "${aws_s3_bucket.exports.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# SQS access for job queue
+resource "aws_iam_role_policy" "ecs_task_sqs" {
+  name = "${local.name_prefix}-task-sqs-${var.environment}"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueUrl",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ]
+        Resource = [
+          aws_sqs_queue.job_runner.arn,
+          aws_sqs_queue.job_runner_dlq.arn
+        ]
+      }
+    ]
+  })
+}
+
+# -----------------------------------------------------------------------------
+# ECS Task Definition
+# -----------------------------------------------------------------------------
+
+resource "aws_ecs_task_definition" "app" {
+  family                   = "${local.name_prefix}-${var.environment}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.ecs_task_cpu
   memory                   = var.ecs_task_memory
-
-  execution_role_arn = aws_iam_role.ecs_task_execution.arn
-  task_role_arn      = aws_iam_role.ecs_task.arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
-      name  = "${var.project_name}-app"
-      image = var.container_image != "" ? var.container_image : "${var.project_name}:latest"
+      name  = "${var.app_name}-api"
+      image = "${aws_ecr_repository.app.repository_url}:latest"
 
       portMappings = [
         {
-          containerPort = 8000
+          containerPort = var.container_port
+          hostPort      = var.container_port
           protocol      = "tcp"
         }
+      ]
+
+      environment = [
+        { name = "APP_ENV", value = var.environment },
+        { name = "API_PORT", value = tostring(var.container_port) },
+        { name = "CLOUD_PROVIDER", value = "aws" },
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "CLOUD_STORAGE_BUCKET", value = aws_s3_bucket.exports.id },
+        { name = "AWS_SQS_QUEUE_URL", value = aws_sqs_queue.job_runner.url },
+        { name = "MESSAGE_QUEUE_NAME", value = aws_sqs_queue.job_runner.name },
+        { name = "SCHEDULER_ENABLED", value = "true" },
+        { name = "LOG_LEVEL", value = "INFO" },
+        { name = "AUTH_ENABLED", value = var.environment == "prod" ? "true" : "false" },
+        { name = "DATABASE_NAME", value = var.db_name },
+        { name = "ALLOWED_ORIGINS", value = jsonencode(concat(var.enable_ui ? ["http://${aws_s3_bucket_website_configuration.ui[0].website_endpoint}"] : [], var.allowed_origins)) }
       ]
 
       secrets = [
         {
           name      = "DATABASE_URL"
-          valueFrom = local.db_credentials_secret_arn
-        }
-      ]
-
-      environment = [
-        {
-          name  = "APP_ENV"
-          value = var.environment
-        },
-        {
-          name  = "SCHEDULER_ENABLED"
-          value = "true"
-        },
-        {
-          name  = "LOG_LEVEL"
-          value = "INFO"
-        },
-        {
-          name  = "CLOUD_PROVIDER"
-          value = "aws"
-        },
-        {
-          name  = "CLOUD_STORAGE_BUCKET"
-          value = aws_s3_bucket.exports.id
-        },
-        {
-          name  = "AWS_REGION"
-          value = var.aws_region
-        },
-        {
-          name  = "AWS_SQS_QUEUE_URL"
-          value = aws_sqs_queue.job_runner.url
-        },
-        {
-          name  = "MESSAGE_QUEUE_NAME"
-          value = aws_sqs_queue.job_runner.name
-        },
-        {
-          name  = "ALLOWED_ORIGINS"
-          value = jsonencode(concat(["http://${aws_s3_bucket_website_configuration.ui.website_endpoint}"], var.allowed_origins))
+          valueFrom = aws_secretsmanager_secret.database_url.arn
         }
       ]
 
@@ -165,57 +226,83 @@ resource "aws_ecs_task_definition" "main" {
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
           "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
+          "awslogs-stream-prefix" = "api"
         }
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8000/health', timeout=5)\""]
+        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}/health || exit 1"]
         interval    = 30
-        timeout     = 10
+        timeout     = 5
         retries     = 3
         startPeriod = 60
       }
     }
   ])
 
-  tags = var.common_tags
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-${var.environment}"
+  })
 }
 
-# ECS Service - always created (project-specific), uses shared or standalone cluster
-resource "aws_ecs_service" "main" {
-  name            = "${var.project_name}-service-${var.environment}"
+# -----------------------------------------------------------------------------
+# ECS Service
+# -----------------------------------------------------------------------------
+
+resource "aws_ecs_service" "app" {
+  name            = "${local.name_prefix}-${var.environment}"
   cluster         = local.ecs_cluster_arn
-  task_definition = aws_ecs_task_definition.main.arn
+  task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.ecs_desired_count
   launch_type     = "FARGATE"
 
-  # Enable ECS Exec for secure container access (e.g., database queries)
+  # Enable ECS Exec for secure container access
   enable_execute_command = true
 
   network_configuration {
     subnets          = local.private_subnet_ids
-    security_groups  = [local.ecs_security_group_id]
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
 
-  # Only add load balancer if ALB is enabled
-  dynamic "load_balancer" {
-    for_each = var.enable_alb ? [1] : []
-    content {
-      target_group_arn = aws_lb_target_group.main[0].arn
-      container_name   = "${var.project_name}-app"
-      container_port   = 8000
-    }
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "${var.app_name}-api"
+    container_port   = var.container_port
   }
 
-  depends_on = [
-    aws_iam_role_policy_attachment.ecs_task_execution
-  ]
+  depends_on = [aws_lb_listener.http]
 
-  # Conditionally depend on ALB listener if ALB is enabled
-  # Note: We can't use conditional in depends_on, so we'll use a dynamic block approach
-  # The load_balancer block above already handles the conditional
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-${var.environment}"
+  })
+}
 
-  tags = var.common_tags
+# -----------------------------------------------------------------------------
+# Auto Scaling
+# -----------------------------------------------------------------------------
+
+resource "aws_appautoscaling_target" "ecs" {
+  max_capacity       = 4
+  min_capacity       = var.ecs_desired_count
+  resource_id        = "service/${local.ecs_cluster_name}/${aws_ecs_service.app.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs_cpu" {
+  name               = "${local.name_prefix}-cpu-scaling-${var.environment}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
 }

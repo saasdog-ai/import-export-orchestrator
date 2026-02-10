@@ -2,38 +2,16 @@
 
 # GitHub OIDC Provider
 # This allows GitHub Actions to assume IAM roles without storing long-lived credentials
-# Note: OIDC provider is account-wide, so we try to create it but it may already exist
-resource "aws_iam_openid_connect_provider" "github" {
+# Note: OIDC provider is account-wide, so we use a data source to reference the existing one
+# The provider was created by shared-infrastructure or integration-platform
+data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
-
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
-
-  thumbprint_list = [
-    # These are PUBLIC certificate thumbprints (hashes), NOT secrets
-    # They're used to verify GitHub's OIDC provider identity
-    # Safe to store in code - they're public information published by GitHub
-    # See: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
-    "6938fd4d98bab03faadb97b34396831e3780aea1", # GitHub's OIDC thumbprint (primary)
-    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"  # GitHub's OIDC thumbprint (backup)
-  ]
-
-  tags = merge(var.common_tags, {
-    Name    = "${var.project_name}-github-oidc-${var.environment}"
-    Purpose = "GitHub Actions OIDC Provider"
-  })
-
-  # Ignore changes if provider already exists (account-wide resource)
-  lifecycle {
-    ignore_changes = [url, client_id_list, thumbprint_list]
-  }
 }
 
 # IAM Role for CI/CD (GitHub Actions)
 # This role is assumed by GitHub Actions to deploy infrastructure
 resource "aws_iam_role" "cicd" {
-  name = "${var.project_name}-cicd-role-${var.environment}"
+  name = "${local.name_prefix}-cicd-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -41,7 +19,7 @@ resource "aws_iam_role" "cicd" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
+          Federated = data.aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -57,8 +35,8 @@ resource "aws_iam_role" "cicd" {
     ]
   })
 
-  tags = merge(var.common_tags, {
-    Name    = "${var.project_name}-cicd-role-${var.environment}"
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-cicd-role-${var.environment}"
     Purpose = "CI/CD Deployment Role"
   })
 }
@@ -67,7 +45,7 @@ resource "aws_iam_role" "cicd" {
 # NOTE: Backend resources (S3 bucket, DynamoDB table) are created separately via bootstrap
 # This policy uses ARN patterns to reference them
 resource "aws_iam_role_policy" "cicd_terraform_state" {
-  name = "${var.project_name}-cicd-terraform-state-${var.environment}"
+  name = "${local.name_prefix}-cicd-terraform-state-${var.environment}"
   role = aws_iam_role.cicd.id
 
   policy = jsonencode({
@@ -82,8 +60,8 @@ resource "aws_iam_role_policy" "cicd_terraform_state" {
           "s3:DeleteObject"
         ]
         Resource = [
-          "arn:aws:s3:::${var.project_name}-terraform-state-${var.environment}-*",
-          "arn:aws:s3:::${var.project_name}-terraform-state-${var.environment}-*/*"
+          "arn:aws:s3:::${local.name_prefix}-terraform-state-${var.environment}-*",
+          "arn:aws:s3:::${local.name_prefix}-terraform-state-${var.environment}-*/*"
         ]
       },
       {
@@ -94,7 +72,7 @@ resource "aws_iam_role_policy" "cicd_terraform_state" {
           "dynamodb:DeleteItem",
           "dynamodb:DescribeTable"
         ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${var.project_name}-terraform-state-lock-${var.environment}"
+        Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${local.name_prefix}-terraform-state-lock-${var.environment}"
       }
     ]
   })
@@ -102,7 +80,7 @@ resource "aws_iam_role_policy" "cicd_terraform_state" {
 
 # IAM Policy for CI/CD - Infrastructure Deployment
 resource "aws_iam_role_policy" "cicd_deploy" {
-  name = "${var.project_name}-cicd-deploy-${var.environment}"
+  name = "${local.name_prefix}-cicd-deploy-${var.environment}"
   role = aws_iam_role.cicd.id
 
   policy = jsonencode({
@@ -115,8 +93,8 @@ resource "aws_iam_role_policy" "cicd_deploy" {
           "iam:PassRole"
         ]
         Resource = [
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-ecs-task-execution-${var.environment}",
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-ecs-task-${var.environment}"
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.name_prefix}-ecs-task-execution-${var.environment}",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.name_prefix}-ecs-task-${var.environment}"
         ]
       },
       {

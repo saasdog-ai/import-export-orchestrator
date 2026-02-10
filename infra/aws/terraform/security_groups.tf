@@ -1,79 +1,27 @@
-# Security Groups
-# These resources are only created when use_shared_infra = false
+# -----------------------------------------------------------------------------
+# Security Groups (Project-specific)
+# -----------------------------------------------------------------------------
 
-# Security Group for ECS Tasks
-resource "aws_security_group" "ecs_tasks" {
-  count       = var.use_shared_infra ? 0 : 1
-  name        = "${local.infra_name}-ecs-tasks-${var.environment}"
-  description = "Security group for ECS tasks"
-  vpc_id      = local.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name = "${local.infra_name}-ecs-tasks-sg-${var.environment}"
-    }
-  )
-}
-
-# Security Group for RDS
-resource "aws_security_group" "rds" {
-  count       = var.use_shared_infra ? 0 : 1
-  name        = "${local.infra_name}-rds-${var.environment}"
-  description = "Security group for RDS instance"
-  vpc_id      = aws_vpc.main[0].id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks[0].id]
-    description     = "PostgreSQL access from ECS tasks"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name = "${local.infra_name}-rds-sg-${var.environment}"
-    }
-  )
-}
-
-# Security Group for ALB
+# ALB Security Group
 resource "aws_security_group" "alb" {
-  count       = var.use_shared_infra ? 0 : (var.enable_alb ? 1 : 0)
-  name        = "${local.infra_name}-alb-${var.environment}"
-  description = "Security group for Application Load Balancer"
+  name        = "${local.name_prefix}-alb-sg-${var.environment}"
+  description = "Security group for ${var.app_name} ALB"
   vpc_id      = local.vpc_id
 
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-    description = "HTTP access"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
+    description = "HTTPS"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-    description = "HTTPS access"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -83,22 +31,44 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(
-    var.common_tags,
-    {
-      Name = "${local.infra_name}-alb-sg-${var.environment}"
-    }
-  )
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg-${var.environment}"
+  })
 }
 
-# Allow ECS tasks to communicate with ALB
-resource "aws_security_group_rule" "ecs_from_alb" {
-  count                    = var.use_shared_infra ? 0 : (var.enable_alb ? 1 : 0)
+# ECS Tasks Security Group
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${local.name_prefix}-ecs-sg-${var.environment}"
+  description = "Security group for ${var.app_name} ECS tasks"
+  vpc_id      = local.vpc_id
+
+  ingress {
+    description     = "From ALB"
+    from_port       = var.container_port
+    to_port         = var.container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ecs-sg-${var.environment}"
+  })
+}
+
+# Allow ECS tasks to connect to shared RDS
+resource "aws_security_group_rule" "ecs_to_rds" {
   type                     = "ingress"
-  from_port                = 8000
-  to_port                  = 8000
+  from_port                = 5432
+  to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = local.alb_security_group_id
-  security_group_id        = local.ecs_security_group_id
-  description              = "Allow traffic from ALB to ECS tasks"
+  source_security_group_id = aws_security_group.ecs_tasks.id
+  security_group_id        = local.rds_security_group_id
+  description              = "Allow ${var.app_name} ECS tasks to connect to RDS"
 }

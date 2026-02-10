@@ -1,10 +1,12 @@
+# -----------------------------------------------------------------------------
 # S3 Bucket for Export Files
+# -----------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "exports" {
-  bucket = "${var.project_name}-exports-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-exports-${var.environment}-${data.aws_caller_identity.current.account_id}"
 
-  tags = merge(var.common_tags, {
-    Name = "${var.project_name}-exports-${var.environment}"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-exports-${var.environment}"
   })
 }
 
@@ -75,4 +77,3 @@ resource "aws_s3_bucket_lifecycle_configuration" "exports" {
 
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
-

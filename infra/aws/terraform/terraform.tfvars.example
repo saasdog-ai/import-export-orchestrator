@@ -1,93 +1,57 @@
-# Terraform Variables Example
-# Copy this file to terraform.tfvars and customize for your environment
-# NEVER commit terraform.tfvars to version control
+# -----------------------------------------------------------------------------
+# Import/Export Orchestrator - Terraform Configuration Example
+# -----------------------------------------------------------------------------
+# Copy this to terraform.tfvars for local development, or set as
+# TERRAFORM_TFVARS secret in GitHub for CI/CD.
+# -----------------------------------------------------------------------------
 
-aws_region              = "us-east-1"
-environment             = "dev"
-project_name            = "import-export-orchestrator"
-vpc_cidr                = "10.0.0.0/16"
-database_instance_class = "db.t3.micro"
-database_allocated_storage = 20
-database_name           = "job_runner"
-database_username       = "postgres"
-# database_password must be provided via environment variable:
-# export TF_VAR_database_password="your-secure-password"
-# Or use AWS Secrets Manager (recommended for production)
+# General
+company_prefix = "saasdog"
+environment    = "dev"
+aws_region     = "us-east-1"
+app_name       = "import-export"
 
-ecs_task_cpu            = 512
-ecs_task_memory         = 1024
-ecs_desired_count       = 1
-container_image         = "your-ecr-repo/import-export-orchestrator:latest"
-enable_alb              = true
+# -----------------------------------------------------------------------------
+# Shared Infrastructure References
+# -----------------------------------------------------------------------------
+# These values come from the shared-infrastructure project outputs.
+# Run `terraform output` in shared-infrastructure to get these values.
 
-allowed_cidr_blocks = [
-  "0.0.0.0/0"  # Restrict this in production!
-]
+shared_vpc_id              = "vpc-xxxxxxxxx"
+shared_public_subnet_ids   = ["subnet-xxx", "subnet-yyy"]
+shared_private_subnet_ids  = ["subnet-aaa", "subnet-bbb"]
+shared_ecs_cluster_arn     = "arn:aws:ecs:us-east-1:ACCOUNT:cluster/saasdog-shared-ecs-dev"
+shared_ecs_cluster_name    = "saasdog-shared-ecs-dev"
+shared_rds_endpoint        = "saasdog-shared-rds-dev.xxx.us-east-1.rds.amazonaws.com:5432"
+shared_rds_address         = "saasdog-shared-rds-dev.xxx.us-east-1.rds.amazonaws.com"
+shared_rds_security_group_id = "sg-xxxxxxxxx"
+shared_rds_master_password_secret_arn = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:saasdog-shared-rds-master-password-dev-xxxxx"
 
-# S3 Configuration
-s3_bucket_name = "exports"  # Will be prefixed with project name and environment
+# -----------------------------------------------------------------------------
+# Application Configuration
+# -----------------------------------------------------------------------------
 
-# SQS Configuration
-sqs_visibility_timeout = 300      # 5 minutes (should be longer than longest job execution time)
-sqs_receive_wait_time  = 20       # Long polling wait time in seconds
-sqs_max_receive_count  = 3        # Max retries before moving to DLQ
-sqs_message_retention  = 1209600  # 14 days (max). Production: keep at 14 days for debugging
+db_name     = "job_runner"
+db_username = "job_runner"
 
-# PostgreSQL Configuration
-postgres_version = "15"  # Production: use the latest stable version
+# ECS
+ecs_task_cpu      = 512    # 0.5 vCPU
+ecs_task_memory   = 1024   # 1 GB
+ecs_desired_count = 1
 
-# RDS Backup Configuration
-rds_backup_retention_period = 7             # Days (0 to disable, max 35). Production: 14-35
-rds_backup_window           = "03:00-04:00" # UTC. Choose a low-traffic window
-rds_maintenance_window      = "mon:04:00-mon:05:00"  # UTC. Must not overlap backup window
+# SQS
+sqs_visibility_timeout = 300  # 5 minutes
+sqs_max_receive_count  = 3
 
-# CloudWatch Configuration
-log_retention_days = 1  # Days. Production: 30-90
+# CloudWatch
+log_retention_days = 30
 
-# CORS Origins
-allowed_origins = [
-  "http://localhost:3000",
-  "http://localhost:5173"
-]
-# Production: replace with your actual domain(s)
-# allowed_origins = ["https://app.yourdomain.com"]
+# CORS
+allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
 
-# HTTPS / TLS (optional)
-# Provide an ACM certificate ARN to enable HTTPS on the ALB
-# When set, HTTP traffic is automatically redirected to HTTPS
-acm_certificate_arn = ""
-# Production: acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+# CI/CD (GitHub repository for OIDC trust)
+github_repository = "your-org/import-export-orchestrator"
 
-# GitHub OIDC (for CI/CD)
-# github_repository = "your-org/import-export-orchestrator"
-
-common_tags = {
-  Project     = "import-export-orchestrator"
-  ManagedBy   = "terraform"
-  Environment = "dev"
-  Owner       = "devops"
-}
-
-# =============================================================================
-# Shared Infrastructure Mode (Optional)
-# =============================================================================
-# When deploying multiple SaasDog projects, you can share VPC, ECS cluster,
-# and RDS to reduce costs. The first project creates shared resources,
-# subsequent projects reference them.
-#
-# See SHARED_INFRA.md for detailed documentation.
-
-# Name prefix for shared resources (used when creating infrastructure)
-shared_project_name = "saasdog-ai"
-
-# Uncomment below to use existing shared infrastructure:
-# use_shared_infra = true
-# shared_vpc_id = "vpc-..."
-# shared_public_subnet_ids = ["subnet-...", "subnet-..."]
-# shared_private_subnet_ids = ["subnet-...", "subnet-..."]
-# shared_alb_security_group_id = "sg-..."
-# shared_ecs_security_group_id = "sg-..."
-# shared_rds_security_group_id = "sg-..."
-# shared_ecs_cluster_arn = "arn:aws:ecs:us-east-1:...:cluster/..."
-# shared_rds_endpoint = "....rds.amazonaws.com:5432"
-# shared_db_credentials_secret_arn = "arn:aws:secretsmanager:..."
+# Feature flags
+enable_deletion_protection = false
+enable_ui                  = true

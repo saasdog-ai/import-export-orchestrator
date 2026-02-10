@@ -28,10 +28,16 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "project_name" {
-  description = "Project name"
+variable "company_prefix" {
+  description = "Company prefix"
   type        = string
-  default     = "import-export-orchestrator"
+  default     = "saasdog"
+}
+
+variable "app_name" {
+  description = "Application name"
+  type        = string
+  default     = "import-export"
 }
 
 variable "environment" {
@@ -40,18 +46,20 @@ variable "environment" {
   default     = "dev"
 }
 
-data "aws_caller_identity" "current" {}
+locals {
+  name_prefix = "${var.company_prefix}-${var.app_name}"
+}
 
 # S3 Bucket for Terraform State
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${var.project_name}-terraform-state-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-tfstate-${var.environment}"
 
   tags = {
-    Name        = "${var.project_name}-terraform-state-${var.environment}"
+    Name        = "${local.name_prefix}-tfstate-${var.environment}"
     Purpose     = "Terraform State Storage"
     ManagedBy   = "terraform"
     Environment = var.environment
-    Project     = var.project_name
+    Company     = var.company_prefix
   }
 }
 
@@ -87,7 +95,7 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
 
 # DynamoDB Table for Terraform State Locking
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name         = "${var.project_name}-terraform-state-lock-${var.environment}"
+  name         = "${local.name_prefix}-tflock-${var.environment}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -97,11 +105,11 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
   }
 
   tags = {
-    Name        = "${var.project_name}-terraform-state-lock-${var.environment}"
+    Name        = "${local.name_prefix}-tflock-${var.environment}"
     Purpose     = "Terraform State Locking"
     ManagedBy   = "terraform"
     Environment = var.environment
-    Project     = var.project_name
+    Company     = var.company_prefix
   }
 }
 
@@ -114,4 +122,3 @@ output "terraform_state_lock_table" {
   description = "Name of the DynamoDB table for Terraform state locking"
   value       = aws_dynamodb_table.terraform_state_lock.name
 }
-

@@ -1,8 +1,15 @@
-# Variable definitions for Terraform configuration
-# NO secrets or credentials should be defined here
+# -----------------------------------------------------------------------------
+# General Configuration
+# -----------------------------------------------------------------------------
+
+variable "company_prefix" {
+  description = "Company prefix for resource naming"
+  type        = string
+  default     = "saasdog"
+}
 
 variable "aws_region" {
-  description = "AWS region for resources"
+  description = "AWS region"
   type        = string
   default     = "us-east-1"
 }
@@ -13,58 +20,89 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "project_name" {
-  description = "Project name for resource naming"
+variable "app_name" {
+  description = "Application name"
   type        = string
-  default     = "import-export-orchestrator"
+  default     = "import-export"
 }
 
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
+# -----------------------------------------------------------------------------
+# Shared Infrastructure References (from shared-infrastructure project)
+# -----------------------------------------------------------------------------
+
+variable "shared_vpc_id" {
+  description = "VPC ID from shared infrastructure"
   type        = string
-  default     = "10.0.0.0/16"
 }
 
-variable "database_instance_class" {
-  description = "RDS instance class"
+variable "shared_public_subnet_ids" {
+  description = "Public subnet IDs from shared infrastructure"
+  type        = list(string)
+}
+
+variable "shared_private_subnet_ids" {
+  description = "Private subnet IDs from shared infrastructure"
+  type        = list(string)
+}
+
+variable "shared_ecs_cluster_arn" {
+  description = "ECS cluster ARN from shared infrastructure"
   type        = string
-  default     = "db.t3.micro"
 }
 
-variable "database_allocated_storage" {
-  description = "RDS allocated storage in GB"
-  type        = number
-  default     = 20
+variable "shared_ecs_cluster_name" {
+  description = "ECS cluster name from shared infrastructure"
+  type        = string
 }
 
-variable "database_name" {
-  description = "Name of the database to create"
+variable "shared_rds_endpoint" {
+  description = "RDS endpoint from shared infrastructure (host:port)"
+  type        = string
+}
+
+variable "shared_rds_address" {
+  description = "RDS address (hostname only) from shared infrastructure"
+  type        = string
+}
+
+variable "shared_rds_security_group_id" {
+  description = "RDS security group ID from shared infrastructure"
+  type        = string
+}
+
+variable "shared_rds_master_password_secret_arn" {
+  description = "ARN of secret containing RDS master password"
+  type        = string
+}
+
+# -----------------------------------------------------------------------------
+# Database Configuration
+# -----------------------------------------------------------------------------
+
+variable "db_name" {
+  description = "Database name for this application"
   type        = string
   default     = "job_runner"
 }
 
-variable "database_username" {
-  description = "RDS master username (will be set via environment variable or Secrets Manager)"
+variable "db_username" {
+  description = "Database username for this application"
   type        = string
-  default     = "postgres"
-  sensitive   = true
+  default     = "job_runner"
 }
 
-variable "database_password" {
-  description = "RDS master password (required for standalone mode, ignored when use_shared_infra = true)"
-  type        = string
-  sensitive   = true
-  default     = "" # Empty default - required only when creating standalone RDS
-}
+# -----------------------------------------------------------------------------
+# ECS Configuration
+# -----------------------------------------------------------------------------
 
 variable "ecs_task_cpu" {
-  description = "CPU units for ECS task (1024 = 1 vCPU)"
+  description = "ECS task CPU units"
   type        = number
   default     = 512
 }
 
 variable "ecs_task_memory" {
-  description = "Memory for ECS task in MB"
+  description = "ECS task memory in MB"
   type        = number
   default     = 1024
 }
@@ -75,195 +113,80 @@ variable "ecs_desired_count" {
   default     = 1
 }
 
-variable "container_image" {
-  description = "Container image URI (e.g., ECR image)"
-  type        = string
-  default     = ""
+variable "container_port" {
+  description = "Container port"
+  type        = number
+  default     = 8000
 }
 
-variable "enable_alb" {
-  description = "Enable Application Load Balancer"
-  type        = bool
-  default     = true
-}
-
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to access the ALB"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
+# -----------------------------------------------------------------------------
 # S3 Configuration
-variable "s3_bucket_name" {
-  description = "Name for the S3 bucket (will be prefixed with project name and environment)"
-  type        = string
-  default     = "exports"
+# -----------------------------------------------------------------------------
+
+variable "s3_exports_retention_days" {
+  description = "Days to retain export files in S3"
+  type        = number
+  default     = 30
 }
 
+# -----------------------------------------------------------------------------
 # SQS Configuration
-variable "sqs_visibility_timeout" {
-  description = "SQS visibility timeout in seconds (should be longer than longest job execution time)"
-  type        = number
-  default     = 300 # 5 minutes
-}
+# -----------------------------------------------------------------------------
 
-variable "sqs_receive_wait_time" {
-  description = "SQS long polling wait time in seconds"
+variable "sqs_visibility_timeout" {
+  description = "SQS visibility timeout in seconds"
   type        = number
-  default     = 20
+  default     = 300
 }
 
 variable "sqs_max_receive_count" {
-  description = "Maximum number of times a message can be received before moving to DLQ"
+  description = "Max receives before moving to DLQ"
   type        = number
   default     = 3
 }
 
+# -----------------------------------------------------------------------------
 # CloudWatch Configuration
+# -----------------------------------------------------------------------------
+
 variable "log_retention_days" {
-  description = "CloudWatch log retention in days (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653)"
+  description = "CloudWatch log retention in days"
   type        = number
-  default     = 1
+  default     = 30
 }
 
-# RDS Backup Configuration
-variable "rds_backup_retention_period" {
-  description = "Number of days to retain automated backups (0 to disable, max 35)"
-  type        = number
-  default     = 7
-}
+# -----------------------------------------------------------------------------
+# CORS Configuration
+# -----------------------------------------------------------------------------
 
-variable "rds_backup_window" {
-  description = "Preferred backup window (UTC). Format: hh24:mi-hh24:mi"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "rds_maintenance_window" {
-  description = "Preferred maintenance window (UTC). Format: ddd:hh24:mi-ddd:hh24:mi"
-  type        = string
-  default     = "mon:04:00-mon:05:00"
-}
-
-variable "postgres_version" {
-  description = "PostgreSQL engine version for RDS"
-  type        = string
-  default     = "15"
-}
-
-# SQS Message Retention
-variable "sqs_message_retention" {
-  description = "SQS message retention period in seconds (60 to 1209600)"
-  type        = number
-  default     = 1209600 # 14 days
-}
-
-# CORS / ALB
 variable "allowed_origins" {
   description = "Allowed CORS origins for the application"
   type        = list(string)
-  default     = ["http://localhost:3000", "http://localhost:4000", "http://localhost:5173"]
+  default     = ["http://localhost:3000", "http://localhost:5173"]
 }
 
-# HTTPS / TLS
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for HTTPS. Leave empty to use HTTP only."
-  type        = string
-  default     = ""
-}
+# -----------------------------------------------------------------------------
+# CI/CD Configuration
+# -----------------------------------------------------------------------------
 
-# GitHub Configuration (for OIDC)
 variable "github_repository" {
-  description = "GitHub repository in format 'owner/repo' (e.g., 'saasdog-ai/import-export-orchestrator')"
+  description = "GitHub repository (format: owner/repo) for OIDC trust policy"
   type        = string
   default     = ""
 }
 
-# Tags
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default = {
-    Project     = "import-export-orchestrator"
-    ManagedBy   = "terraform"
-    Environment = "dev"
-  }
-}
+# -----------------------------------------------------------------------------
+# Feature Flags
+# -----------------------------------------------------------------------------
 
-# =============================================================================
-# Shared Infrastructure Mode
-# =============================================================================
-# When use_shared_infra = true, the project uses existing shared resources
-# instead of creating its own VPC, ECS cluster, RDS, etc.
-# This allows multiple projects to share infrastructure for cost savings.
-
-variable "use_shared_infra" {
-  description = "Use shared infrastructure instead of creating standalone resources"
+variable "enable_deletion_protection" {
+  description = "Enable deletion protection for critical resources"
   type        = bool
   default     = false
 }
 
-variable "shared_project_name" {
-  description = "Name prefix for shared resources (e.g., 'saasdog-ai')"
-  type        = string
-  default     = "saasdog-ai"
+variable "enable_ui" {
+  description = "Enable UI hosting via S3/CloudFront"
+  type        = bool
+  default     = true
 }
-
-# Shared VPC & Networking
-variable "shared_vpc_id" {
-  description = "VPC ID when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
-variable "shared_public_subnet_ids" {
-  description = "Public subnet IDs when using shared infrastructure"
-  type        = list(string)
-  default     = []
-}
-
-variable "shared_private_subnet_ids" {
-  description = "Private subnet IDs when using shared infrastructure"
-  type        = list(string)
-  default     = []
-}
-
-# Shared Security Groups
-variable "shared_alb_security_group_id" {
-  description = "ALB security group ID when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
-variable "shared_ecs_security_group_id" {
-  description = "ECS tasks security group ID when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
-variable "shared_rds_security_group_id" {
-  description = "RDS security group ID when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
-# Shared ECS Cluster
-variable "shared_ecs_cluster_arn" {
-  description = "ECS cluster ARN when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
-# Shared RDS
-variable "shared_rds_endpoint" {
-  description = "RDS endpoint (host:port) when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
-variable "shared_db_credentials_secret_arn" {
-  description = "Secrets Manager ARN for DB credentials when using shared infrastructure"
-  type        = string
-  default     = ""
-}
-
