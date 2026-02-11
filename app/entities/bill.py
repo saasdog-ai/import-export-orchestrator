@@ -1,6 +1,57 @@
 """Bill entity definition."""
 
+from datetime import datetime
+from typing import Any
+
 from app.entities._registry import EntityDefinition, FieldDef, RelationshipDef, registry
+
+
+def validate_bill_amount_positive(
+    row: dict[str, Any], row_num: int, errors: list[dict[str, Any]]
+) -> None:
+    """Validate that bill amount is positive."""
+    amount = row.get("amount")
+    if amount is not None and amount != "":
+        try:
+            amount_val = float(amount)
+            if amount_val <= 0:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "field": "amount",
+                        "message": "Amount must be greater than zero",
+                    }
+                )
+        except (ValueError, TypeError):
+            pass  # Type validation is handled elsewhere
+
+
+def validate_bill_due_date_after_date(
+    row: dict[str, Any], row_num: int, errors: list[dict[str, Any]]
+) -> None:
+    """Validate that due_date is after date if both are present."""
+    date_str = row.get("date")
+    due_date_str = row.get("due_date")
+
+    if not date_str or not due_date_str:
+        return
+
+    try:
+        # Parse ISO format dates (YYYY-MM-DD)
+        date_val = datetime.strptime(str(date_str), "%Y-%m-%d")
+        due_date_val = datetime.strptime(str(due_date_str), "%Y-%m-%d")
+
+        if due_date_val < date_val:
+            errors.append(
+                {
+                    "row": row_num,
+                    "field": "due_date",
+                    "message": "Due date cannot be before the bill date",
+                }
+            )
+    except ValueError:
+        pass  # Date format validation is handled elsewhere
+
 
 bill = EntityDefinition(
     name="bill",
@@ -47,6 +98,7 @@ bill = EntityDefinition(
     required_fields=["amount", "date"],
     date_fields={"date", "due_date", "paid_on_date"},
     decimal_fields={"amount"},
+    validators=[validate_bill_amount_positive, validate_bill_due_date_after_date],
 )
 
 registry.register(bill)

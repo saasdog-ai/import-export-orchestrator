@@ -106,6 +106,40 @@ EntityDefinition(name="bill", ...,
 ### Field name mapping
 For entities where DB column names differ from schema names (e.g., `total_amount` -> `amount`), mapping is handled in `app/infrastructure/saas/utils.py:model_to_dict()`.
 
+### Custom validators
+Entities can define custom validation functions that run during import validation. Validators receive the row data and append errors to a mutable list:
+
+```python
+from typing import Any
+from app.entities._registry import EntityDefinition, FieldDef, registry
+
+def validate_amount_positive(
+    row: dict[str, Any], row_num: int, errors: list[dict[str, Any]]
+) -> None:
+    """Validate that amount is positive."""
+    amount = row.get("amount")
+    if amount is not None and amount != "":
+        try:
+            if float(amount) <= 0:
+                errors.append({
+                    "row": row_num,
+                    "field": "amount",
+                    "message": "Amount must be greater than zero",
+                })
+        except (ValueError, TypeError):
+            pass  # Type validation handled elsewhere
+
+EntityDefinition(
+    name="payment",
+    ...,
+    validators=[validate_amount_positive],
+)
+```
+
+Each validator function signature: `(row: dict, row_num: int, errors: list[dict]) -> None`
+
+Validators are called after built-in validation (required fields, SQL injection, XSS). See `app/entities/bill.py` for a complete example with amount and due date validation.
+
 ## Handler Patterns
 
 ### DB-direct mock handler

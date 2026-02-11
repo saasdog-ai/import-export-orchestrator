@@ -45,6 +45,10 @@ class ImportValidator:
     # Lazy-loaded on first access to avoid import ordering issues.
     _required_fields_cache: dict[ExportEntity, list[str]] | None = None
 
+    # Custom validators auto-generated from the centralized entity registry.
+    # Lazy-loaded on first access to avoid import ordering issues.
+    _validators_cache: dict[ExportEntity, list] | None = None
+
     @classmethod
     def _get_required_fields(cls) -> dict[ExportEntity, list[str]]:
         if cls._required_fields_cache is None:
@@ -52,6 +56,15 @@ class ImportValidator:
 
             cls._required_fields_cache = registry.get_required_fields()
         return cls._required_fields_cache
+
+    @classmethod
+    def _get_validators(cls) -> dict[ExportEntity, list]:
+        """Get custom validators from the entity registry."""
+        if cls._validators_cache is None:
+            from app.entities import registry
+
+            cls._validators_cache = registry.get_validators()
+        return cls._validators_cache
 
     # Keep REQUIRED_FIELDS as a property-like accessor for backward compat.
     # All internal access goes through _get_required_fields() instead.
@@ -572,6 +585,11 @@ class ImportValidator:
                 errors.append(
                     {"row": row_num, "field": field, "message": f"Field '{field}' must be a number"}
                 )
+
+        # Run custom validators from the entity registry
+        custom_validators = ImportValidator._get_validators().get(entity, [])
+        for validator in custom_validators:
+            validator(row, row_num, errors)
 
         return errors
 

@@ -1,9 +1,16 @@
 """Centralized entity registry for schema, validation, and query configuration."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.domain.entities import ExportEntity
+
+# Type alias for custom validator functions.
+# Signature: (row: dict, row_num: int, errors: list[dict]) -> None
+# Validators append errors to the mutable errors list.
+# Each error should be: {"row": row_num, "field": field_name, "message": error_message}
+ValidatorFunc = Callable[[dict[str, Any], int, list[dict[str, Any]]], None]
 
 
 @dataclass
@@ -42,6 +49,7 @@ class EntityDefinition:
     match_key: str = "external_id"
     date_fields: set[str] = field(default_factory=set)
     decimal_fields: set[str] = field(default_factory=set)
+    validators: list[ValidatorFunc] = field(default_factory=list)
 
 
 class EntityRegistry:
@@ -161,6 +169,14 @@ class EntityRegistry:
         for defn in self._entities.values():
             entity = ExportEntity(defn.name)
             result[entity] = list(defn.required_fields)
+        return result
+
+    def get_validators(self) -> dict[ExportEntity, list[ValidatorFunc]]:
+        """Generate VALIDATORS dict consumed by import_validator.py."""
+        result: dict[ExportEntity, list[ValidatorFunc]] = {}
+        for defn in self._entities.values():
+            entity = ExportEntity(defn.name)
+            result[entity] = list(defn.validators)
         return result
 
 

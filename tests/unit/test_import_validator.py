@@ -219,3 +219,64 @@ class TestImportValidator:
         assert any(
             e.get("field") == "amount" and "number" in e.get("message", "").lower() for e in errors
         )
+
+    def test_custom_validator_amount_positive(self, temp_csv_file):
+        """Test that the custom bill validator rejects negative amounts."""
+        with open(temp_csv_file, "w") as f:
+            f.write("id,amount,date\n")
+            f.write(",-100.00,2024-01-01\n")  # Negative amount
+
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
+        assert is_valid is False
+        assert any(
+            e.get("field") == "amount" and "greater than zero" in e.get("message", "").lower()
+            for e in errors
+        )
+
+    def test_custom_validator_amount_zero(self, temp_csv_file):
+        """Test that the custom bill validator rejects zero amounts."""
+        with open(temp_csv_file, "w") as f:
+            f.write("id,amount,date\n")
+            f.write(",0,2024-01-01\n")  # Zero amount
+
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
+        assert is_valid is False
+        assert any(
+            e.get("field") == "amount" and "greater than zero" in e.get("message", "").lower()
+            for e in errors
+        )
+
+    def test_custom_validator_due_date_before_date(self, temp_csv_file):
+        """Test that the custom bill validator rejects due_date before date."""
+        with open(temp_csv_file, "w") as f:
+            f.write("id,amount,date,due_date\n")
+            f.write(",100.00,2024-01-15,2024-01-01\n")  # due_date before date
+
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
+        assert is_valid is False
+        assert any(
+            e.get("field") == "due_date" and "before the bill date" in e.get("message", "").lower()
+            for e in errors
+        )
+
+    def test_custom_validator_due_date_after_date_valid(self, temp_csv_file):
+        """Test that the custom bill validator accepts due_date after date."""
+        with open(temp_csv_file, "w") as f:
+            f.write("id,amount,date,due_date\n")
+            f.write(",100.00,2024-01-01,2024-01-31\n")  # due_date after date
+
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
+        assert is_valid is True
+        assert len(errors) == 0
+
+    def test_custom_validators_multiple_errors(self, temp_csv_file):
+        """Test that multiple custom validators can report errors."""
+        with open(temp_csv_file, "w") as f:
+            f.write("id,amount,date,due_date\n")
+            f.write(",-50.00,2024-01-15,2024-01-01\n")  # Both negative and due_date before date
+
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
+        assert is_valid is False
+        # Should have errors for both amount and due_date
+        assert any(e.get("field") == "amount" for e in errors)
+        assert any(e.get("field") == "due_date" for e in errors)
