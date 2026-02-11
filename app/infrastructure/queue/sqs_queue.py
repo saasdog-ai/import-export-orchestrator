@@ -55,7 +55,7 @@ class SQSQueue:
                         lambda: self.sqs_client.create_queue(
                             QueueName=self._queue_name,
                             Attributes={
-                                "VisibilityTimeout": "300",  # 5 minutes
+                                "VisibilityTimeout": "60",  # 60 seconds - short to enable fast retry
                                 "MessageRetentionPeriod": "1209600",  # 14 days
                             },
                         ),
@@ -187,4 +187,31 @@ class SQSQueue:
             return dict(response.get("Attributes", {}))
         except ClientError as e:
             logger.error(f"Failed to get queue attributes: {e}")
+            raise
+
+    async def extend_message_visibility(
+        self, receipt_handle: str, visibility_timeout_seconds: int
+    ) -> None:
+        """Extend message visibility timeout for long-running jobs."""
+        logger.debug(
+            f"Message queue extend_visibility request: service=SQS, queue={self.queue_name}, "
+            f"timeout={visibility_timeout_seconds}s"
+        )
+
+        await self._ensure_queue_url()
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.sqs_client.change_message_visibility(
+                    QueueUrl=self.queue_url,
+                    ReceiptHandle=receipt_handle,
+                    VisibilityTimeout=visibility_timeout_seconds,
+                ),
+            )
+            logger.debug(
+                f"Message queue extend_visibility completed: service=SQS, queue={self.queue_name}"
+            )
+        except ClientError as e:
+            logger.error(f"Failed to extend message visibility: {e}")
             raise

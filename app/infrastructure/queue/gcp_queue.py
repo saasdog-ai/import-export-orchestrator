@@ -205,3 +205,30 @@ class GCPPubSubQueue:
         except GoogleCloudError as e:
             logger.error(f"Failed to get subscription attributes: {e}")
             raise
+
+    async def extend_message_visibility(
+        self, receipt_handle: str, visibility_timeout_seconds: int
+    ) -> None:
+        """Extend message visibility timeout (ack deadline) for long-running jobs."""
+        logger.debug(
+            f"Message queue extend_visibility request: service=GCP, subscription={self.subscription_name}, "
+            f"timeout={visibility_timeout_seconds}s"
+        )
+
+        await self._ensure_topic_and_subscription()
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.subscriber_client.modify_ack_deadline(
+                    subscription=self.subscription_path,
+                    ack_ids=[receipt_handle],
+                    ack_deadline_seconds=visibility_timeout_seconds,
+                ),
+            )
+            logger.debug(
+                f"Message queue extend_visibility completed: service=GCP, subscription={self.subscription_name}"
+            )
+        except GoogleCloudError as e:
+            logger.error(f"Failed to extend message visibility: {e}")
+            raise

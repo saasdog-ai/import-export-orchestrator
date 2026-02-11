@@ -56,3 +56,19 @@ class MessageQueueInterface(ABC):
             Dictionary of queue attributes
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def extend_message_visibility(
+        self, receipt_handle: str, visibility_timeout_seconds: int
+    ) -> None:
+        """
+        Extend the visibility timeout of a message.
+
+        Use this for long-running jobs to prevent the message from becoming
+        visible again while still being processed.
+
+        Args:
+            receipt_handle: Receipt handle from receive_messages
+            visibility_timeout_seconds: New visibility timeout in seconds
+        """
+        raise NotImplementedError

@@ -124,7 +124,7 @@ class AzureQueueStorage:
                 None,
                 lambda: self.queue_client.receive_messages(
                     messages_per_page=min(max_messages, 32),  # Azure max is 32
-                    visibility_timeout=300,  # 5 minutes
+                    visibility_timeout=60,  # 60 seconds - short to enable fast retry
                 ),
             )
 
@@ -201,4 +201,42 @@ class AzureQueueStorage:
             }
         except AzureError as e:
             logger.error(f"Failed to get queue attributes: {e}")
+            raise
+
+    async def extend_message_visibility(
+        self, receipt_handle: str, visibility_timeout_seconds: int
+    ) -> None:
+        """Extend message visibility timeout for long-running jobs."""
+        logger.debug(
+            f"Message queue extend_visibility request: service=Azure, queue={self.queue_name}, "
+            f"timeout={visibility_timeout_seconds}s"
+        )
+
+        await self._ensure_queue_client()
+        try:
+            # Parse receipt_handle which contains "message_id:pop_receipt"
+            if ":" not in receipt_handle:
+                logger.warning(
+                    f"Azure queue extend_visibility: receipt_handle format unexpected: {receipt_handle}"
+                )
+                return
+
+            message_id, pop_receipt = receipt_handle.split(":", 1)
+
+            loop = asyncio.get_event_loop()
+            # Azure uses update_message with empty content to extend visibility
+            await loop.run_in_executor(
+                None,
+                lambda: self.queue_client.update_message(
+                    message_id,
+                    pop_receipt,
+                    visibility_timeout=visibility_timeout_seconds,
+                ),
+            )
+
+            logger.debug(
+                f"Message queue extend_visibility completed: service=Azure, queue={self.queue_name}"
+            )
+        except AzureError as e:
+            logger.error(f"Failed to extend message visibility: {e}")
             raise

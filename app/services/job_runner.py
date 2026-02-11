@@ -86,6 +86,32 @@ class JobRunnerService:
         await self._queue.put((job, job_run))
         logger.debug(f"Queued job run {job_run.id} for job {job.id}")
 
+    async def _extend_visibility_loop(
+        self, receipt_handle: str, job_run_id: UUID, stop_event: asyncio.Event
+    ) -> None:
+        """Background task to extend message visibility for long-running jobs."""
+        extension_seconds = self.settings.message_queue_visibility_extension
+        # Extend at half the visibility timeout to ensure we don't miss
+        sleep_interval = max(extension_seconds // 2, 10)
+
+        while not stop_event.is_set():
+            try:
+                await asyncio.sleep(sleep_interval)
+                if stop_event.is_set():
+                    break
+                if self.message_queue:
+                    await self.message_queue.extend_message_visibility(
+                        receipt_handle, extension_seconds
+                    )
+                    logger.debug(
+                        f"Extended visibility for job_run {job_run_id} by {extension_seconds}s"
+                    )
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Failed to extend visibility for job_run {job_run_id}: {e}")
+                # Continue trying - the job is still running
+
     async def _worker(self, worker_id: str) -> None:
         """Worker coroutine that processes job runs."""
         logger.info(f"Worker {worker_id} started")
@@ -99,36 +125,89 @@ class JobRunnerService:
                     )
 
                     for msg in messages:
+                        visibility_task: asyncio.Task | None = None
+                        stop_event = asyncio.Event()
+                        job_id: UUID | None = None
+                        job_run_id: UUID | None = None
                         try:
                             message_body = msg["body"]
                             receipt_handle = msg["receipt_handle"]
+                            message_id = msg.get("message_id", "unknown")
+
+                            # Log immediately after receiving message
+                            logger.info(
+                                f"Worker {worker_id} received message from queue: "
+                                f"message_id={message_id}, body_keys={list(message_body.keys())}"
+                            )
 
                             job_id = UUID(message_body["job_id"])
                             job_run_id = UUID(message_body["job_run_id"])
 
+                            logger.info(
+                                f"Worker {worker_id} processing job_run {job_run_id} "
+                                f"(job_id={job_id})"
+                            )
+
                             # Fetch job and job_run from database
+                            logger.debug(f"Worker {worker_id} fetching job {job_id} from database")
                             job = await self.job_repository.get_by_id(job_id)
                             if not job:
                                 logger.error(f"Job not found: {job_id}")
                                 await self.message_queue.delete_message(receipt_handle)
                                 continue
 
+                            logger.debug(
+                                f"Worker {worker_id} fetching job_run {job_run_id} from database"
+                            )
                             job_run = await self.job_run_repository.get_by_id(job_run_id)
                             if not job_run:
                                 logger.error(f"Job run not found: {job_run_id}")
                                 await self.message_queue.delete_message(receipt_handle)
                                 continue
 
+                            logger.info(
+                                f"Worker {worker_id} starting execution of job_run {job_run_id} "
+                                f"(job_name={job.name}, job_type={job.job_type.value})"
+                            )
+
+                            # Start visibility extension task for long-running jobs
+                            visibility_task = asyncio.create_task(
+                                self._extend_visibility_loop(receipt_handle, job_run_id, stop_event)
+                            )
+
                             # Execute the job
                             await self._execute_job_run(job, job_run, worker_id)
 
+                            # Stop visibility extension
+                            stop_event.set()
+                            if visibility_task:
+                                visibility_task.cancel()
+                                try:
+                                    await visibility_task
+                                except asyncio.CancelledError:
+                                    pass
+
                             # Delete message from queue after successful processing
                             await self.message_queue.delete_message(receipt_handle)
+                            logger.info(f"Worker {worker_id} completed job_run {job_run_id}")
 
                         except Exception as e:
+                            # Include job context in error log if available
+                            context = f"job_run={job_run_id}" if job_run_id else "job_run=unknown"
+                            if job_id:
+                                context = f"job={job_id}, {context}"
                             logger.error(
-                                f"Worker {worker_id} error processing message: {e}", exc_info=True
+                                f"Worker {worker_id} error processing message ({context}): {e}",
+                                exc_info=True,
                             )
+                            # Stop visibility extension task on error
+                            stop_event.set()
+                            if visibility_task:
+                                visibility_task.cancel()
+                                try:
+                                    await visibility_task
+                                except asyncio.CancelledError:
+                                    pass
                             # Message will become visible again after visibility timeout
                             # Don't delete it so it can be retried
                 else:

@@ -120,6 +120,14 @@ class Settings(BaseSettings):
     message_queue_max_messages: int = Field(
         default=1, description="Max messages to receive per poll (default: 1)"
     )
+    message_queue_visibility_timeout: int = Field(
+        default=60,
+        description="Initial visibility timeout in seconds. Messages re-appear after this time if not deleted. (default: 60)",
+    )
+    message_queue_visibility_extension: int = Field(
+        default=30,
+        description="Extend visibility by this many seconds for long-running jobs (default: 30)",
+    )
 
     # CORS
     allowed_origins: list[str] = Field(
