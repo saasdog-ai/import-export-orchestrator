@@ -521,8 +521,12 @@ class ImportValidator:
 
             # Check for malicious content (basic checks)
             if isinstance(value, str):
-                # Check for SQL injection patterns
-                sql_patterns = ["';", "--", "/*", "*/", "xp_", "sp_", "exec", "union", "select"]
+                # Check for SQL injection patterns.
+                # Note: We only check for unambiguous SQL injection markers, not common
+                # words like "union", "select", "exec" which cause false positives
+                # (e.g., "Union Bank", "Select Staffing", "Executive Services").
+                # Real SQL injection protection comes from parameterized queries (SQLAlchemy ORM).
+                sql_patterns = ["';", "' ;", "--", "/*", "*/", "xp_", "sp_"]
                 value_lower = value.lower()
                 for pattern in sql_patterns:
                     if pattern in value_lower:

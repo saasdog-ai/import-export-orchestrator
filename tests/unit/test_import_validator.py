@@ -126,6 +126,19 @@ class TestImportValidator:
         assert is_valid is False
         assert any("malicious" in e.get("message", "").lower() for e in errors)
 
+    def test_validate_csv_content_legitimate_business_names(self, temp_csv_file):
+        """Test that legitimate business names with SQL keywords are NOT flagged."""
+        with open(temp_csv_file, "w") as f:
+            f.write("id,amount,date,description\n")
+            f.write(",100.00,2024-01-01,Union Pacific Railroad\n")
+            f.write(",200.00,2024-01-02,Select Staffing Services\n")
+            f.write(",300.00,2024-01-03,Executive Solutions Inc\n")
+            f.write(",400.00,2024-01-04,Credit Union of California\n")
+
+        is_valid, errors = ImportValidator.validate_file_content(temp_csv_file, ExportEntity.BILL)
+        assert is_valid is True
+        assert len(errors) == 0
+
     def test_validate_csv_content_missing_required_field_value(self, temp_csv_file):
         """Test CSV content validation for missing required field value."""
         with open(temp_csv_file, "w") as f:
