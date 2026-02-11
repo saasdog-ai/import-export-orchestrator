@@ -123,6 +123,58 @@ class BillHandler:
                 return None
         return None
 
+    async def _resolve_vendor_id(
+        self,
+        session: AsyncSession,
+        record: dict[str, Any],
+        client_id: UUID,
+    ) -> UUID | None:
+        """Resolve vendor_id from various input formats."""
+        # Direct vendor_id (UUID)
+        if record.get("vendor_id"):
+            return UUID(record["vendor_id"])
+        # Nested vendor object with id
+        if record.get("vendor") and record["vendor"].get("id"):
+            return UUID(record["vendor"]["id"])
+        # Lookup by vendor_external_id
+        if record.get("vendor_external_id"):
+            result = await session.execute(
+                select(SampleVendorModel).where(
+                    SampleVendorModel.client_id == client_id,
+                    SampleVendorModel.external_id == record["vendor_external_id"],
+                )
+            )
+            vendor = result.scalar_one_or_none()
+            if vendor:
+                return vendor.id
+        return None
+
+    async def _resolve_project_id(
+        self,
+        session: AsyncSession,
+        record: dict[str, Any],
+        client_id: UUID,
+    ) -> UUID | None:
+        """Resolve project_id from various input formats."""
+        # Direct project_id (UUID)
+        if record.get("project_id"):
+            return UUID(record["project_id"])
+        # Nested project object with id
+        if record.get("project") and record["project"].get("id"):
+            return UUID(record["project"]["id"])
+        # Lookup by project_external_id
+        if record.get("project_external_id"):
+            result = await session.execute(
+                select(SampleProjectModel).where(
+                    SampleProjectModel.client_id == client_id,
+                    SampleProjectModel.external_id == record["project_external_id"],
+                )
+            )
+            project = result.scalar_one_or_none()
+            if project:
+                return project.id
+        return None
+
     async def create(
         self,
         session: AsyncSession,
@@ -130,17 +182,8 @@ class BillHandler:
         client_id: UUID,
     ) -> dict[str, Any]:
         """Create a new bill record."""
-        vendor_id = None
-        if record.get("vendor_id"):
-            vendor_id = UUID(record["vendor_id"])
-        elif record.get("vendor") and record["vendor"].get("id"):
-            vendor_id = UUID(record["vendor"]["id"])
-
-        project_id = None
-        if record.get("project_id"):
-            project_id = UUID(record["project_id"])
-        elif record.get("project") and record["project"].get("id"):
-            project_id = UUID(record["project"]["id"])
+        vendor_id = await self._resolve_vendor_id(session, record, client_id)
+        project_id = await self._resolve_project_id(session, record, client_id)
 
         bill = SampleBillModel(
             id=uuid4(),
@@ -166,11 +209,21 @@ class BillHandler:
         session: AsyncSession,
         existing: SampleBillModel,
         record: dict[str, Any],
+        client_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Update an existing bill record."""
         date_fields = {"date", "due_date", "paid_on_date"}
         decimal_fields = {"amount"}
-        skip_fields = {"id", "client_id", "vendor", "project", "vendor_id", "project_id"}
+        skip_fields = {
+            "id",
+            "client_id",
+            "vendor",
+            "project",
+            "vendor_id",
+            "project_id",
+            "vendor_external_id",
+            "project_external_id",
+        }
 
         for key, value in record.items():
             if key in skip_fields or not hasattr(existing, key):
@@ -184,24 +237,15 @@ class BillHandler:
             else:
                 setattr(existing, key, value)
 
-        # Handle vendor_id and project_id from nested objects or direct values
-        if "vendor" in record and record["vendor"].get("id"):
-            existing.vendor_id = UUID(record["vendor"]["id"])  # type: ignore[assignment]
-        elif record.get("vendor_id"):
-            existing.vendor_id = (
-                UUID(record["vendor_id"])
-                if isinstance(record["vendor_id"], str)
-                else record["vendor_id"]
-            )
+        # Resolve vendor and project IDs using helper methods
+        resolved_client_id = client_id or existing.client_id
+        vendor_id = await self._resolve_vendor_id(session, record, resolved_client_id)
+        if vendor_id:
+            existing.vendor_id = vendor_id  # type: ignore[assignment]
 
-        if "project" in record and record["project"].get("id"):
-            existing.project_id = UUID(record["project"]["id"])  # type: ignore[assignment]
-        elif record.get("project_id"):
-            existing.project_id = (
-                UUID(record["project_id"])
-                if isinstance(record["project_id"], str)
-                else record["project_id"]
-            )
+        project_id = await self._resolve_project_id(session, record, resolved_client_id)
+        if project_id:
+            existing.project_id = project_id  # type: ignore[assignment]
 
         existing.updated_at = datetime.now(UTC).replace(tzinfo=None)  # type: ignore[assignment]
         return {"action": "updated"}
