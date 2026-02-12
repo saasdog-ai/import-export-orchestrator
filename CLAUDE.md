@@ -216,18 +216,38 @@ terraform apply
 ### CI/CD
 `.github/workflows/deploy.yml` uses GitHub OIDC for keyless AWS auth. Account ID is auto-detected via `aws sts get-caller-identity`.
 
+### Manual Docker Build and Push
+**IMPORTANT:** When building locally on Mac (Apple Silicon), you MUST specify the target platform for AWS Fargate:
+```bash
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 429763994533.dkr.ecr.us-east-1.amazonaws.com
+
+# Build for linux/amd64 (required for Fargate) and push
+docker buildx build --platform linux/amd64 --no-cache \
+  -t 429763994533.dkr.ecr.us-east-1.amazonaws.com/saasdog-import-export-dev:latest \
+  --push .
+
+# Force ECS to pick up the new image
+aws ecs update-service --cluster saasdog-shared-ecs-dev \
+  --service saasdog-import-export-dev \
+  --force-new-deployment
+```
+
+**Why `--platform linux/amd64`:** Mac with Apple Silicon builds arm64 images by default, which fail on Fargate with "image Manifest does not contain descriptor matching platform 'linux/amd64'".
+
+**Why `--no-cache`:** Docker buildx may use cached arm64 layers even when targeting amd64.
+
 ### Known issue: ECS deployment with `:latest` tag
 The deploy workflow pushes to ECR with `:latest` tag, but Terraform doesn't detect image content changes when the tag stays the same. After a deploy, you may need to force a new ECS deployment:
 ```bash
-aws ecs update-service --cluster import-export-orchestrator-cluster-dev \
-  --service import-export-orchestrator-service-dev \
-  --task-definition import-export-orchestrator-dev:<REVISION> \
+aws ecs update-service --cluster saasdog-shared-ecs-dev \
+  --service saasdog-import-export-dev \
   --force-new-deployment
 ```
 Check the current task definition revision with:
 ```bash
-aws ecs describe-services --cluster import-export-orchestrator-cluster-dev \
-  --services import-export-orchestrator-service-dev \
+aws ecs describe-services --cluster saasdog-shared-ecs-dev \
+  --services saasdog-import-export-dev \
   --query 'services[0].deployments[*].{status:status,taskDef:taskDefinition,running:runningCount}'
 ```
 
