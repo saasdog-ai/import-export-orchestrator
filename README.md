@@ -363,9 +363,6 @@ Example:
 5. Run linting and type checking
 6. Submit a pull request
 
-## License
-
-MIT License - see LICENSE file for details.
 
 ## Support
 
