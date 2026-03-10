@@ -3,6 +3,9 @@ FROM --platform=linux/amd64 python:3.11-slim
 
 WORKDIR /app
 
+# Cloud provider extras: aws, azure, gcp, or cloud (all providers)
+ARG CLOUD_EXTRAS=aws
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -17,10 +20,9 @@ COPY alembic/ ./alembic/
 # Copy application code (needed for editable install)
 COPY app/ ./app/
 
-# Install Python dependencies
-# Install with 'aws' extra to include boto3 for S3 storage
+# Install Python dependencies with selected cloud provider extras
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e ".[aws]"
+    pip install --no-cache-dir -e ".[${CLOUD_EXTRAS}]"
 
 # Copy startup script (before switching user)
 COPY scripts/start.sh /app/start.sh
