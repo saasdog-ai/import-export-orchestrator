@@ -224,6 +224,23 @@ curl https://your-app-url/docs
 | `PRESIGNED_URL_EXPIRATION` | Upload URL expiration (seconds) | `3600` |
 | `ALLOWED_ORIGINS` | CORS allowed origins (JSON array) | `["http://localhost:3000", "http://localhost:5173"]` |
 
+### How Environment Variables Are Configured
+
+The same Docker image is used across all environments. What changes is how env vars are injected:
+
+| Environment | How variables are set |
+|---|---|
+| **Local (no Docker)** | `.env` file in the project root. Pydantic Settings auto-loads it. Copy `.env.example` to get started. |
+| **Local (Docker Compose)** | `docker-compose.yml` `environment:` block. Values are hardcoded for local dev (e.g., `DATABASE_URL` points to the local `postgres` container). |
+| **AWS (ECS/Fargate)** | Terraform's ECS task definition ([`infra/aws/terraform/ecs.tf`](infra/aws/terraform/ecs.tf)). Non-sensitive values go in the `environment` block; secrets (`DATABASE_URL`) are pulled from AWS Secrets Manager via the `secrets` block. |
+
+**Per-environment configuration on AWS**: Terraform derives several values automatically from `var.environment`:
+- `AUTH_ENABLED` is `"true"` for prod, `"false"` otherwise
+- `CLOUD_STORAGE_BUCKET`, `MESSAGE_QUEUE_NAME`, and `ALLOWED_ORIGINS` are set from Terraform-managed resources
+- Resource names, secret ARNs, and queue URLs are all environment-scoped by Terraform
+
+To deploy multiple environments (dev, staging, prod), use separate `terraform.tfvars` files with different `environment` values, or use Terraform workspaces. Each environment gets its own ECS service, ALB, S3 bucket, SQS queue, and secrets — all derived from the same Terraform configs.
+
 > **Production validation**: When `APP_ENV=production`, the app enforces that `AUTH_ENABLED=true`, JWT is properly configured, `MESSAGE_QUEUE_NAME` is set, cloud storage is configured, and CORS origins are explicit. It will refuse to start otherwise.
 
 ## Customization Guide
