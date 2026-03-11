@@ -15,11 +15,11 @@ Every SaaS application needs import/export. Users need to export filtered data t
 - **Presigned URL uploads** -- clients upload directly to cloud storage, bypassing API Gateway size limits
 - **Cron scheduling** -- schedule recurring exports using cron expressions with APScheduler
 - **Multi-tenant isolation** -- JWT authentication with JWKS, secret-key, and dev bypass modes
-- **Multi-cloud storage** -- S3, Azure Blob Storage, and GCP Cloud Storage support
+- **Multi-cloud storage** -- S3, Azure Blob Storage, and GCP Cloud Storage adapters. *AWS is production-tested; Azure and GCP adapters are included but not yet tested in production*
 - **Import validation** -- per-row validation with preview before execution, custom validators per entity
 - **Entity registry** -- single source of truth for field metadata, relationships, and validation rules
 - **Embeddable UI** -- React micro-frontend you can drop into your host app via module federation
-- **Multi-cloud Terraform** -- deploy to AWS (ECS/Fargate), GCP, or Azure
+- **Multi-cloud Terraform** -- deploy to AWS (ECS/Fargate), GCP, or Azure. *AWS is production-tested; GCP and Azure configs are provided as a starting point*
 
 ### How to Use It
 
