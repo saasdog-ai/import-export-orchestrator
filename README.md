@@ -226,22 +226,6 @@ curl https://your-app-url/docs
 
 > **Production validation**: When `APP_ENV=production`, the app enforces that `AUTH_ENABLED=true`, JWT is properly configured, `MESSAGE_QUEUE_NAME` is set, cloud storage is configured, and CORS origins are explicit. It will refuse to start otherwise.
 
-### Tear down
-
-`terraform destroy` in import-export-orchestrator first, then shared-infrastructure.
-
-### Cost Estimate (AWS, dev environment)
-
-| Resource | Monthly |
-|----------|---------|
-| NAT Gateway | ~$32 (shared) |
-| ALB | ~$16 |
-| ECS Fargate (0.5 vCPU) | ~$18 |
-| RDS (db.t3.micro) | ~$13 (shared) |
-| S3 | ~$1 |
-| SQS | ~$0 (free tier) |
-| **Total (incremental over shared-infra)** | **~$35** |
-
 ## Customization Guide
 
 ### Connect to Your Own Data (Replace Entity Handlers)
