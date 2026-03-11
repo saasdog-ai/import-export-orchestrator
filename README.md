@@ -158,13 +158,6 @@ terraform init \
 terraform apply
 ```
 
-**Alternative — one-command deployment** (handles both projects):
-
-```bash
-# From the parent directory containing both repos
-CLOUD=aws COMPANY_PREFIX=mycompany ./scripts/infra.sh up
-```
-
 ### Step 3: Initialize the database
 
 The container's `start.sh` runs Alembic migrations on first boot, but the database and application user must be created first.
@@ -235,11 +228,7 @@ curl https://your-app-url/docs
 
 ### Tear down
 
-```bash
-CLOUD=aws ./scripts/infra.sh down
-```
-
-Or manually: `terraform destroy` in import-export-orchestrator first, then shared-infrastructure.
+`terraform destroy` in import-export-orchestrator first, then shared-infrastructure.
 
 ### Cost Estimate (AWS, dev environment)
 
