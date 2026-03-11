@@ -107,12 +107,23 @@ terraform init \
 terraform apply
 ```
 
-**Note the outputs** — you'll need them for the next step:
+**Save the outputs** — you'll paste them into the next step's `terraform.tfvars`:
 
 ```bash
 terraform output
-# vpc_id, ecs_cluster_arn, rds_endpoint, rds_master_password_secret_arn, etc.
 ```
+
+| shared-infrastructure output | import-export-orchestrator variable |
+|------------------------------|-------------------------------------|
+| `vpc_id` | `shared_vpc_id` |
+| `public_subnet_ids` | `shared_public_subnet_ids` |
+| `private_subnet_ids` | `shared_private_subnet_ids` |
+| `ecs_cluster_arn` | `shared_ecs_cluster_arn` |
+| `ecs_cluster_name` | `shared_ecs_cluster_name` |
+| `rds_endpoint` | `shared_rds_endpoint` |
+| `rds_address` | `shared_rds_address` |
+| `rds_security_group_id` | `shared_rds_security_group_id` |
+| `rds_master_password_secret_arn` | `shared_rds_master_password_secret_arn` |
 
 ### Step 2: Deploy import-export-orchestrator
 
@@ -133,8 +144,7 @@ terraform init && terraform apply
 ```bash
 cd ../  # back to infra/aws/terraform/
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars: paste shared-infrastructure outputs
-#   shared_vpc_id, shared_ecs_cluster_arn, shared_rds_endpoint, etc.
+# Edit terraform.tfvars: paste shared-infrastructure outputs using the mapping above
 ```
 
 ```bash
