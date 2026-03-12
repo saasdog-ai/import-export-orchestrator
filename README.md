@@ -21,6 +21,8 @@ Every SaaS application needs import/export. Users need to export filtered data t
 - **Embeddable UI** -- React micro-frontend you can drop into your host app via module federation
 - **Multi-cloud Terraform** -- deploy to AWS (ECS/Fargate), GCP, or Azure. *AWS is production-tested; GCP and Azure configs are provided as a starting point*
 
+[See the product in action](https://youtu.be/cw8gKNE3LAw) | [Book a demo](https://saasdog.ai/#book-demo)
+
 ### How to Use It
 
 The included sample entities (vendor, bill, invoice, project) are fully working reference implementations with import, export, filtering, and scheduling.
