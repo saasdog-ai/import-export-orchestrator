@@ -73,9 +73,9 @@ For the detailed filter DSL reference (operators, relative dates, nested fields)
 - [Docker](https://docs.docker.com/get-docker/)
 - PostgreSQL 15+ (provisioned automatically by shared-infrastructure)
 
-### Step 1: Deploy shared-infrastructure
+### Step 1: Deploy shared-infrastructure (optional)
 
-The [shared-infrastructure](https://github.com/saasdog-ai/shared-infrastructure) project creates the foundational resources (VPC, ECS cluster, RDS PostgreSQL) that this service runs on. If you've already deployed it for integration-platform, skip to Step 2.
+The [shared-infrastructure](https://github.com/saasdog-ai/shared-infrastructure) project creates foundational resources (VPC, ECS cluster, RDS PostgreSQL) that this service runs on. **If you already have these resources** (or deployed shared-infrastructure for integration-platform), skip this step and fill in the `terraform.tfvars` in Step 2 with your existing resource IDs instead.
 
 ```bash
 git clone https://github.com/saasdog-ai/shared-infrastructure.git
